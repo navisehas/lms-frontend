@@ -3,8 +3,6 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
   UserPlus, 
   Phone, 
   User, 
@@ -15,6 +13,8 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
   Camera,
   Upload
 } from "lucide-react";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function RegisterPage() {
   const router = useRouter();
