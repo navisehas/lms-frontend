@@ -7,7 +7,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 
 export default function About() {
-  const [lecturers, setLecturers] = useState([]);
+  const [lecturers, setLecturers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch teachers from the database on component load
