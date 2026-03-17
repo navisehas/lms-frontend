@@ -94,7 +94,7 @@ export default function RegisterUser() {
     if (role === "ADMIN") endpoint = "/admins";
 
     try {
-      const response = await authFetch(`http://localhost:5000${endpoint}`, {
+      const response = await authFetch(`${API}${endpoint}`, {
         method: "POST",
         body: JSON.stringify(formData),
       });
