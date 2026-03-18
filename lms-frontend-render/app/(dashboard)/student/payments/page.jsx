@@ -95,8 +95,6 @@ export default function StudentCoursesPayPage() {
         country:       "Sri Lanka",
         hash:          hashData.hash,
         platform:      "web",
-        custom_logo:   `${FRONTEND_URL}/english-gate-logo.jpeg`,
-        merchant_name: "English Gate",
       };
 
       Object.entries(fields).forEach(([k, v]) => {
