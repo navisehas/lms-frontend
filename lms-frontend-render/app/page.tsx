@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import {
-  BookOpen,
-  Users,
-  Award,
   QrCode,
   MonitorPlay,
   Clock,
@@ -14,649 +12,697 @@ import {
   GraduationCap,
   Bell,
   Star,
+  Users,
+  Award,
+  BookOpen,
+  Menu,
+  X,
 } from "lucide-react";
 
 export default function Home() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <main
-      className="flex flex-col min-h-screen font-sans"
-      style={{ fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
-    >
+    <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-        :root {
-          --glass-white: rgba(255, 255, 255, 0.15);
-          --glass-border: rgba(255, 255, 255, 0.3);
-          --glass-shadow: rgba(0, 0, 0, 0.15);
-          --blue-primary: #0A84FF;
-          --blue-deep: #0040C8;
-          --purple-accent: #BF5AF2;
-          --cyan-accent: #32D2FF;
-          --green-accent: #30D158;
-        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
 
         body {
-          background: #0a0a1a;
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          background: #0d1b4b;
+          color: #fff;
+          overflow-x: hidden;
         }
 
-        /* === LIQUID GLASS CORE === */
-        .glass {
-          background: rgba(255, 255, 255, 0.10);
-          backdrop-filter: blur(24px) saturate(180%);
-          -webkit-backdrop-filter: blur(24px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.20);
+        /* ─── LIQUID GLASS BASE ──────────────────────────────── */
+        .lx {
+          background: rgba(255,255,255,0.10);
+          backdrop-filter: blur(28px) saturate(180%) brightness(1.05);
+          -webkit-backdrop-filter: blur(28px) saturate(180%) brightness(1.05);
+          border: 1px solid rgba(255,255,255,0.22);
           box-shadow:
-            0 8px 32px rgba(0, 0, 0, 0.20),
-            inset 0 1px 0 rgba(255,255,255,0.25),
-            inset 0 -1px 0 rgba(0,0,0,0.10);
+            0 8px 32px rgba(15,40,120,0.25),
+            inset 0 1px 0 rgba(255,255,255,0.30),
+            inset 0 -1px 0 rgba(0,20,80,0.18);
         }
 
-        .glass-card {
-          background: rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(40px) saturate(200%);
-          -webkit-backdrop-filter: blur(40px) saturate(200%);
-          border: 1px solid rgba(255, 255, 255, 0.18);
+        .lx-card {
+          background: rgba(255,255,255,0.08);
+          backdrop-filter: blur(36px) saturate(200%) brightness(1.08);
+          -webkit-backdrop-filter: blur(36px) saturate(200%) brightness(1.08);
+          border: 1px solid rgba(255,255,255,0.18);
           box-shadow:
-            0 20px 60px rgba(0, 0, 0, 0.30),
-            0 1px 0 rgba(255, 255, 255, 0.20) inset,
-            0 -1px 0 rgba(0, 0, 0, 0.15) inset;
-          transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            0 24px 64px rgba(10,30,100,0.30),
+            inset 0 1px 0 rgba(255,255,255,0.28),
+            inset 0 -1px 0 rgba(0,20,80,0.12),
+            0 0 0 0.5px rgba(255,255,255,0.08);
+          transition: all 0.4s cubic-bezier(0.23,1,0.32,1);
         }
 
-        .glass-card:hover {
-          background: rgba(255, 255, 255, 0.13);
-          border-color: rgba(255, 255, 255, 0.28);
-          transform: translateY(-6px) scale(1.01);
+        .lx-card:hover {
+          background: rgba(255,255,255,0.13);
+          border-color: rgba(255,255,255,0.30);
+          transform: translateY(-8px) scale(1.015);
           box-shadow:
-            0 32px 80px rgba(0, 0, 0, 0.35),
-            0 1px 0 rgba(255, 255, 255, 0.30) inset;
+            0 40px 90px rgba(10,30,100,0.40),
+            inset 0 1px 0 rgba(255,255,255,0.35),
+            0 0 40px rgba(96,165,250,0.18);
         }
 
-        .glass-dark {
-          background: rgba(10, 10, 30, 0.45);
-          backdrop-filter: blur(30px) saturate(180%);
-          -webkit-backdrop-filter: blur(30px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.10);
+        /* ─── NAVBAR ─────────────────────────────────────────── */
+        .navbar {
+          position: fixed;
+          top: 0; left: 0; right: 0;
+          z-index: 100;
+          padding: 0 1rem;
+          transition: all 0.4s cubic-bezier(0.23,1,0.32,1);
+        }
+
+        .navbar-inner {
+          max-width: 1160px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          height: 68px;
+          padding: 0 1.75rem;
+          border-radius: 0 0 1.5rem 1.5rem;
+          transition: all 0.4s cubic-bezier(0.23,1,0.32,1);
+        }
+
+        .navbar-scrolled .navbar-inner {
+          margin-top: 10px;
+          border-radius: 2rem;
+          background: rgba(10,22,66,0.58);
+          backdrop-filter: blur(44px) saturate(200%) brightness(1.08);
+          -webkit-backdrop-filter: blur(44px) saturate(200%) brightness(1.08);
+          border: 1px solid rgba(255,255,255,0.18);
           box-shadow:
-            0 12px 48px rgba(0, 0, 0, 0.40),
-            inset 0 1px 0 rgba(255,255,255,0.12);
+            0 20px 60px rgba(10,30,120,0.35),
+            inset 0 1px 0 rgba(255,255,255,0.26),
+            inset 0 -1px 0 rgba(0,20,80,0.14);
         }
 
-        /* Liquid orb blob animations */
+        .nav-logo {
+          font-family: 'Outfit', sans-serif;
+          font-weight: 800;
+          font-size: 1.4rem;
+          letter-spacing: -0.03em;
+          background: linear-gradient(135deg, #fff 30%, #93c5fd 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          text-decoration: none;
+        }
+
+        .nav-links {
+          display: flex;
+          align-items: center;
+          gap: 0.15rem;
+          list-style: none;
+        }
+
+        .nav-link {
+          color: rgba(255,255,255,0.65);
+          font-size: 0.875rem;
+          font-weight: 500;
+          padding: 0.5rem 1rem;
+          border-radius: 999px;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+        .nav-link:hover {
+          color: #fff;
+          background: rgba(255,255,255,0.10);
+        }
+
+        .nav-btn {
+          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+          color: #fff;
+          font-size: 0.875rem;
+          font-weight: 700;
+          padding: 0.58rem 1.4rem;
+          border-radius: 999px;
+          text-decoration: none;
+          box-shadow: 0 4px 20px rgba(59,130,246,0.45), inset 0 1px 0 rgba(255,255,255,0.28);
+          transition: all 0.25s ease;
+          white-space: nowrap;
+        }
+        .nav-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 28px rgba(59,130,246,0.55);
+        }
+
+        .nav-login {
+          color: rgba(255,255,255,0.70);
+          font-size: 0.875rem;
+          font-weight: 600;
+          padding: 0.5rem 1rem;
+          border-radius: 999px;
+          text-decoration: none;
+          transition: all 0.2s ease;
+        }
+        .nav-login:hover {
+          color: #fff;
+          background: rgba(255,255,255,0.08);
+        }
+
+        /* Mobile */
+        .mob-toggle {
+          display: none;
+          background: rgba(255,255,255,0.10);
+          border: 1px solid rgba(255,255,255,0.20);
+          border-radius: 12px;
+          padding: 0.48rem;
+          color: #fff;
+          cursor: pointer;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+        }
+
+        .mobile-menu {
+          background: rgba(10,22,66,0.88);
+          backdrop-filter: blur(44px);
+          -webkit-backdrop-filter: blur(44px);
+          border: 1px solid rgba(255,255,255,0.14);
+          border-radius: 1.5rem;
+          margin: 0.75rem;
+          padding: 1.25rem;
+          box-shadow: 0 24px 64px rgba(10,30,100,0.50), inset 0 1px 0 rgba(255,255,255,0.14);
+        }
+
+        .mobile-link {
+          display: block;
+          color: rgba(255,255,255,0.70);
+          font-weight: 500;
+          font-size: 0.95rem;
+          padding: 0.75rem 1rem;
+          border-radius: 12px;
+          text-decoration: none;
+          transition: all 0.2s;
+        }
+        .mobile-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+        /* ─── HERO BG ─────────────────────────────────────────── */
+        .hero-bg {
+          background:
+            radial-gradient(ellipse 130% 90% at 5% 10%, rgba(37,99,235,0.60) 0%, transparent 55%),
+            radial-gradient(ellipse 80% 60% at 95% 5%,  rgba(59,130,246,0.40) 0%, transparent 50%),
+            radial-gradient(ellipse 100% 70% at 50% 110%, rgba(29,78,216,0.55) 0%, transparent 55%),
+            linear-gradient(160deg, #0d1b4b 0%, #0f2460 45%, #163080 70%, #0d1b4b 100%);
+        }
+
+        .mesh {
+          background-image:
+            linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+          background-size: 58px 58px;
+        }
+
+        /* ─── ORBS ───────────────────────────────────────────── */
         .orb {
           position: absolute;
           border-radius: 50%;
-          filter: blur(80px);
-          animation: float 8s ease-in-out infinite;
           pointer-events: none;
+          will-change: transform;
         }
 
-        .orb-1 {
-          width: 500px; height: 500px;
-          background: radial-gradient(circle, rgba(10,132,255,0.5) 0%, transparent 70%);
-          top: -100px; left: -100px;
-          animation-delay: 0s;
+        @keyframes drift1 {
+          0%,100% { transform: translate(0,0) scale(1); }
+          33%      { transform: translate(40px,-35px) scale(1.06); }
+          66%      { transform: translate(-25px,25px) scale(0.94); }
         }
-        .orb-2 {
-          width: 400px; height: 400px;
-          background: radial-gradient(circle, rgba(191,90,242,0.4) 0%, transparent 70%);
-          top: 200px; right: -80px;
-          animation-delay: -3s;
+        @keyframes drift2 {
+          0%,100% { transform: translate(0,0) scale(1); }
+          40%      { transform: translate(-35px,40px) scale(1.08); }
+          75%      { transform: translate(30px,-20px) scale(0.96); }
         }
-        .orb-3 {
-          width: 350px; height: 350px;
-          background: radial-gradient(circle, rgba(50,210,255,0.35) 0%, transparent 70%);
-          bottom: 0px; left: 30%;
-          animation-delay: -5s;
+        @keyframes drift3 {
+          0%,100% { transform: translate(0,0) scale(1); }
+          50%      { transform: translate(20px,30px) scale(1.04); }
         }
 
-        @keyframes float {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(30px, -30px) scale(1.05); }
-          66% { transform: translate(-20px, 20px) scale(0.95); }
-        }
+        .orb-a { width:600px;height:600px; background:radial-gradient(circle,rgba(59,130,246,0.48) 0%,transparent 68%); filter:blur(72px); top:-150px; left:-100px; animation:drift1 9s ease-in-out infinite; }
+        .orb-b { width:480px;height:480px; background:radial-gradient(circle,rgba(96,165,250,0.38) 0%,transparent 68%); filter:blur(65px); top:40%; right:-80px; animation:drift2 11s ease-in-out infinite; }
+        .orb-c { width:380px;height:380px; background:radial-gradient(circle,rgba(147,197,253,0.30) 0%,transparent 68%); filter:blur(60px); bottom:0; left:35%; animation:drift3 7s ease-in-out infinite; }
+
+        /* ─── TYPE ───────────────────────────────────────────── */
+        .display { font-family: 'Outfit', sans-serif; font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
 
         @keyframes shimmer {
-          0% { background-position: -200% center; }
-          100% { background-position: 200% center; }
+          0%   { background-position: -300% center; }
+          100% { background-position: 300% center; }
         }
-
-        .shimmer-text {
-          background: linear-gradient(
-            90deg,
-            #fff 0%,
-            rgba(50,210,255,1) 30%,
-            #fff 50%,
-            rgba(191,90,242,1) 70%,
-            #fff 100%
-          );
-          background-size: 200% auto;
+        .shine {
+          background: linear-gradient(90deg, #93c5fd 0%, #fff 25%, #60a5fa 50%, #bfdbfe 75%, #93c5fd 100%);
+          background-size: 300% auto;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
-          animation: shimmer 4s linear infinite;
+          animation: shimmer 5s linear infinite;
         }
 
-        .pill-badge {
-          background: rgba(255, 255, 255, 0.12);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.22);
-          box-shadow: 0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2);
+        /* ─── BUTTONS ────────────────────────────────────────── */
+        .btn-blue {
+          display:inline-flex; align-items:center; gap:0.5rem;
+          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+          color:#fff; font-weight:700; font-size:1rem;
+          padding:1rem 2.2rem; border-radius:999px; text-decoration:none;
+          box-shadow: 0 10px 30px rgba(37,99,235,0.45), inset 0 1px 0 rgba(255,255,255,0.28);
+          transition: all 0.3s cubic-bezier(0.23,1,0.32,1);
         }
-
-        .btn-primary {
-          background: linear-gradient(135deg, #0A84FF 0%, #0060D0 100%);
-          box-shadow:
-            0 8px 24px rgba(10,132,255,0.35),
-            inset 0 1px 0 rgba(255,255,255,0.25),
-            inset 0 -1px 0 rgba(0,0,0,0.15);
-          transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-        }
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 14px 36px rgba(10,132,255,0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+        .btn-blue:hover {
+          transform:translateY(-3px);
+          box-shadow: 0 18px 44px rgba(37,99,235,0.60), inset 0 1px 0 rgba(255,255,255,0.32);
         }
 
         .btn-glass {
-          background: rgba(255, 255, 255, 0.10);
+          display:inline-flex; align-items:center; justify-content:center;
+          color:#fff; font-weight:700; font-size:1rem;
+          padding:1rem 2.2rem; border-radius:999px; text-decoration:none;
+          background: rgba(255,255,255,0.10);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.25);
-          box-shadow: 0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2);
-          transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+          border: 1px solid rgba(255,255,255,0.26);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.24), 0 4px 16px rgba(0,20,80,0.20);
+          transition: all 0.3s cubic-bezier(0.23,1,0.32,1);
         }
         .btn-glass:hover {
           background: rgba(255,255,255,0.18);
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+          transform:translateY(-3px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), 0 10px 30px rgba(0,20,80,0.30);
         }
 
-        .stat-number {
-          background: linear-gradient(135deg, #ffffff 0%, #32D2FF 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-
-        .icon-glass {
-          background: rgba(255, 255, 255, 0.10);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255,255,255,0.20);
-          box-shadow: 0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2);
-        }
-
-        .feature-glow-blue { box-shadow: 0 0 30px rgba(10,132,255,0.2); }
-        .feature-glow-purple { box-shadow: 0 0 30px rgba(191,90,242,0.2); }
-        .feature-glow-green { box-shadow: 0 0 30px rgba(48,209,88,0.2); }
-
-        .divider-glass {
-          height: 1px;
-          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
-        }
-
-        /* Mesh grid background */
-        .mesh-bg {
-          background-image:
-            linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-          background-size: 60px 60px;
-        }
-
-        /* Floating particle dots */
-        @keyframes rise {
-          0% { transform: translateY(0) scale(1); opacity: 0.4; }
-          100% { transform: translateY(-120px) scale(0); opacity: 0; }
-        }
-
-        .particle {
-          position: absolute;
-          width: 4px; height: 4px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.5);
-          animation: rise 4s ease-in infinite;
-        }
-
-        @keyframes pulse-ring {
-          0% { transform: scale(0.8); opacity: 1; }
-          100% { transform: scale(2); opacity: 0; }
-        }
-
-        .live-dot::before {
-          content: '';
-          position: absolute;
-          inset: -4px;
-          border-radius: 50%;
-          background: #30D158;
-          animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        .checklist-item {
-          background: rgba(255,255,255,0.05);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255,255,255,0.10);
-          transition: all 0.3s ease;
-        }
-        .checklist-item:hover {
+        /* ─── BADGE ──────────────────────────────────────────── */
+        .badge {
+          display:inline-flex; align-items:center; gap:0.5rem;
           background: rgba(255,255,255,0.10);
-          border-color: rgba(10,132,255,0.4);
-          transform: translateX(6px);
+          backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+          border:1px solid rgba(255,255,255,0.22);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 12px rgba(0,20,80,0.18);
+          border-radius:999px; padding: 0.45rem 1.1rem;
+          font-size:0.8rem; font-weight:600; color:rgba(255,255,255,0.85); letter-spacing:0.02em;
         }
 
-        .cta-glass {
-          background: rgba(10, 132, 255, 0.12);
-          backdrop-filter: blur(40px) saturate(200%);
-          -webkit-backdrop-filter: blur(40px) saturate(200%);
-          border: 1px solid rgba(10,132,255,0.3);
+        @keyframes pulse-dot {
+          0%,100% { opacity:1; transform:scale(1); }
+          50%      { opacity:0.5; transform:scale(0.78); }
+        }
+        .live-dot { width:7px;height:7px;border-radius:50%;background:#4ade80;animation:pulse-dot 1.8s ease-in-out infinite;flex-shrink:0; }
+
+        /* ─── PARTICLES ──────────────────────────────────────── */
+        @keyframes rise {
+          0%  { transform:translateY(0) scale(1); opacity:0.55; }
+          100%{ transform:translateY(-100px) scale(0); opacity:0; }
+        }
+        .pt { position:absolute; border-radius:50%; background:rgba(147,197,253,0.65); animation:rise linear infinite; }
+
+        /* ─── STAT NUMBER ────────────────────────────────────── */
+        .stat-num {
+          font-family:'Outfit',sans-serif; font-weight:800; font-size:2.1rem;
+          background:linear-gradient(135deg,#fff 30%,#93c5fd 100%);
+          -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+        }
+
+        /* ─── SEC LABEL ──────────────────────────────────────── */
+        .sec-label {
+          display:inline-flex; align-items:center; gap:0.5rem;
+          background:rgba(59,130,246,0.16);
+          border:1px solid rgba(59,130,246,0.35);
+          backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+          border-radius:999px; padding:0.35rem 1rem;
+          font-size:0.72rem; font-weight:700; letter-spacing:0.1em;
+          color:#93c5fd; text-transform:uppercase;
+        }
+
+        /* ─── SECTION BACKGROUNDS ────────────────────────────── */
+        .sec-blue {
+          background:
+            radial-gradient(ellipse 80% 50% at 50% 0%, rgba(37,99,235,0.20) 0%, transparent 60%),
+            linear-gradient(180deg, #0d1b4b 0%, #111f55 100%);
+        }
+        .sec-mid {
+          background:
+            radial-gradient(ellipse 70% 60% at 80% 50%, rgba(29,78,216,0.22) 0%, transparent 60%),
+            linear-gradient(180deg, #111f55 0%, #0d1b4b 100%);
+        }
+        .sec-dark { background: linear-gradient(180deg, #0d1b4b 0%, #091540 100%); }
+
+        /* ─── CHECK ITEMS ────────────────────────────────────── */
+        .check-item {
+          display:flex; align-items:center; gap:0.85rem;
+          background:rgba(255,255,255,0.05);
+          backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+          border:1px solid rgba(255,255,255,0.10);
+          border-radius:14px; padding:0.9rem 1.1rem;
+          transition:all 0.3s ease;
+        }
+        .check-item:hover {
+          background:rgba(59,130,246,0.13);
+          border-color:rgba(96,165,250,0.35);
+          transform:translateX(6px);
+        }
+
+        /* ─── DASHBOARD FRAME ────────────────────────────────── */
+        .dash-frame {
+          background:rgba(255,255,255,0.06);
+          backdrop-filter:blur(40px); -webkit-backdrop-filter:blur(40px);
+          border:1px solid rgba(255,255,255,0.14);
+          border-radius:24px; overflow:hidden;
           box-shadow:
-            0 40px 120px rgba(10,132,255,0.2),
-            inset 0 1px 0 rgba(255,255,255,0.15),
-            0 0 0 1px rgba(10,132,255,0.1);
+            0 48px 120px rgba(10,30,100,0.55),
+            inset 0 1px 0 rgba(255,255,255,0.18),
+            0 0 0 0.5px rgba(255,255,255,0.06);
+        }
+        .dash-bar {
+          height:38px;
+          background:rgba(255,255,255,0.05);
+          border-bottom:1px solid rgba(255,255,255,0.08);
+          display:flex; align-items:center; gap:6px; padding:0 14px;
         }
 
-        /* Scroll fade-in animation */
+        /* ─── FLOAT BADGES ───────────────────────────────────── */
+        .float-badge {
+          position:absolute;
+          background:rgba(10,22,66,0.68);
+          backdrop-filter:blur(30px) saturate(180%); -webkit-backdrop-filter:blur(30px) saturate(180%);
+          border:1px solid rgba(255,255,255,0.18);
+          box-shadow:0 16px 48px rgba(10,30,100,0.40), inset 0 1px 0 rgba(255,255,255,0.20);
+          border-radius:18px; padding:0.75rem 1rem;
+          display:flex; align-items:center; gap:0.75rem; min-width:172px;
+        }
+
+        /* ─── CTA WRAP ───────────────────────────────────────── */
+        .cta-wrap {
+          background:rgba(37,99,235,0.10);
+          backdrop-filter:blur(44px) saturate(180%); -webkit-backdrop-filter:blur(44px) saturate(180%);
+          border:1px solid rgba(96,165,250,0.28);
+          border-radius:32px;
+          box-shadow:
+            0 48px 120px rgba(10,30,120,0.30),
+            inset 0 1px 0 rgba(255,255,255,0.18),
+            0 0 80px rgba(37,99,235,0.12);
+        }
+
+        /* ─── DIVIDER ────────────────────────────────────────── */
+        .div-line {
+          height:1px;
+          background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15) 50%,transparent);
+        }
+
+        /* ─── FADE UP ────────────────────────────────────────── */
         @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
+          from { opacity:0; transform:translateY(32px); }
+          to   { opacity:1; transform:translateY(0); }
         }
-        .fade-up {
-          animation: fadeUp 0.7s cubic-bezier(0.23, 1, 0.32, 1) forwards;
-        }
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-        .delay-4 { animation-delay: 0.4s; }
-        .delay-5 { animation-delay: 0.5s; }
+        .fu  { opacity:0; animation:fadeUp 0.75s cubic-bezier(0.23,1,0.32,1) forwards; }
+        .d1  { animation-delay:0.05s; }
+        .d2  { animation-delay:0.15s; }
+        .d3  { animation-delay:0.25s; }
+        .d4  { animation-delay:0.35s; }
+        .d5  { animation-delay:0.45s; }
+        .d6  { animation-delay:0.55s; }
 
-        .section-label {
-          background: linear-gradient(135deg, rgba(10,132,255,0.15) 0%, rgba(191,90,242,0.15) 100%);
-          border: 1px solid rgba(10,132,255,0.25);
-          backdrop-filter: blur(10px);
+        /* ─── RESPONSIVE ─────────────────────────────────────── */
+        @media(max-width:768px){
+          .hide-mob { display:none !important; }
+          .mob-toggle { display:flex !important; }
+          .g3 { grid-template-columns:1fr !important; }
+          .g2 { grid-template-columns:1fr !important; }
+          .float-badge { display:none !important; }
+          .hero-h { font-size:clamp(3rem,13vw,5rem) !important; }
         }
 
-        /* Dashboard image glass frame */
-        .dashboard-frame {
-          background: rgba(255,255,255,0.06);
-          backdrop-filter: blur(40px);
-          border: 1px solid rgba(255,255,255,0.15);
-          box-shadow:
-            0 40px 100px rgba(0,0,0,0.5),
-            inset 0 1px 0 rgba(255,255,255,0.2),
-            0 0 0 1px rgba(255,255,255,0.05);
-        }
+        ::-webkit-scrollbar{ width:6px; }
+        ::-webkit-scrollbar-track{ background:#0d1b4b; }
+        ::-webkit-scrollbar-thumb{ background:rgba(96,165,250,0.40); border-radius:99px; }
       `}</style>
 
-      {/* ============ 1. HERO ============ */}
-      <section
-        className="relative min-h-screen flex items-center justify-center overflow-hidden mesh-bg"
-        style={{ background: "linear-gradient(135deg, #040414 0%, #080825 40%, #0c0c2e 100%)" }}
-      >
-        {/* Liquid orbs */}
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="orb orb-3" />
+      {/* ═══════════════════ NAVBAR ═══════════════════ */}
+      <nav className={`navbar ${scrolled ? "navbar-scrolled" : ""}`}>
+        <div className="navbar-inner">
+          {/* Logo */}
+          <Link href="/" className="nav-logo">🎓 EduLanka</Link>
 
-        {/* Particles */}
-        {[...Array(12)].map((_, i) => (
-          <div
-            key={i}
-            className="particle"
-            style={{
-              left: `${8 + i * 8}%`,
-              bottom: `${10 + (i % 4) * 15}%`,
-              animationDelay: `${i * 0.4}s`,
-              animationDuration: `${3 + (i % 3)}s`,
-              width: i % 3 === 0 ? "6px" : "3px",
-              height: i % 3 === 0 ? "6px" : "3px",
-              opacity: 0.3 + (i % 4) * 0.1,
-            }}
-          />
-        ))}
-
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-24">
-          {/* Live badge */}
-          <div className="inline-flex items-center gap-2.5 pill-badge rounded-full px-5 py-2 mb-10 fade-up">
-            <span className="relative flex items-center">
-              <span className="live-dot relative w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-            </span>
-            <span className="text-sm font-medium text-white/80 tracking-wide">
-              Admissions Open for 2026 Batch
-            </span>
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-          </div>
-
-          {/* Headline */}
-          <h1 className="text-6xl md:text-8xl font-black tracking-tight mb-6 leading-none fade-up delay-1">
-            <span className="text-white block">Master Your</span>
-            <span className="shimmer-text block mt-1">Future.</span>
-          </h1>
-
-          <p className="text-lg md:text-xl text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed fade-up delay-2 font-light">
-            Sri Lanka's most advanced hybrid learning platform. Smart attendance, HD recordings, and instant exam results — all in one place.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center fade-up delay-3">
-            <Link
-              href="/courses"
-              className="btn-primary text-white px-10 py-4 rounded-2xl font-semibold text-base flex items-center justify-center gap-2 tracking-wide"
-            >
-              Find Your Course
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link
-              href="/login"
-              className="btn-glass text-white px-10 py-4 rounded-2xl font-semibold text-base flex items-center justify-center tracking-wide"
-            >
-              Student Login
-            </Link>
-          </div>
-
-          {/* Floating mini stats */}
-          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 fade-up delay-4">
-            {[
-              { icon: <Users className="w-4 h-4" />, val: "5,000+", label: "Students" },
-              { icon: <GraduationCap className="w-4 h-4" />, val: "50+", label: "Teachers" },
-              { icon: <Award className="w-4 h-4" />, val: "12", label: "Top Ranks" },
-              { icon: <Star className="w-4 h-4" />, val: "100%", label: "Coverage" },
-            ].map((s, i) => (
-              <div key={i} className="glass rounded-2xl p-4 flex flex-col items-center gap-2">
-                <span className="text-blue-400">{s.icon}</span>
-                <span className="text-2xl font-bold text-white">{s.val}</span>
-                <span className="text-xs text-white/45 tracking-wide uppercase">{s.label}</span>
-              </div>
+          {/* Desktop links */}
+          <ul className="nav-links hide-mob">
+            {["Courses","Teachers","Results","About","Contact"].map((l) => (
+              <li key={l}><Link href={`/${l.toLowerCase()}`} className="nav-link">{l}</Link></li>
             ))}
+          </ul>
+
+          {/* Desktop actions */}
+          <div className="hide-mob" style={{ display:"flex", alignItems:"center", gap:"0.6rem" }}>
+            <Link href="/login" className="nav-login">Login</Link>
+            <Link href="/register" className="nav-btn">Get Started</Link>
           </div>
+
+          {/* Mobile toggle */}
+          <button className="mob-toggle" onClick={() => setMobileOpen(!mobileOpen)}>
+            {mobileOpen ? <X size={20}/> : <Menu size={20}/>}
+          </button>
         </div>
 
-        {/* Bottom fade */}
-        <div
-          className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-          style={{ background: "linear-gradient(to bottom, transparent, #040414)" }}
-        />
-      </section>
-
-      {/* ============ 2. FEATURES ============ */}
-      <section
-        className="py-28 relative overflow-hidden mesh-bg"
-        style={{ background: "linear-gradient(180deg, #040414 0%, #06061e 100%)" }}
-      >
-        {/* Subtle orb */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(10,132,255,0.07) 0%, transparent 70%)", filter: "blur(40px)" }}
-        />
-
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Section header */}
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 section-label rounded-full px-5 py-2 mb-5">
-              <span className="text-xs font-semibold text-blue-400 uppercase tracking-widest">Why Choose Us</span>
+        {/* Mobile dropdown */}
+        {mobileOpen && (
+          <div className="mobile-menu">
+            {["Courses","Teachers","Results","About","Contact"].map((l)=>(
+              <Link key={l} href={`/${l.toLowerCase()}`} className="mobile-link">{l}</Link>
+            ))}
+            <div style={{ borderTop:"1px solid rgba(255,255,255,0.10)", marginTop:"0.75rem", paddingTop:"0.75rem", display:"flex", gap:"0.75rem" }}>
+              <Link href="/login" className="mobile-link" style={{ flex:1, textAlign:"center" }}>Login</Link>
+              <Link href="/register" className="btn-blue" style={{ flex:1, justifyContent:"center", fontSize:"0.875rem", padding:"0.65rem 1rem" }}>Register</Link>
             </div>
-            <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">
-              Technology Driven
-              <span className="block text-transparent" style={{
-                background: "linear-gradient(90deg, #0A84FF, #BF5AF2)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent"
-              }}>Education</span>
-            </h2>
-            <p className="text-white/45 text-lg max-w-xl mx-auto leading-relaxed">
-              An ecosystem built for success using the most advanced educational technology.
+          </div>
+        )}
+      </nav>
+
+      <main style={{ paddingTop:"68px" }}>
+
+        {/* ═══════════════════ HERO ═══════════════════ */}
+        <section className="hero-bg mesh" style={{ position:"relative", minHeight:"100vh", display:"flex", alignItems:"center", overflow:"hidden" }}>
+          <div className="orb orb-a" />
+          <div className="orb orb-b" />
+          <div className="orb orb-c" />
+
+          {Array.from({length:14}).map((_,i)=>(
+            <div key={i} className="pt" style={{
+              left:`${6+i*7}%`, bottom:`${5+(i%5)*12}%`,
+              width:i%4===0?"6px":"3px", height:i%4===0?"6px":"3px",
+              animationDuration:`${3.5+(i%4)*0.8}s`, animationDelay:`${i*0.35}s`,
+              opacity:0.35+(i%4)*0.12,
+            }}/>
+          ))}
+
+          <div style={{ position:"relative", zIndex:10, maxWidth:"1100px", margin:"0 auto", padding:"6rem 1.5rem", display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", width:"100%" }}>
+            <div className="badge fu d1" style={{ marginBottom:"2rem" }}>
+              <span className="live-dot"/>
+              Admissions Open for 2026 Batch
+              <Sparkles size={13} color="#60a5fa"/>
+            </div>
+
+            <h1 className="display hero-h fu d2" style={{ fontSize:"clamp(3.5rem,9vw,7rem)", marginBottom:"1.25rem", color:"#fff" }}>
+              Master Your<br/>
+              <span className="shine">Future.</span>
+            </h1>
+
+            <p className="fu d3" style={{ fontSize:"1.1rem", color:"rgba(255,255,255,0.52)", maxWidth:"540px", lineHeight:"1.75", marginBottom:"2.5rem", fontWeight:400 }}>
+              Sri Lanka's most advanced hybrid LMS. Smart attendance, HD class recordings, and real-time exam results — all in one beautiful platform.
             </p>
+
+            <div className="fu d4" style={{ display:"flex", flexWrap:"wrap", gap:"1rem", justifyContent:"center", marginBottom:"4rem" }}>
+              <Link href="/courses" className="btn-blue">Find Your Course <ArrowRight size={17}/></Link>
+              <Link href="/login" className="btn-glass">Student Login</Link>
+            </div>
+
+            {/* Stat tiles */}
+            <div className="fu d5 g3" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"1rem", width:"100%", maxWidth:"780px" }}>
+              {[
+                { icon:<Users size={16} color="#60a5fa"/>, val:"5,000+", label:"Students" },
+                { icon:<GraduationCap size={16} color="#60a5fa"/>, val:"50+", label:"Teachers" },
+                { icon:<Award size={16} color="#60a5fa"/>, val:"12", label:"Top Ranks" },
+                { icon:<Star size={16} color="#60a5fa"/>, val:"100%", label:"Syllabus" },
+              ].map((s,i)=>(
+                <div key={i} className="lx" style={{ borderRadius:"18px", padding:"1.1rem 0.75rem", display:"flex", flexDirection:"column", alignItems:"center", gap:"0.4rem" }}>
+                  {s.icon}
+                  <span className="stat-num">{s.val}</span>
+                  <span style={{ fontSize:"0.7rem", color:"rgba(255,255,255,0.42)", textTransform:"uppercase", letterSpacing:"0.08em" }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Feature cards */}
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: <QrCode className="w-7 h-7" />,
-                color: "#0A84FF",
-                colorBg: "rgba(10,132,255,0.12)",
-                glow: "feature-glow-blue",
-                title: "Smart Attendance",
-                desc: "Seamless QR Code entry with instant SMS notifications to parents when their child enters or leaves.",
-                tag: "Instant Alerts",
-              },
-              {
-                icon: <MonitorPlay className="w-7 h-7" />,
-                color: "#BF5AF2",
-                colorBg: "rgba(191,90,242,0.12)",
-                glow: "feature-glow-purple",
-                title: "HD Recordings",
-                desc: "Missed a class? Access crystal-clear lecture recordings and downloadable PDF notes anytime, anywhere.",
-                tag: "On Demand",
-              },
-              {
-                icon: <Clock className="w-7 h-7" />,
-                color: "#30D158",
-                colorBg: "rgba(48,209,88,0.12)",
-                glow: "feature-glow-green",
-                title: "Instant Results",
-                desc: "Auto-marked MCQ exams with real-time results, rank analytics, and detailed performance tracking.",
-                tag: "Auto Graded",
-              },
-            ].map((f, i) => (
-              <div key={i} className={`glass-card rounded-3xl p-8 ${f.glow}`}>
-                {/* Icon */}
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6"
-                  style={{ background: f.colorBg, border: `1px solid ${f.color}33` }}
-                >
-                  <span style={{ color: f.color }}>{f.icon}</span>
-                </div>
+          <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"120px", background:"linear-gradient(transparent,#0d1b4b)", pointerEvents:"none" }}/>
+        </section>
 
-                {/* Tag pill */}
-                <div
-                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold mb-4 tracking-wide"
-                  style={{ background: f.colorBg, color: f.color, border: `1px solid ${f.color}30` }}
-                >
-                  {f.tag}
-                </div>
+        {/* ═══════════════════ FEATURES ═══════════════════ */}
+        <section className="sec-blue mesh" style={{ padding:"6rem 1.5rem", position:"relative", overflow:"hidden" }}>
+          <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:"700px", height:"400px", background:"radial-gradient(ellipse,rgba(37,99,235,0.14) 0%,transparent 70%)", filter:"blur(40px)", pointerEvents:"none" }}/>
 
-                <h3 className="text-xl font-bold text-white mb-3">{f.title}</h3>
-                <p className="text-white/50 leading-relaxed text-sm">{f.desc}</p>
-
-                {/* Bottom line accent */}
-                <div
-                  className="mt-6 h-0.5 rounded-full"
-                  style={{ background: `linear-gradient(90deg, ${f.color}60, transparent)` }}
-                />
+          <div style={{ maxWidth:"1100px", margin:"0 auto", position:"relative", zIndex:1 }}>
+            <div style={{ textAlign:"center", marginBottom:"3.5rem" }}>
+              <div className="sec-label" style={{ marginBottom:"1rem" }}>
+                <Sparkles size={12}/> Why Choose Us
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ============ 3. ECOSYSTEM SECTION ============ */}
-      <section
-        className="py-28 relative overflow-hidden"
-        style={{ background: "linear-gradient(180deg, #06061e 0%, #060618 100%)" }}
-      >
-        <div
-          className="absolute bottom-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(191,90,242,0.08) 0%, transparent 70%)", filter: "blur(60px)" }}
-        />
-
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            {/* Left content */}
-            <div>
-              <div className="inline-flex items-center gap-2 section-label rounded-full px-5 py-2 mb-6">
-                <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-                <span className="text-xs font-semibold text-purple-400 uppercase tracking-widest">Complete Ecosystem</span>
-              </div>
-
-              <h2 className="text-4xl md:text-5xl font-black text-white mb-5 tracking-tight leading-tight">
-                Everything You Need,<br />
-                <span className="text-transparent" style={{
-                  background: "linear-gradient(90deg, #32D2FF, #BF5AF2)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent"
-                }}>In One Dashboard</span>
+              <h2 className="display" style={{ fontSize:"clamp(2rem,5vw,3.2rem)", color:"#fff", marginBottom:"0.75rem" }}>
+                Technology Driven<br/>
+                <span style={{ background:"linear-gradient(90deg,#60a5fa,#93c5fd)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>Education</span>
               </h2>
-
-              <p className="text-white/45 text-base leading-relaxed mb-10">
-                Our platform integrates every tool a student needs to excel — from payments to live chat with teachers.
+              <p style={{ color:"rgba(255,255,255,0.45)", fontSize:"1rem", maxWidth:"460px", margin:"0 auto", lineHeight:"1.7" }}>
+                An ecosystem built for success using the most advanced educational technology.
               </p>
+            </div>
 
-              <ul className="space-y-3">
-                {[
-                  { label: "Secure Online Fee Payments (PayHere)", color: "#30D158" },
-                  { label: "Chat with Teachers & Doubt Solving", color: "#0A84FF" },
-                  { label: "Automated Progress Reports", color: "#BF5AF2" },
-                  { label: "Mobile-Friendly Learning App", color: "#32D2FF" },
-                ].map((item, i) => (
-                  <li key={i} className="checklist-item rounded-xl px-4 py-3.5 flex items-center gap-3">
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ background: `${item.color}20`, border: `1px solid ${item.color}40` }}
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" style={{ color: item.color }} />
+            <div className="g3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1.25rem" }}>
+              {[
+                { icon:<QrCode size={26} color="#60a5fa"/>, tag:"Instant Alerts", title:"Smart Attendance", desc:"Seamless QR code entry. Parents get live SMS when their child arrives or leaves.", accent:"rgba(59,130,246,0.18)", border:"rgba(96,165,250,0.25)", glow:"rgba(59,130,246,0.15)" },
+                { icon:<MonitorPlay size={26} color="#93c5fd"/>, tag:"On Demand", title:"HD Recordings", desc:"Access crystal-clear lecture recordings and downloadable PDF notes anytime, anywhere.", accent:"rgba(96,165,250,0.14)", border:"rgba(147,197,253,0.22)", glow:"rgba(96,165,250,0.12)" },
+                { icon:<Clock size={26} color="#bfdbfe"/>, tag:"Auto Graded", title:"Instant Results", desc:"Auto-marked MCQ exams with real-time scores, rank analytics and performance tracking.", accent:"rgba(147,197,253,0.12)", border:"rgba(191,219,254,0.20)", glow:"rgba(147,197,253,0.10)" },
+              ].map((f,i)=>(
+                <div key={i} className="lx-card" style={{ borderRadius:"24px", padding:"2rem", boxShadow:`0 24px 64px rgba(10,30,100,0.30), inset 0 1px 0 rgba(255,255,255,0.28), 0 0 40px ${f.glow}` }}>
+                  <div style={{ width:52, height:52, borderRadius:16, background:f.accent, border:`1px solid ${f.border}`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:"1.25rem", boxShadow:`0 0 20px ${f.glow}` }}>
+                    {f.icon}
+                  </div>
+                  <span style={{ display:"inline-block", background:f.accent, border:`1px solid ${f.border}`, borderRadius:999, padding:"0.25rem 0.8rem", fontSize:"0.7rem", fontWeight:700, color:"#93c5fd", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:"0.85rem" }}>{f.tag}</span>
+                  <h3 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:"1.2rem", color:"#fff", marginBottom:"0.65rem" }}>{f.title}</h3>
+                  <p style={{ color:"rgba(255,255,255,0.46)", fontSize:"0.88rem", lineHeight:"1.7" }}>{f.desc}</p>
+                  <div style={{ marginTop:"1.5rem", height:1, background:`linear-gradient(90deg,${f.border},transparent)` }}/>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════ ECOSYSTEM ═══════════════════ */}
+        <section className="sec-mid mesh" style={{ padding:"6rem 1.5rem", position:"relative", overflow:"hidden" }}>
+          <div style={{ position:"absolute", bottom:0, right:0, width:"500px", height:"500px", background:"radial-gradient(circle,rgba(37,99,235,0.16) 0%,transparent 70%)", filter:"blur(60px)", pointerEvents:"none" }}/>
+
+          <div style={{ maxWidth:"1100px", margin:"0 auto", position:"relative", zIndex:1 }}>
+            <div className="g2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4rem", alignItems:"center" }}>
+              {/* Left */}
+              <div>
+                <div className="sec-label" style={{ marginBottom:"1.25rem" }}>
+                  <BookOpen size={12}/> Complete Ecosystem
+                </div>
+                <h2 className="display" style={{ fontSize:"clamp(1.8rem,4.5vw,3rem)", color:"#fff", lineHeight:1.1, marginBottom:"1rem" }}>
+                  Everything You Need,<br/>
+                  <span style={{ background:"linear-gradient(90deg,#60a5fa,#bfdbfe)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>One Dashboard.</span>
+                </h2>
+                <p style={{ color:"rgba(255,255,255,0.44)", lineHeight:"1.75", marginBottom:"2rem", fontSize:"0.93rem" }}>
+                  Every tool a student needs to excel — payments, chat, reports, and a mobile app — all seamlessly integrated.
+                </p>
+
+                <div style={{ display:"flex", flexDirection:"column", gap:"0.65rem", marginBottom:"2rem" }}>
+                  {[
+                    "Secure Online Fee Payments (PayHere)",
+                    "Chat with Teachers & Doubt Solving",
+                    "Automated Progress Reports",
+                    "Mobile-Friendly Learning App",
+                  ].map((item,i)=>(
+                    <div key={i} className="check-item">
+                      <div style={{ width:28, height:28, borderRadius:"50%", background:"rgba(59,130,246,0.18)", border:"1px solid rgba(96,165,250,0.35)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        <CheckCircle size={15} color="#60a5fa"/>
+                      </div>
+                      <span style={{ color:"rgba(255,255,255,0.75)", fontSize:"0.9rem", fontWeight:500 }}>{item}</span>
                     </div>
-                    <span className="text-white/75 text-sm font-medium">{item.label}</span>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+                </div>
 
-              <div className="mt-8">
-                <Link
-                  href="/about"
-                  className="inline-flex items-center gap-2 text-blue-400 font-semibold hover:text-blue-300 transition-colors text-sm"
-                >
-                  Learn more about our vision
-                  <ArrowRight className="w-4 h-4" />
+                <Link href="/about" style={{ display:"inline-flex", alignItems:"center", gap:"0.4rem", color:"#60a5fa", fontWeight:600, textDecoration:"none", fontSize:"0.9rem" }}>
+                  Learn more about our vision <ArrowRight size={15}/>
                 </Link>
               </div>
-            </div>
 
-            {/* Right: Dashboard preview */}
-            <div className="relative">
-              {/* Glow behind */}
-              <div
-                className="absolute inset-0 rounded-3xl"
-                style={{ background: "radial-gradient(circle at 50% 50%, rgba(10,132,255,0.15), transparent 70%)", filter: "blur(30px)", transform: "scale(1.1)" }}
-              />
+              {/* Right — dashboard */}
+              <div style={{ position:"relative" }}>
+                <div style={{ position:"absolute", inset:0, background:"radial-gradient(circle at 50% 50%,rgba(37,99,235,0.20),transparent 70%)", filter:"blur(30px)", transform:"scale(1.15)", borderRadius:"24px", pointerEvents:"none" }}/>
 
-              <div className="dashboard-frame relative rounded-3xl overflow-hidden" style={{ height: "420px" }}>
-                {/* Top bar mockup */}
-                <div
-                  className="absolute top-0 left-0 right-0 h-10 flex items-center px-4 gap-2 z-10"
-                  style={{ background: "rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}
-                >
-                  {["#FF5F57", "#FEBC2E", "#28C840"].map((c, i) => (
-                    <div key={i} className="w-3 h-3 rounded-full" style={{ background: c }} />
-                  ))}
-                  <div
-                    className="flex-1 mx-4 h-5 rounded-md flex items-center justify-center"
-                    style={{ background: "rgba(255,255,255,0.08)" }}
-                  >
-                    <span className="text-white/30 text-xs">lms.yourplatform.lk</span>
+                <div className="dash-frame">
+                  <div className="dash-bar">
+                    {["#ff5f57","#febc2e","#28c840"].map((c,i)=>(
+                      <div key={i} style={{ width:11, height:11, borderRadius:"50%", background:c }}/>
+                    ))}
+                    <div style={{ flex:1, background:"rgba(255,255,255,0.07)", borderRadius:8, height:22, marginLeft:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <span style={{ color:"rgba(255,255,255,0.28)", fontSize:"0.68rem" }}>lms.yourplatform.lk</span>
+                    </div>
+                  </div>
+                  <div style={{ height:380, overflow:"hidden", position:"relative" }}>
+                    <img src="/Dashboard.png" alt="Dashboard" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"top" }}/>
+                    <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom,transparent 60%,rgba(13,27,75,0.55) 100%)", pointerEvents:"none" }}/>
                   </div>
                 </div>
 
-                {/* Dashboard image */}
-                <img
-                  src="/Dashboard.png"
-                  alt="Dashboard Interface Preview"
-                  className="w-full h-full object-cover object-top"
-                  style={{ paddingTop: "40px" }}
-                />
-
-                {/* Overlay gradient for glass feel */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{ background: "linear-gradient(to bottom, rgba(10,10,30,0.1) 0%, transparent 40%, rgba(10,10,30,0.4) 100%)" }}
-                />
-              </div>
-
-              {/* Floating notification badge */}
-              <div
-                className="absolute -right-4 top-16 glass rounded-2xl px-4 py-3 flex items-center gap-3"
-                style={{ minWidth: "180px" }}
-              >
-                <div className="w-8 h-8 rounded-xl bg-green-500/20 flex items-center justify-center border border-green-500/30">
-                  <Bell className="w-4 h-4 text-green-400" />
+                {/* Notification badge */}
+                <div className="float-badge" style={{ top:"3.5rem", right:"-2rem" }}>
+                  <div style={{ width:36, height:36, borderRadius:12, background:"rgba(59,130,246,0.25)", border:"1px solid rgba(96,165,250,0.35)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <Bell size={16} color="#60a5fa"/>
+                  </div>
+                  <div>
+                    <p style={{ color:"#fff", fontSize:"0.76rem", fontWeight:600, marginBottom:2 }}>Result Published</p>
+                    <p style={{ color:"rgba(255,255,255,0.40)", fontSize:"0.7rem" }}>Physics MCQ · 98%</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-white text-xs font-semibold">Result Published</p>
-                  <p className="text-white/40 text-xs">Physics MCQ · 98%</p>
-                </div>
-              </div>
 
-              {/* Floating attendance badge */}
-              <div
-                className="absolute -left-4 bottom-16 glass rounded-2xl px-4 py-3 flex items-center gap-3"
-                style={{ minWidth: "165px" }}
-              >
-                <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
-                  <QrCode className="w-4 h-4 text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-white text-xs font-semibold">Attendance Marked</p>
-                  <p className="text-white/40 text-xs">✓ SMS Sent to Parent</p>
+                {/* Attendance badge */}
+                <div className="float-badge" style={{ bottom:"3.5rem", left:"-2rem" }}>
+                  <div style={{ width:36, height:36, borderRadius:12, background:"rgba(59,130,246,0.20)", border:"1px solid rgba(96,165,250,0.30)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <QrCode size={16} color="#93c5fd"/>
+                  </div>
+                  <div>
+                    <p style={{ color:"#fff", fontSize:"0.76rem", fontWeight:600, marginBottom:2 }}>Attendance Marked</p>
+                    <p style={{ color:"rgba(255,255,255,0.40)", fontSize:"0.7rem" }}>✓ SMS Sent to Parent</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ============ 4. CTA ============ */}
-      <section
-        className="py-24 relative overflow-hidden mesh-bg"
-        style={{ background: "linear-gradient(180deg, #060618 0%, #040414 100%)" }}
-      >
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full pointer-events-none"
-          style={{ background: "radial-gradient(ellipse, rgba(10,132,255,0.12) 0%, transparent 70%)", filter: "blur(40px)" }}
-        />
+        {/* ═══════════════════ CTA ═══════════════════ */}
+        <section className="sec-dark mesh" style={{ padding:"6rem 1.5rem", position:"relative", overflow:"hidden" }}>
+          <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", width:"700px", height:"320px", background:"radial-gradient(ellipse,rgba(37,99,235,0.18) 0%,transparent 70%)", filter:"blur(50px)", pointerEvents:"none" }}/>
 
-        <div className="relative z-10 max-w-3xl mx-auto px-4 text-center">
-          <div className="cta-glass rounded-3xl p-12 md:p-16">
-            <div className="inline-flex items-center gap-2 section-label rounded-full px-5 py-2 mb-6">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-xs font-semibold text-cyan-400 uppercase tracking-widest">Get Started Today</span>
+          <div style={{ maxWidth:"760px", margin:"0 auto", position:"relative", zIndex:1 }}>
+            <div className="cta-wrap" style={{ padding:"clamp(2.5rem,6vw,4rem) clamp(1.5rem,5vw,3.5rem)", textAlign:"center" }}>
+              <div className="sec-label" style={{ marginBottom:"1.25rem" }}>
+                <Sparkles size={12}/> Get Started Today
+              </div>
+
+              <h2 className="display shine" style={{ fontSize:"clamp(2rem,5vw,3.2rem)", marginBottom:"1rem" }}>
+                Ready to Start<br/>Your Journey?
+              </h2>
+
+              <p style={{ color:"rgba(255,255,255,0.44)", lineHeight:"1.75", maxWidth:"420px", margin:"0 auto 2.5rem", fontSize:"0.95rem" }}>
+                Join thousands of successful students. Register today and access free introductory materials.
+              </p>
+
+              <div style={{ display:"flex", gap:"1rem", justifyContent:"center", flexWrap:"wrap" }}>
+                <Link href="/register" className="btn-blue">Register Now <ArrowRight size={17}/></Link>
+                <Link href="/contact" className="btn-glass">Contact Support</Link>
+              </div>
+
+              <div className="div-line" style={{ margin:"2.5rem 0 1.25rem" }}/>
+              <p style={{ color:"rgba(255,255,255,0.22)", fontSize:"0.76rem", letterSpacing:"0.04em" }}>
+                Trusted by 5,000+ students across Sri Lanka · Secure payments via PayHere
+              </p>
             </div>
-
-            <h2 className="text-4xl md:text-5xl font-black text-white mb-5 tracking-tight">
-              Ready to Start Your
-              <span className="block shimmer-text">Journey?</span>
-            </h2>
-
-            <p className="text-white/45 mb-10 leading-relaxed">
-              Join thousands of successful students who trust us for their higher education. Register today and access free introductory materials.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/register"
-                className="btn-primary text-white px-10 py-4 rounded-2xl font-semibold text-base flex items-center justify-center gap-2 tracking-wide"
-              >
-                Register Now
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                href="/contact"
-                className="btn-glass text-white px-10 py-4 rounded-2xl font-semibold text-base flex items-center justify-center tracking-wide"
-              >
-                Contact Support
-              </Link>
-            </div>
-
-            {/* Trust line */}
-            <div className="divider-glass mt-10 mb-6" />
-            <p className="text-white/25 text-xs tracking-wide">
-              Trusted by 5,000+ students across Sri Lanka · Secure payments via PayHere
-            </p>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
+
+      </main>
+    </>
   );
 }
