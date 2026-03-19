@@ -11,9 +11,9 @@ import { guardRoute, authFetch, getToken } from "@/lib/auth";
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 // ── PayHere sandbox config ────────────────────────────────────────────────────
-const PAYHERE_CHECKOUT_URL = "https://sandbox.payhere.lk/pay/checkout";
+const PAYHERE_CHECKOUT_URL = process.env.NEXT_PUBLIC_PAYHERE_URL;
 const CURRENCY             = "LKR";
-const FRONTEND_URL         = process.env.NEXT_PUBLIC_FRONTEND_URL || "https://lms-frontend-ger6.onrender.com";
+const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL;
 
 export default function StudentCoursesPayPage() {
   const router = useRouter();
