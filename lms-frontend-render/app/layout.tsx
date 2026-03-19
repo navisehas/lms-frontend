@@ -1,4 +1,3 @@
-import React from "react";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Chatbot from "@/components/Chatbot"; // Import the new component
@@ -8,10 +7,13 @@ export const metadata = {
   description: "Management System",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 relative"> {/* Added relative just in case */}
+      <head>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet" />
+      </head>
+      <body className="bg-gray-50 relative" suppressHydrationWarning>
         <Navbar />
         
         {children}
