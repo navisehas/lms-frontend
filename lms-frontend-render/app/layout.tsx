@@ -1,13 +1,14 @@
+import React from 'react';
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import Chatbot from "@/components/Chatbot"; // Import the new component
+import Chatbot from "@/components/Chatbot";
 
 export const metadata = {
   title: "Institute LMS",
   description: "Management System",
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -22,7 +23,6 @@ export default function RootLayout({ children }) {
           <p>© 2026 Institute LMS. All rights reserved.</p>
         </footer>
 
-        {/* Add the Chatbot component here */}
         <Chatbot />
       </body>
     </html>
