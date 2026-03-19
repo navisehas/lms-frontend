@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle, Loader2, ArrowRight, BookOpen, Home, RefreshCw, AlertCircle } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function PaymentSuccessPage() {
   const router       = useRouter();
