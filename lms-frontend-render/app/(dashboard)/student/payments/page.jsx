@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { guardRoute, authFetch, getToken } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 // ── PayHere sandbox config ────────────────────────────────────────────────────
 const PAYHERE_CHECKOUT_URL = process.env.NEXT_PUBLIC_PAYHERE_URL;
