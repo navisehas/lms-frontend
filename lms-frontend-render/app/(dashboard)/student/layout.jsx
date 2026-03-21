@@ -30,11 +30,10 @@ export default function StudentLayout({ children }) {
 
   const menuItems = [
     { name: "Dashboard",       href: "/student/dashboard",        icon: <Home size={20} /> },
-    { name: "Browse Courses",  href: "/student/browse-courses",   icon: <BookOpen size={20} /> },  // ✅ ADDED
+    { name: "Courses & Payments",href: "/student/payments",          icon: <CreditCard size={20} /> },
     { name: "My Courses",      href: "/student/courses",           icon: <GraduationCap size={20} /> },
     { name: "Schedule",        href: "/student/schedule",          icon: <Calendar size={20} /> },
     { name: "Attendance",      href: "/student/attendance",        icon: <Calendar size={20} /> },
-    { name: "Payments",        href: "/student/payments",          icon: <CreditCard size={20} /> },
     { name: "Payment History", href: "/student/history",           icon: <Receipt size={20} /> },
     { name: "Feedback",        href: "/student/feedback",          icon: <MessageSquare size={20} /> },
     { name: "Profile",         href: "/student/profile",           icon: <User size={20} /> },
