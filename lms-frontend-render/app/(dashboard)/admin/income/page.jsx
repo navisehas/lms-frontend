@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function AdminInstituteincomePage() {
   const router = useRouter();

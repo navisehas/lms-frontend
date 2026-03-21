@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 const PAYHERE_URL = process.env.NEXT_PUBLIC_PAYHERE_URL || "https://sandbox.payhere.lk/pay/checkout";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 

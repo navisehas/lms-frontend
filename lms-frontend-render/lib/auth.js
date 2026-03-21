@@ -31,8 +31,14 @@ export function isLoggedIn() {
 export async function authFetch(url, options = {}) {
   const token = getToken();
 
+  // When sending FormData (file uploads / multipart), do NOT set Content-Type.
+  // The browser will set it automatically with the correct multipart boundary.
+  // Forcing "application/json" here breaks multer's multipart parsing so
+  // req.body ends up empty and req.files is never populated.
+  const isFormData = options.body instanceof FormData;
+
   const headers = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers || {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };

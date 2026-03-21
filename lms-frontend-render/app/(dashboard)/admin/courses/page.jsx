@@ -9,10 +9,7 @@ import {
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:5000`
-    : "http://localhost:5000");
+const API = process.env.NEXT_PUBLIC_API_URL;
 const REPORT_API_PATH = "/api/admin/course-report";
 
 function getReportApiCandidates() {

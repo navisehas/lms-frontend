@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 const statusConfig = {
   PENDING:  { label: "Pending",       color: "bg-yellow-100 text-yellow-700 border-yellow-200",   icon: <Clock size={13} /> },

@@ -8,7 +8,7 @@ import {
 import QRCode from "react-qr-code";
 import html2canvas from "html2canvas";
 import { authFetch } from "@/lib/auth";
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 
 export default function RegisterUser() {

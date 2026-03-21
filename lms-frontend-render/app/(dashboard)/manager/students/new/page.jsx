@@ -9,7 +9,7 @@ import html2canvas from "html2canvas";
 import { authFetch } from "@/lib/auth";
 
 // Best practice: use env variable for the API
-const API = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function RegisterStudent() {
   const [loading, setLoading] = useState(false);

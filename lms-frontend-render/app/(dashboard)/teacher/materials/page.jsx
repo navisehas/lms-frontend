@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 function getMaterialHref(value) {
   if (!value) return null;
@@ -276,6 +276,7 @@ export default function TeacherMaterialsPage() {
     try {
       const url = editingMaterialId ? `${API}/materials/${editingMaterialId}` : `${API}/materials`;
       const formData = new FormData();
+      formData.append("course_id", modalCourse.course_id);
       formData.append("lesson_id", selectedLessonId);
       formData.append("title", materialForm.title.trim());
       formData.append("external_url", materialForm.external_url.trim());

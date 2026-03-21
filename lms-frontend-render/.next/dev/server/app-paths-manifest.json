@@ -1,0 +1,10 @@
+{
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(dashboard)/student/courses/[id]/page": "app/(dashboard)/student/courses/[id]/page.js",
+  "/(dashboard)/student/courses/page": "app/(dashboard)/student/courses/page.js",
+  "/(dashboard)/student/payments/page": "app/(dashboard)/student/payments/page.js",
+  "/(dashboard)/teacher/dashboard/page": "app/(dashboard)/teacher/dashboard/page.js",
+  "/(dashboard)/teacher/materials/page": "app/(dashboard)/teacher/materials/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js"
+}

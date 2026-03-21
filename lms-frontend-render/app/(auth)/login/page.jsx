@@ -6,7 +6,7 @@ import { Eye, EyeOff, LogIn, User, Lock, AlertCircle } from "lucide-react";
 import { saveSession } from "@/lib/auth";
 
 // Best practice: Use env variable for the API
-const API = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function LoginPage() {
   const router = useRouter();
