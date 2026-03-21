@@ -9,7 +9,15 @@ import {
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:5000`
+    : "http://localhost:5000");
+const REPORT_API_PATH = "/api/admin/course-report";
+
+function getReportApiCandidates() {
+  return [];
+}
 
 const EMPTY = { title: "", description: "", duration: "", teacher_id: "", fee: "", thumbnail_url: "" };
 
@@ -27,6 +35,7 @@ const FormLabel = ({ label, required, hint, children }) => (
 export default function AdminCoursesPage() {
   const router  = useRouter();
   const fileRef = useRef(null);
+  const reportInFlightRef = useRef(false);
 
   const [user, setUser]         = useState(null);
   const [courses, setCourses]   = useState([]);
@@ -35,6 +44,7 @@ export default function AdminCoursesPage() {
   const [search, setSearch]     = useState("");
   const [error, setError]       = useState("");
   const [success, setSuccess]   = useState("");
+  const [reporting, setReporting] = useState(false);
 
   // modal: null | "add" | { type:"edit", course_id }
   const [modal, setModal]           = useState(null);
@@ -66,6 +76,53 @@ export default function AdminCoursesPage() {
       setTeachers(Array.isArray(td) ? td : []);
     } catch { flash("Failed to load data.", true); }
     finally { setLoading(false); }
+  }
+
+  async function handleGenerateReport() {
+    if (reportInFlightRef.current || reporting) return;
+    reportInFlightRef.current = true;
+    setReporting(true);
+    try {
+      const res = await authFetch(REPORT_API_PATH);
+
+      if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = await res.json().catch(() => ({}));
+          flash(data.error || "Failed to generate report.", true);
+        } else {
+          const text = await res.text().catch(() => "");
+          flash(text || `Failed to generate report (HTTP ${res.status}).`, true);
+        }
+        return;
+      }
+
+      const isPdf = (res.headers.get("content-type") || "").includes("application/pdf");
+      if (!isPdf) {
+        const text = await res.text().catch(() => "");
+        // flash(text || "Invalid report response from server.", true);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "course-report.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      flash("Course report downloaded.");
+    } catch (err) {
+      // const message = String(err?.message || "").toLowerCase().includes("failed to fetch")
+      //   ? "Cannot reach server at http://localhost:5000. Make sure backend is running and API URL is correct."
+      //   : err?.message || "Network error while generating report.";
+      // flash(message, true);
+    } finally {
+      reportInFlightRef.current = false;
+      setReporting(false);
+    }
   }
 
   // ── flash ─────────────────────────────────────────────────────────────────
@@ -198,6 +255,10 @@ export default function AdminCoursesPage() {
           <button onClick={load}
             className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50">
             <RefreshCw size={14} /> Refresh
+          </button>
+          <button onClick={handleGenerateReport} disabled={reporting}
+            className="flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-60">
+            {reporting ? <Loader size={14} className="animate-spin" /> : <BookOpen size={14} />} {reporting ? "Generating..." : "Generate Report"}
           </button>
           <button onClick={openAdd}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition-all">
