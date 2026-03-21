@@ -85,14 +85,16 @@ export default function RegisterPage() {
     }
 
     try {
-      // CALL BACKEND API
       const res = await fetch(`${API}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await res.json()
+        : null;
 
       if (res.ok) {
         setMessage({ type: "success", text: `Success! Your ID is ${data.userId}. Please wait for admin approval.` });
@@ -100,7 +102,10 @@ export default function RegisterPage() {
           router.push("/login");
         }, 3000);
       } else {
-        setMessage({ type: "error", text: data.error || "Registration failed" });
+        setMessage({
+          type: "error",
+          text: data?.error || `Registration failed. Check that the backend is running at ${API}.`,
+        });
       }
     } catch (error) {
       setMessage({ type: "error", text: "Server connection failed." });
