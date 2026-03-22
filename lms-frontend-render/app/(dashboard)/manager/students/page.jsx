@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { authFetch } from "@/lib/auth"; 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -142,6 +144,91 @@ export default function StudentManagement() {
     return matchesSearch;
   });
 
+  // ==================== ADDED: PDF DOWNLOAD LOGIC ====================
+  const downloadAllStudentsPDF = async () => {
+    if (filteredUsers.length === 0) {
+      return alert("No student data available to download.");
+    }
+
+    const doc = new jsPDF();
+    
+    // 1. Load Logo Image
+    let logoDataUrl = null;
+    try {
+      const img = new Image();
+      img.src = '/logo.png';
+      
+      await new Promise((resolve) => {
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          logoDataUrl = canvas.toDataURL("image/png");
+          resolve();
+        };
+        img.onerror = resolve; 
+      });
+    } catch (e) {
+      console.warn("Could not load logo for PDF");
+    }
+
+    // 2. Draw Header
+    let textStartX = 14;
+    let startYOffset = 34;
+
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', 14, 12, 16, 16); 
+      textStartX = 34; 
+    }
+
+    doc.setFontSize(22);
+    doc.setTextColor(30, 58, 138); 
+    doc.setFont("helvetica", "bold");
+    doc.text("ENGLISH GATE", textStartX, 22);
+
+    doc.setFontSize(14);
+    doc.setTextColor(50, 50, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text("Student Directory Report", textStartX, 28);
+
+    // 3. Draw Metadata & Filters
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated On: ${new Date().toLocaleString()}`, 14, startYOffset + 6);
+    doc.text(`Total Records: ${filteredUsers.length}`, 14, startYOffset + 12);
+    
+    if (searchTerm) {
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(79, 70, 229);
+      doc.text(`Search Filter Applied: "${searchTerm}"`, 14, startYOffset + 18);
+      startYOffset += 6; 
+    }
+
+    // 4. Generate Table
+    const tableColumn = ["Student ID", "Full Name", "Phone No", "Gender", "Status"];
+    const tableRows = filteredUsers.map(student => [
+      student.user_id,
+      student.name,
+      student.phone_no || "N/A",
+      student.gender || "N/A",
+      student.status || "N/A"
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: startYOffset + 20, 
+      theme: 'grid',
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      styles: { fontSize: 9 }
+    });
+
+    doc.save(`English_Gate_Students_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-6">
       
@@ -169,7 +256,16 @@ export default function StudentManagement() {
             value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        {/* Role Dropdown removed entirely */}
+        
+        {/* ADDED: Export PDF Button near the search bar */}
+        <button 
+          onClick={downloadAllStudentsPDF}
+          disabled={loading || filteredUsers.length === 0}
+          className="flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 px-4 py-2.5 rounded-lg font-bold transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={18} />
+          <span className="hidden sm:inline">Export PDF</span>
+        </button>
       </div>
 
       {/* Responsive Table Wrapper */}
@@ -273,31 +369,29 @@ export default function StudentManagement() {
 
       {/* --- EDIT MODAL --- */}
       {editingUser && (
-  <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-100 flex items-center justify-center p-4 ani">
-    
-    <form
-      onSubmit={handleUpdateUser}
-      className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-xl overflow-hidden border border-gray-200"
-    >
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <form
+            onSubmit={handleUpdateUser}
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200"
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <Edit size={20} className="text-blue-600" />
+                Edit User Profile
+              </h2>
 
-      {/* Header */}
-      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-        <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-          <Edit size={20} className="text-blue-600" />
-          Edit User Profile
-        </h2>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="p-2 rounded-lg hover:bg-gray-200 transition"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
 
-        <button
-          type="button"
-          onClick={() => setEditingUser(null)}
-          className="p-2 rounded-lg hover:bg-gray-200 transition"
-        >
-          <X size={20} className="text-gray-600" />
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="p-6 space-y-6 overflow-y-auto">
+            {/* Body */}
+            <div className="p-6 space-y-6 overflow-y-auto">
               
               {/* Profile Picture Upload */}
               <div className="flex flex-col items-center justify-center p-2 text-gray-700">
@@ -338,7 +432,6 @@ export default function StudentManagement() {
                     value={editingUser.birthday ? new Date(editingUser.birthday).toISOString().split('T')[0] : ""} 
                     onChange={(e) => setEditingUser({...editingUser, birthday: e.target.value})} 
                     className="w-full p-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-600" 
-                    
                   />
                 </div>
 
@@ -393,17 +486,14 @@ export default function StudentManagement() {
 
               </div>
               <div className="flex flex-col sm:flex-row gap-3 p-5 border-t border-gray-100 bg-gray-50 shrink-0">
-              <button type="button" onClick={() => setEditingUser(null)} className="w-full sm:w-1/2 px-3 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 font-bold transition">
-                Cancel
-              </button>
-              <button type="submit" disabled={updating} className="w-full sm:w-1/2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold disabled:bg-blue-400 transition flex justify-center items-center">
-                {updating ? <><Loader size={16} className="animate-spin mr-2"/> Saving...</> : "Save Changes"}
-              </button>
+                <button type="button" onClick={() => setEditingUser(null)} className="w-full sm:w-1/2 px-3 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 font-bold transition">
+                  Cancel
+                </button>
+                <button type="submit" disabled={updating} className="w-full sm:w-1/2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold disabled:bg-blue-400 transition flex justify-center items-center">
+                  {updating ? <><Loader size={16} className="animate-spin mr-2"/> Saving...</> : "Save Changes"}
+                </button>
+              </div>
             </div>
-            </div>
-
-            
-
           </form>
         </div>
       )}
