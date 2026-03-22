@@ -1,19 +1,12 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
-import { Menu, X, ChevronDown, LogOut, LayoutDashboard, User } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
+import { Menu, X, LayoutDashboard } from "lucide-react";
 import Image from "next/image";
-import { getUser, isLoggedIn, logout } from "@/lib/auth";
+import { getUser, isLoggedIn } from "@/lib/auth";
 
-// All roles use the same blue pill style
-const ROLE_COLORS = {
-  ADMIN:   { bg: "bg-blue-100", text: "text-blue-700", badge: "bg-blue-600" },
-  MANAGER: { bg: "bg-blue-100", text: "text-blue-700", badge: "bg-blue-600" },
-  TEACHER: { bg: "bg-blue-100", text: "text-blue-700", badge: "bg-blue-600" },
-  STUDENT: { bg: "bg-blue-100", text: "text-blue-700", badge: "bg-blue-600" },
-};
-
+// Routes users to the correct dashboard based on their role
 const ROLE_DASHBOARD = {
   ADMIN:   "/admin/dashboard",
   MANAGER: "/manager/dashboard",
@@ -21,21 +14,11 @@ const ROLE_DASHBOARD = {
   STUDENT: "/student/dashboard",
 };
 
-const ROLE_PROFILE = {
-  ADMIN:   "/admin/users",
-  MANAGER: "/manager/students",
-  TEACHER: "/teacher/dashboard",
-  STUDENT: "/student/profile",
-};
-
 export default function Navbar() {
-  const [isOpen, setIsOpen]         = useState(false);
-  const [dropdownOpen, setDropdown] = useState(false);
-  const [user, setUser]             = useState(null);
-  const [loggedIn, setLoggedIn]     = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loggedIn, setLoggedIn] = useState(false);
   const pathname  = usePathname();
-  const router    = useRouter();
-  const dropRef   = useRef(null);
 
   useEffect(() => {
     const u  = getUser();
@@ -44,21 +27,10 @@ export default function Navbar() {
     setLoggedIn(ok);
   }, [pathname]);
 
+  // Close mobile menu on route change
   useEffect(() => {
-    function handleClick(e) {
-      if (dropRef.current && !dropRef.current.contains(e.target)) {
-        setDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const handleLogout = () => {
-    setDropdown(false);
     setIsOpen(false);
-    logout(router);
-  };
+  }, [pathname]);
 
   const navLinks = [
     { name: "Home",    href: "/" },
@@ -68,15 +40,8 @@ export default function Navbar() {
     { name: "Contact", href: "/contact" },
   ];
 
-  const colors   = user ? (ROLE_COLORS[user.role] || ROLE_COLORS.STUDENT) : null;
-  const initials = user
-    ? (user.name
-        ? user.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
-        : (user.user_id || "?").slice(0, 2).toUpperCase())
-    : "";
-
   return (
-    <nav className="bg-white shadow-md sticky top-0 z-50">
+    <nav className="bg-white shadow-md sticky top-0 z-50 w-full relative">
       <div className="w-full px-4 lg:px-8">
         <div className="flex items-center justify-between h-16">
 
@@ -98,7 +63,7 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* RIGHT: nav links + auth */}
+          {/* RIGHT: nav links + auth (Desktop) */}
           <div className="hidden md:flex items-center gap-6">
 
             {navLinks.map((link) => (
@@ -120,106 +85,59 @@ export default function Navbar() {
               </Link>
             ))}
 
+            {/* Login / Dashboard Button */}
             {loggedIn && user ? (
-              <div className="relative" ref={dropRef}>
-                <button
-                  onClick={() => setDropdown((v) => !v)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border-2 transition-all ${colors.bg} ${colors.text} border-current hover:opacity-90`}
-                >
-                  <span className={`w-7 h-7 rounded-full ${colors.badge} text-white text-xs font-bold flex items-center justify-center flex-shrink-0`}>
-                    {initials}
-                  </span>
-                  <span className="text-sm font-semibold max-w-[120px] truncate">
-                    {user.name || user.user_id}
-                  </span>
-                  <ChevronDown size={14} className={`transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className={`px-4 py-3 ${colors.bg}`}>
-                      <p className={`text-xs font-bold uppercase tracking-wide ${colors.text}`}>{user.role}</p>
-                      <p className="text-sm font-semibold text-gray-800 truncate mt-0.5">{user.name || user.user_id}</p>
-                      {user.name && <p className="text-xs text-gray-500 truncate">{user.user_id}</p>}
-                    </div>
-                    <div className="py-1">
-                      <Link href={ROLE_DASHBOARD[user.role] || "/"} onClick={() => setDropdown(false)}
-                        className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                        <LayoutDashboard size={16} className="text-gray-400" /> Dashboard
-                      </Link>
-                      <Link href={ROLE_PROFILE[user.role] || "/"} onClick={() => setDropdown(false)}
-                        className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                        <User size={16} className="text-gray-400" /> My Profile
-                      </Link>
-                    </div>
-                    <div className="border-t border-gray-100 py-1">
-                      <button onClick={handleLogout}
-                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                        <LogOut size={16} /> Logout
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <Link 
+                href={ROLE_DASHBOARD[user.role] || "/student/dashboard"}
+                className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-sm"
+              >
+                <LayoutDashboard size={18} />
+                Dashboard
+              </Link>
             ) : (
               <Link href="/login"
-                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition whitespace-nowrap">
+                className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-sm whitespace-nowrap">
                 Login
               </Link>
             )}
           </div>
 
-          {/* Mobile hamburger */}
-          <button onClick={() => setIsOpen(!isOpen)} className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+          {/* Hamburger (Mobile) */}
+          <button onClick={() => setIsOpen(!isOpen)} className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* ── MOBILE DROPDOWN OVERLAY ── */}
       {isOpen && (
-        <div className="md:hidden bg-white border-t shadow-lg">
-          <div className="px-4 pt-3 pb-4 space-y-1">
+        <div className="md:hidden absolute top-16 left-0 w-full bg-white border-t shadow-2xl z-50 flex flex-col max-h-[calc(100vh-4rem)] overflow-y-auto">
+          <div className="px-4 pt-4 pb-6 space-y-2">
+            
+            {/* Mobile Links */}
             {navLinks.map((link) => (
               <Link key={link.name} href={link.href} onClick={() => setIsOpen(false)}
-                className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`block px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                   pathname === link.href
-                    ? "bg-blue-50 text-blue-600 font-bold"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-blue-600"
+                    ? "bg-blue-50 text-blue-600 font-bold border border-blue-100"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-blue-600 border border-transparent"
                 }`}>
                 {link.name}
               </Link>
             ))}
 
-            <div className="pt-2">
+            <div className="pt-4 mt-2 border-t border-gray-100">
+              {/* Mobile Login / Dashboard Button */}
               {loggedIn && user ? (
-                <>
-                  <div className={`flex items-center gap-3 px-3 py-3 rounded-lg mb-2 ${colors.bg}`}>
-                    <span className={`w-9 h-9 rounded-full ${colors.badge} text-white text-sm font-bold flex items-center justify-center flex-shrink-0`}>
-                      {initials}
-                    </span>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-semibold truncate ${colors.text}`}>{user.name || user.user_id}</p>
-                      <p className={`text-xs font-bold ${colors.text} opacity-70`}>{user.role}</p>
-                    </div>
-                  </div>
-                  <Link href={ROLE_DASHBOARD[user.role] || "/"} onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-                    <LayoutDashboard size={16} /> Dashboard
-                  </Link>
-                  <Link href={ROLE_PROFILE[user.role] || "/"} onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-                    <User size={16} /> My Profile
-                  </Link>
-                  <button onClick={handleLogout}
-                    className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-sm text-red-600 hover:bg-red-50 mt-1">
-                    <LogOut size={16} /> Logout
-                  </button>
-                </>
+                <Link href={ROLE_DASHBOARD[user.role] || "/student/dashboard"} onClick={() => setIsOpen(false)}
+                  className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white px-4 py-3.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-sm">
+                  <LayoutDashboard size={18} />
+                  Go to Dashboard
+                </Link>
               ) : (
                 <Link href="/login" onClick={() => setIsOpen(false)}
-                  className="block w-full text-center bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition">
-                  Login
+                  className="flex items-center justify-center w-full bg-blue-600 text-white px-4 py-3.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-sm">
+                  Student / Staff Login
                 </Link>
               )}
             </div>
