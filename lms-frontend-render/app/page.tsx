@@ -82,8 +82,9 @@ export default function Home() {
                 alt="Special Welcome Offer" 
                 className="w-full h-auto max-h-[70vh] object-contain"
                 onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = `
+                  const img = e.target as HTMLImageElement;
+                  img.style.display = 'none';
+                  if (img.parentElement) img.parentElement.innerHTML = `
                     <div class="p-12 text-center w-full">
                       <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
