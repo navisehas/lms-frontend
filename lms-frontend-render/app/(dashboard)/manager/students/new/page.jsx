@@ -193,7 +193,7 @@ export default function RegisterStudent() {
   return (
     <div className="max-w-4xl mx-auto pb-12 px-4">
       <div className="flex items-center gap-4 mb-8 mt-6">
-        <button type="button" onClick={() => window.history.back()} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+        <button type="button" onClick={() => window.history.back()} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-700">
           <ArrowLeft size={20} />
         </button>
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
