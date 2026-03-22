@@ -97,7 +97,7 @@ export default function AdminCoursesPage() {
       const isPdf = (res.headers.get("content-type") || "").includes("application/pdf");
       if (!isPdf) {
         const text = await res.text().catch(() => "");
-        // flash(text || "Invalid report response from server.", true);
+        flash(text || "Invalid report response from server.", true);
         return;
       }
 
@@ -112,10 +112,10 @@ export default function AdminCoursesPage() {
       window.URL.revokeObjectURL(url);
       flash("Course report downloaded.");
     } catch (err) {
-      // const message = String(err?.message || "").toLowerCase().includes("failed to fetch")
-      //   ? "Cannot reach server at http://localhost:5000. Make sure backend is running and API URL is correct."
-      //   : err?.message || "Network error while generating report.";
-      // flash(message, true);
+      const message = String(err?.message || "").toLowerCase().includes("failed to fetch")
+        ? "Cannot reach server. Make sure the backend is running and API URL is correct."
+        : err?.message || "Network error while generating report.";
+      flash(message, true);
     } finally {
       reportInFlightRef.current = false;
       setReporting(false);
