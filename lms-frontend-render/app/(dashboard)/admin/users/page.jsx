@@ -4,13 +4,14 @@ import Link from "next/link";
 import { 
   Search, Filter, Plus, Trash2, Edit, Shield, 
   User, GraduationCap, Briefcase, Download, Loader, X,
-  Calendar, Camera, AlertTriangle, Upload, MapPin, Phone
+  Calendar, Camera, AlertTriangle, MapPin, Phone
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { authFetch } from "@/lib/auth"; 
 const API = process.env.NEXT_PUBLIC_API_URL;
-
 
 export default function UserManagement() {
   
@@ -74,7 +75,6 @@ export default function UserManagement() {
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     
-    // FIXED: Use editingUser instead of formData, and standard alert()
     if (editingUser.birthday && editingUser.birthday >= maxDate) {
       alert("❌ Date of Birth must be a date in the past.");
       return;
@@ -136,9 +136,9 @@ export default function UserManagement() {
   const filteredUsers = users.filter(user => {
     const matchesRole = filterRole === "ALL" || user.role === filterRole;
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = user.name.toLowerCase().includes(searchLower) || 
+    const matchesSearch = (user.name || "").toLowerCase().includes(searchLower) || 
                           (user.phone_no && user.phone_no.includes(searchLower)) ||
-                          user.user_id.toLowerCase().includes(searchLower);
+                          (user.user_id || "").toLowerCase().includes(searchLower);
     return matchesRole && matchesSearch;
   });
 
@@ -149,6 +149,96 @@ export default function UserManagement() {
       case 'MANAGER': return <Briefcase size={14} />;
       default: return <User size={14} />;
     }
+  };
+
+  // ==================== PDF DOWNLOAD LOGIC ====================
+  const downloadAllUsersPDF = async () => {
+    if (filteredUsers.length === 0) {
+      return alert("No user data available to download.");
+    }
+
+    const doc = new jsPDF();
+    
+    // 1. Load Logo Image
+    let logoDataUrl = null;
+    try {
+      const img = new Image();
+      img.src = '/logo.png';
+      
+      await new Promise((resolve) => {
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          logoDataUrl = canvas.toDataURL("image/png");
+          resolve();
+        };
+        img.onerror = resolve; 
+      });
+    } catch (e) {
+      console.warn("Could not load logo for PDF");
+    }
+
+    // 2. Draw Header
+    let textStartX = 14;
+    let startYOffset = 34;
+
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', 14, 12, 16, 16); 
+      textStartX = 34; 
+    }
+
+    doc.setFontSize(22);
+    doc.setTextColor(30, 58, 138); 
+    doc.setFont("helvetica", "bold");
+    doc.text("ENGLISH GATE", textStartX, 22);
+
+    doc.setFontSize(14);
+    doc.setTextColor(50, 50, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text("Master User Directory", textStartX, 28);
+
+    // 3. Draw Metadata & Filters
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated On: ${new Date().toLocaleString()}`, 14, startYOffset + 6);
+    doc.text(`Total Records: ${filteredUsers.length}`, 14, startYOffset + 12);
+    
+    let filterText = [];
+    if (filterRole !== "ALL") filterText.push(`Role: ${filterRole}`);
+    if (searchTerm) filterText.push(`Search: "${searchTerm}"`);
+    
+    if (filterText.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(79, 70, 229);
+      doc.text(`Filters Applied: ${filterText.join(" | ")}`, 14, startYOffset + 18);
+      startYOffset += 6; 
+    }
+
+    // 4. Generate Table
+    const tableColumn = ["User ID", "Full Name", "Role", "Phone No", "Gender", "Status"];
+    const tableRows = filteredUsers.map(user => [
+      user.user_id,
+      user.name,
+      user.role,
+      user.phone_no || "N/A",
+      user.gender || "N/A",
+      user.status || "N/A"
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: startYOffset + 20, 
+      theme: 'grid',
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      styles: { fontSize: 9 }
+    });
+
+    doc.save(`English_Gate_Users_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   return (
@@ -169,7 +259,7 @@ export default function UserManagement() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-row gap-4 justify-between items-center text-gray-700">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col lg:flex-row gap-4 justify-between items-center text-gray-700">
         <div className="relative w-full lg:w-96">
           <Search className="absolute left-3 top-3 text-gray-600 w-5 h-5" />
           <input 
@@ -178,10 +268,10 @@ export default function UserManagement() {
             value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-3 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
           <Filter size={18} className="text-gray-600 shrink-0"/>
           <select 
-            className="w-full lg:w-auto p-2.5 border border-gray-200 rounded-lg text-sm font-bold bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition"
+            className="w-full sm:w-auto p-2.5 border border-gray-200 rounded-lg text-sm font-bold bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition"
             value={filterRole} onChange={(e) => setFilterRole(e.target.value)}
           >
             <option value="ALL">All Roles</option>
@@ -190,6 +280,16 @@ export default function UserManagement() {
             <option value="MANAGER">Managers</option>
             <option value="ADMIN">Admins</option>
           </select>
+          
+          {/* Export PDF Button */}
+          <button 
+            onClick={downloadAllUsersPDF}
+            disabled={loading || filteredUsers.length === 0}
+            className="flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 px-4 py-2.5 rounded-lg font-bold transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+          >
+            <Download size={18} />
+            <span>Export PDF</span>
+          </button>
         </div>
       </div>
 
@@ -300,13 +400,13 @@ export default function UserManagement() {
         )}
       </div>
 
-      {/* --- EDIT MODAL (Perfectly Responsive) --- */}
+      {/* --- EDIT MODAL --- */}
       {editingUser && (
   <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-100 flex items-center justify-center p-4 ani">
     
     <form
       onSubmit={handleUpdateUser}
-      className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-xl overflow-hidden border border-gray-200"
+      className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200"
     >
 
       {/* Header */}
@@ -486,7 +586,7 @@ export default function UserManagement() {
                 ID: {idCardData.user_id}
               </div>
             </div>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyCenter: "center", width: "100%", paddingBottom: "24px" }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", paddingBottom: "24px" }}>
               <div style={{ backgroundColor: "#ffffff", padding: "12px", borderRadius: "12px", border: "2px solid #e2e8f0", boxShadow: "0 8px 16px rgba(0,0,0,0.05)" }}>
                 <QRCode value={idCardData.user_id} size={160} level="M" />
               </div>
