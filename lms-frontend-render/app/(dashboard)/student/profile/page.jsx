@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
 import { authFetch, guardRoute } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function StudentProfile() {
   const router = useRouter();
@@ -87,11 +87,21 @@ export default function StudentProfile() {
   // ====================== HANDLERS ======================
   const handleDownloadID = async () => {
     if (!cardRef.current) return;
-    const canvas = await html2canvas(cardRef.current, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
-    const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/png");
-    link.download = `${user.user_id}_ID.png`;
-    link.click();
+    try {
+      const canvas = await html2canvas(cardRef.current, { 
+        backgroundColor: "#ffffff", 
+        scale: 3, 
+        useCORS: true,
+        logging: false
+      });
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `${user.user_id}_ID_Card.png`;
+      link.click();
+    } catch (error) {
+      console.error("Failed to generate ID card:", error);
+      alert("Failed to generate ID card. Please try again.");
+    }
   };
 
   const handleChangePassword = async (e) => {
@@ -133,42 +143,9 @@ export default function StudentProfile() {
     }
   };
 
-  // ====================== ATTENDANCE FILTER & STATS LOGIC ======================
-  const uniqueCourses = [...new Set(attendanceRecords.map(item => item.course_title))];
   
-  const monthOptions = Array.from(new Set(
-    attendanceRecords.map(p => {
-      const d = new Date(p.date);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    })
-  )).sort().reverse();
-
-  const filteredAttendance = attendanceRecords.filter(item => {
-    const matchCourse = filterCourse === "ALL" || item.course_title === filterCourse;
-    const d = new Date(item.date);
-    const itemMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const matchMonth = filterMonth === "ALL" || itemMonth === filterMonth;
-    return matchCourse && matchMonth;
-  });
-
-  // Calculate Statistics dynamically based on the filtered list
-  const totalClasses = filteredAttendance.length;
-  const attendedClasses = filteredAttendance.filter(r => r.status === "PRESENT" || r.status === "LATE").length;
-  const absentClasses = filteredAttendance.filter(r => r.status === "ABSENT").length;
-  const attendancePercentage = totalClasses === 0 ? 0 : Math.round((attendedClasses / totalClasses) * 100);
-
-  const formatTime = (timeString) => {
-    if (!timeString) return "N/A";
-    const [h, m] = timeString.split(':');
-    const date = new Date();
-    date.setHours(h, m);
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader className="animate-spin text-indigo-600 w-10 h-10" /></div>;
-
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8 relative">
       
       {/* Header */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -178,9 +155,9 @@ export default function StudentProfile() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         
-        {/* ==================== LEFT: ID CARD ==================== */}
+        {/* ==================== LEFT: VISIBLE UI PROFILE SUMMARY ==================== */}
         <div className="space-y-6 lg:sticky lg:top-6">
-          <div ref={cardRef} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden relative text-center">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-center">
             <div className="h-28 bg-indigo-600 relative">
                <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
                  <div className="relative">
@@ -210,8 +187,8 @@ export default function StudentProfile() {
             </div>
           </div>
 
-          <button onClick={handleDownloadID} className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-3 rounded-xl transition shadow-sm">
-            <Download size={18} /> Download ID Card
+          <button onClick={handleDownloadID} className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition shadow-md">
+            <Download size={20} /> Download Official ID
           </button>
         </div>
 
@@ -322,150 +299,43 @@ export default function StudentProfile() {
             )}
           </div>
 
-          {/* ==================== ATTENDANCE HISTORY ==================== */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            
-            {/* Header & Filters */}
-            <div className="p-6 md:p-8 border-b border-gray-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                  <CalendarCheck size={20} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">Attendance History</h2>
-                  <p className="text-xs text-gray-500">Track your class presence</p>
-                </div>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-                <div className="relative flex-1 sm:flex-none">
-                  <BookOpen size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select 
-                    value={filterCourse} 
-                    onChange={(e) => setFilterCourse(e.target.value)}
-                    className="w-full sm:w-48 pl-9 pr-8 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
-                  >
-                    <option value="ALL">All Courses</option>
-                    {uniqueCourses.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-
-                <div className="relative flex-1 sm:flex-none">
-                  <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select 
-                    value={filterMonth} 
-                    onChange={(e) => setFilterMonth(e.target.value)}
-                    className="w-full sm:w-40 pl-9 pr-8 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
-                  >
-                    <option value="ALL">All Months</option>
-                    {monthOptions.map(m => {
-                      const [y, mo] = m.split("-");
-                      const label = new Date(parseInt(y), parseInt(mo) - 1).toLocaleString("en-US", { month: "short", year: "numeric" });
-                      return <option key={m} value={m}>{label}</option>;
-                    })}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-0">
-              {loadingAttendance ? (
-                <div className="flex justify-center items-center py-16"><Loader className="animate-spin text-indigo-600" size={28} /></div>
-              ) : filteredAttendance.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <CalendarCheck size={40} className="mx-auto mb-3 opacity-20" />
-                  <p className="font-medium text-sm text-gray-500">No attendance records found for this selection.</p>
-                </div>
-              ) : (
-                <>
-                  {/* --- SUMMARY STATISTICS BAR --- */}
-                  <div className="bg-gray-50 border-b border-gray-100 p-4 md:p-5">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-2 md:divide-x divide-gray-200">
-                      
-                      <div className="flex flex-col px-2 md:px-4 text-center md:text-left">
-                        <span className="text-[10px] md:text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 truncate">Total Classes</span>
-                        <span className="text-2xl font-black text-gray-900">{totalClasses}</span>
-                      </div>
-                      
-                      <div className="flex flex-col px-2 md:px-4 text-center md:text-left">
-                        <span className="text-[10px] md:text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 truncate">Attended</span>
-                        <span className="text-2xl font-black text-green-600">{attendedClasses}</span>
-                      </div>
-                      
-                      <div className="flex flex-col px-2 md:px-4 text-center md:text-left">
-                        <span className="text-[10px] md:text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 truncate">Absent</span>
-                        <span className="text-2xl font-black text-red-600">{absentClasses}</span>
-                      </div>
-                      
-                      <div className="flex flex-col px-2 md:px-4 text-center md:text-left">
-                        <span className="text-[10px] md:text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 truncate">Attendance Rate</span>
-                        <span className={`text-2xl font-black ${
-                          attendancePercentage >= 80 ? 'text-green-600' : 
-                          attendancePercentage >= 50 ? 'text-yellow-600' : 
-                          'text-red-600'
-                        }`}>
-                          {attendancePercentage}%
-                        </span>
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* --- ATTENDANCE TABLE --- */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-white text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        <tr>
-                          <th className="px-6 py-4 border-b border-gray-100">Date</th>
-                          <th className="px-6 py-4 border-b border-gray-100">Course</th>
-                          <th className="px-6 py-4 border-b border-gray-100">Arrival Time</th>
-                          <th className="px-6 py-4 border-b border-gray-100 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 bg-white">
-                        {filteredAttendance.map((record) => (
-                          <tr key={record.attendance_id} className="hover:bg-indigo-50/30 transition-colors">
-                            <td className="px-6 py-4">
-                              <span className="font-semibold text-gray-900">
-                                {new Date(record.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-gray-700 font-medium">
-                              {record.course_title}
-                            </td>
-                            <td className="px-6 py-4 text-gray-500 font-medium">
-                              {record.status === "ABSENT" || record.status === "EXCUSED" ? "--:--" : (
-                                <span className="flex items-center gap-1.5"><Clock size={14}/> {formatTime(record.arrival_time)}</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                                record.status === "PRESENT" ? "bg-green-50 text-green-700 border-green-200" : 
-                                record.status === "LATE" ? "bg-yellow-50 text-yellow-700 border-yellow-200" : 
-                                record.status === "EXCUSED" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                "bg-red-50 text-red-700 border-red-200"
-                              }`}>
-                                {record.status === "PRESENT" ? <CheckCircle size={14} /> : 
-                                 record.status === "LATE" ? <Clock size={14} /> : 
-                                 record.status === "EXCUSED" ? <CheckCircle size={14} className="opacity-70" /> :
-                                 <XCircle size={14} />}
-                                {record.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
+          
         </div>
       </div>
+
+      {/* --- HIDDEN ID CARD GENERATOR (For Download ONLY) --- */}
+      <div style={{ position: "absolute", top: "-9999px", left: "-9999px" }}>
+        <div ref={cardRef} style={{ width: "340px", height: "540px", backgroundColor: "#ffffff", borderRadius: "16px", fontFamily: "sans-serif", position: "relative", overflow: "hidden", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "140px", background: "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)", zIndex: 0 }}></div>
+          <div style={{ position: "relative", zIndex: 10, marginTop: "24px", color: "#ffffff", textAlign: "center", width: "100%" }}>
+            <h2 style={{ margin: 0, fontSize: "22px", fontWeight: "900", letterSpacing: "2px", textTransform: "uppercase" }}>ENGLISH GATE</h2>
+          </div>
+          <div style={{ position: "relative", zIndex: 10, marginTop: "20px", width: "120px", height: "120px", borderRadius: "50%", backgroundColor: "#ffffff", padding: "6px", boxShadow: "0 4px 10px rgba(0,0,0,0.15)" }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: "50%", backgroundColor: "#f3f4f6", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {user.profile_picture_url ? (
+                <img src={user.profile_picture_url} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : <User size={60} color="#9ca3af" />}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", padding: "16px 24px", zIndex: 10 }}>
+            <h1 style={{ margin: "0 0 8px 0", fontSize: "24px", fontWeight: "800", color: "#111827", textAlign: "center", lineHeight: "1.2" }}>
+              {user.name}
+            </h1>
+            <div style={{ backgroundColor: '#dcfce3', color: '#166534', padding: "4px 16px", borderRadius: "99px", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+              STUDENT
+            </div>
+            <div style={{ fontSize: "16px", color: "#64748b", fontFamily: "monospace", fontWeight: "bold", letterSpacing: "2px" }}>
+              ID: {user.user_id}
+            </div>
+          </div>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", paddingBottom: "24px" }}>
+            <div style={{ backgroundColor: "#ffffff", padding: "12px", borderRadius: "12px", border: "2px solid #e2e8f0", boxShadow: "0 8px 16px rgba(0,0,0,0.05)" }}>
+              {user.user_id && <QRCodeSVG value={user.user_id} size={160} level="M" />}
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
