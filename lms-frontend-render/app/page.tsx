@@ -1,3 +1,5 @@
+"use client";
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   BookOpen, 
@@ -7,16 +9,110 @@ import {
   MonitorPlay, 
   Clock, 
   CheckCircle,
-  ArrowRight
+  ArrowRight,
+  X
 } from 'lucide-react';
 
 export default function Home() {
-  return (
-    <main className="flex flex-col min-h-screen">
+  const [showPopup, setShowPopup] = useState(false);
+  const [isFadingIn, setIsFadingIn] = useState(false);
+
+  useEffect(() => {
+    // ------------------------------------------------------------------
+    // 🛠️ DEVELOPMENT MODE: Session storage is disabled so you can test it!
+    // To make it show only once per session in production, uncomment the 
+    // "popupSeen" lines later.
+    // ------------------------------------------------------------------
+    
+    // const popupSeen = sessionStorage.getItem('welcomePopupSeen');
+    // if (!popupSeen) {
       
-      {/* 1. HERO SECTION: The "Hook" */}
+      // Shows popup after just 0.5 seconds (down from 1.5s)
+      const timer = setTimeout(() => {
+        setShowPopup(true);
+        setTimeout(() => setIsFadingIn(true), 50); 
+      }, 500);
+
+      return () => clearTimeout(timer);
+      
+    // }
+  }, []);
+
+  const closePopup = () => {
+    setIsFadingIn(false);
+    setTimeout(() => {
+      setShowPopup(false);
+      // sessionStorage.setItem('welcomePopupSeen', 'true'); // Disabled for testing
+    }, 300); 
+  };
+
+  return (
+    <main className="flex flex-col min-h-screen relative">
+      
+      {/* ─── WELCOME POPUP MODAL ─── */}
+      {showPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ease-out ${
+              isFadingIn ? "opacity-100" : "opacity-0"
+            }`}
+            onClick={closePopup}
+          />
+
+          {/* Modal Content */}
+          <div 
+            className={`relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden z-10 flex flex-col transform transition-all duration-300 ease-out ${
+              isFadingIn ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-4"
+            }`}
+          >
+            {/* Close Button */}
+            <button 
+              onClick={closePopup}
+              className="absolute top-4 right-4 z-20 bg-black/50 text-white rounded-full p-1.5 hover:bg-black/80 transition-colors"
+              aria-label="Close popup"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Image Section */}
+            <div className="relative w-full max-h-[85vh] bg-blue-50 flex items-center justify-center">
+              <img 
+                src="0/Dashboard.png" 
+                alt="Special Welcome Offer" 
+                className="w-full h-auto max-h-[70vh] object-contain"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentElement.innerHTML = `
+                    <div class="p-12 text-center w-full">
+                      <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                      </div>
+                      <h2 class="text-3xl font-bold text-blue-900 mb-4">Admissions Open 2026</h2>
+                      <p class="text-gray-600 mb-16">Join the most advanced hybrid learning platform in Sri Lanka.</p>
+                    </div>
+                  `;
+                }}
+              />
+              
+              {/* Call to Action Button */}
+              <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex justify-center">
+                <Link 
+                  href="/register"
+                  onClick={closePopup}
+                  className="px-8 py-3.5 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 transition shadow-lg flex items-center gap-2 transform hover:scale-105"
+                >
+                  Enroll Now for 2026 <ArrowRight className="w-5 h-5" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ─── END POPUP ─── */}
+
+      {/* 1. HERO SECTION */}
       <section className="relative bg-gradient-to-br from-blue-900 via-blue-800 to-blue-600 text-white py-24 lg:py-32 overflow-hidden">
-        {/* Abstract Background Element */}
         <div className="absolute top-0 right-0 w-1/2 h-full bg-white opacity-5 transform skew-x-12 translate-x-20"></div>
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center text-center">
@@ -53,7 +149,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 2. STATS SECTION: Social Proof */}
+      {/* 2. STATS SECTION */}
       <section className="bg-white py-12 border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
@@ -77,7 +173,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. FEATURES SECTION: "What do I get?" */}
+      {/* 3. FEATURES SECTION */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -91,7 +187,6 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {/* Feature 1 */}
             <div className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-xl transition-shadow duration-300">
               <div className="w-14 h-14 bg-blue-100 rounded-lg flex items-center justify-center mb-6">
                 <QrCode className="w-8 h-8 text-blue-600" />
@@ -102,7 +197,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Feature 2 */}
             <div className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-xl transition-shadow duration-300">
               <div className="w-14 h-14 bg-purple-100 rounded-lg flex items-center justify-center mb-6">
                 <MonitorPlay className="w-8 h-8 text-purple-600" />
@@ -113,7 +207,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Feature 3 */}
             <div className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-xl transition-shadow duration-300">
               <div className="w-14 h-14 bg-green-100 rounded-lg flex items-center justify-center mb-6">
                 <Clock className="w-8 h-8 text-green-600" />
@@ -127,11 +220,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 4. GRID CONTENT: More detailed breakdown */}
+      {/* 4. GRID CONTENT */}
       <section className="py-20 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="lg:grid lg:grid-cols-2 lg:gap-16 items-center">
-            {/* Left: Content */}
             <div className="mb-12 lg:mb-0">
               <h2 className="text-3xl font-extrabold text-gray-900 mb-6">
                 A Complete Learning Ecosystem
@@ -161,25 +253,21 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right: Visual Placeholder */}
             <div className="relative">
-  {/* Decorative background shadow */}
-  <div className="absolute inset-0 bg-blue-600 rounded-2xl transform rotate-3 opacity-10"></div>
-  
-  {/* Image Container */}
-  <div className="relative bg-white rounded-2xl h-96 overflow-hidden shadow-lg border border-gray-200">
-    <img 
-      src="/Dashboard.png" 
-      alt="Dashboard Interface Preview" 
-      className="w-full h-full object-cover object-top"
-    />
-  </div>
-</div>
+              <div className="absolute inset-0 bg-blue-600 rounded-2xl transform rotate-3 opacity-10"></div>
+              <div className="relative bg-white rounded-2xl h-96 overflow-hidden shadow-lg border border-gray-200">
+                <img 
+                  src="/Dashboard.png" 
+                  alt="Dashboard Interface Preview" 
+                  className="w-full h-full object-cover object-top"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 5. CTA SECTION: Final Call */}
+      {/* 5. CTA SECTION */}
       <section className="bg-gray-900 py-16">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
