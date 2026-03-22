@@ -2,13 +2,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { 
   Calendar, Search, Edit2, Trash2, 
-  CheckCircle, XCircle, Save, X, Loader, BookOpen, AlertTriangle, UserMinus, AlertCircle, FileText, DownloadCloud, FileDown
+  CheckCircle, XCircle, X, Loader, BookOpen, AlertTriangle, UserMinus, AlertCircle, FileText, DownloadCloud, FileDown, Clock
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-const API = process.env.NEXT_PUBLIC_API_URL;
-
 
 export default function AttendanceLog() {
   
@@ -48,7 +46,7 @@ export default function AttendanceLog() {
 
   const fetchAttendance = async () => {
     try {
-      const res = await authFetch(`${API}/attendance/all`);
+      const res = await authFetch("http://localhost:5000/attendance/all");
       if (res.ok) setAttendanceData(await res.json());
     } catch (error) {
       console.error("Failed to fetch attendance:", error);
@@ -59,7 +57,7 @@ export default function AttendanceLog() {
 
   const fetchAllCourses = async () => {
     try {
-      const res = await authFetch(`${API}/courses`);
+      const res = await authFetch("http://localhost:5000/courses");
       if (res.ok) setAllCourses(await res.json());
     } catch (error) {
       console.error("Failed to fetch courses");
@@ -73,7 +71,7 @@ export default function AttendanceLog() {
     setEditCourseId(record.course_id); 
     setFetchingCourses(true);
     try {
-      const res = await authFetch(`${API}/student/${record.studentId}/courses`);
+      const res = await authFetch(`http://localhost:5000/student/${record.studentId}/courses`);
       setStudentCourses(await res.json());
     } catch (error) {
       showAlert("error", "Failed to load student courses");
@@ -86,7 +84,7 @@ export default function AttendanceLog() {
   const submitUpdate = async () => {
     setIsSaving(true);
     try {
-      const res = await authFetch(`${API}/attendance/${updateModal.record.id}`, {
+      const res = await authFetch(`http://localhost:5000/attendance/${updateModal.record.id}`, {
         method: "PUT",
         body: JSON.stringify({ course_id: editCourseId })
       });
@@ -111,7 +109,7 @@ export default function AttendanceLog() {
   const submitDelete = async () => {
     setIsDeleting(true);
     try {
-      const res = await authFetch(`${API}/attendance/${deleteModal.record.id}`, { 
+      const res = await authFetch(`http://localhost:5000/attendance/${deleteModal.record.id}`, { 
         method: "DELETE" 
       });
       
@@ -134,7 +132,7 @@ export default function AttendanceLog() {
     if (!absentModal.courseId) return showAlert("error", "Please select a course first.");
     setIsMarkingAbsents(true);
     try {
-      const res = await authFetch(`${API}/attendance/mark-absents`, {
+      const res = await authFetch("http://localhost:5000/attendance/mark-absents", {
         method: "POST",
         body: JSON.stringify({ course_id: absentModal.courseId, date: absentModal.date })
       });
@@ -214,7 +212,6 @@ export default function AttendanceLog() {
 
       grouped[groupKey].total += 1;
       
-      // Combine LATE into ATTENDED, and EXCUSED into ABSENT for a cleaner report
       if (record.status === "PRESENT" || record.status === "LATE") {
         grouped[groupKey].attended += 1;
       } else {
@@ -228,12 +225,24 @@ export default function AttendanceLog() {
     }).sort((a, b) => a.key.localeCompare(b.key));
   }, [filteredData, reportModal.isOpen, reportModal.type]);
 
-  // ==================== DOWNLOAD HANDLERS ====================
-  const downloadCSV = () => {
+
+  // Helper to get active filters string
+  const getActiveFiltersString = () => {
+    const activeFilters = [];
+    if (searchTerm) activeFilters.push(`Student: "${searchTerm}"`);
+    if (filterDate) activeFilters.push(`Date: ${filterDate}`);
+    if (filterCourse !== "ALL") activeFilters.push(`Course: ${filterCourse}`);
+    
+    return activeFilters.length > 0 ? activeFilters.join("  |  ") : "None (All Records)";
+  };
+
+
+  // ==================== DOWNLOAD HANDLERS (REPORT MODAL) ====================
+  const downloadReportCSV = () => {
     if (reportData.length === 0) return showAlert("error", "No data to download.");
 
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += `LMS Attendance Report (${reportModal.type}-WISE)\n`;
+    csvContent += `ENGLISH GATE - Attendance Report (${reportModal.type}-WISE)\n`;
     csvContent += `Generated On: ${new Date().toLocaleString()}\n\n`;
     csvContent += "Group/Entity,Total Records,Attended,Absent,Attendance Rate (%)\n";
 
@@ -245,58 +254,203 @@ export default function AttendanceLog() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Attendance_Report_${reportModal.type}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `English_Gate_Report_${reportModal.type}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     showAlert("success", "CSV Report downloaded successfully!");
   };
 
-  const downloadPDF = () => {
+  // --- UPDATED PDF EXPORT FOR REPORT MODAL ---
+  const downloadReportPDF = async () => {
     if (reportData.length === 0) return showAlert("error", "No data to download.");
 
     const doc = new jsPDF();
     
-    // Add Report Title and Metadata
-    doc.setFontSize(16);
-    doc.text("LMS Attendance Summary Report", 14, 20);
+    // 1. Attempt to Load Logo Image
+    let logoDataUrl = null;
+    try {
+      const img = new Image();
+      img.src = '/logo.png'; 
+      
+      await new Promise((resolve) => {
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          logoDataUrl = canvas.toDataURL("image/png");
+          resolve();
+        };
+        img.onerror = resolve; 
+      });
+    } catch (e) {
+      console.warn("Could not load logo for PDF");
+    }
+
+    // 2. Draw Header (Logo + Title)
+    let textStartX = 14;
+    let startYOffset = 34;
+
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', 14, 12, 16, 16); // Logo at top left
+      textStartX = 34; 
+    }
+
+    doc.setFontSize(22);
+    doc.setTextColor(30, 58, 138); // Indigo / Dark Blue
+    doc.setFont("helvetica", "bold");
+    doc.text("ENGLISH GATE", textStartX, 22);
+
+    doc.setFontSize(14);
+    doc.setTextColor(50, 50, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text("Attendance Summary Report", textStartX, 28);
+
+    // 3. Draw Metadata & Group By Info
     doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(`Report Type: ${reportModal.type}-WISE`, 14, 28);
-    doc.text(`Generated On: ${new Date().toLocaleString()}`, 14, 34);
-    doc.text(`Total Filtered Records: ${filteredData.length}`, 14, 40);
+    doc.text(`Generated On: ${new Date().toLocaleString()}`, 14, startYOffset + 6);
+    doc.text(`Total Filtered Records: ${filteredData.length}`, 14, startYOffset + 12);
+    
+    const groupByText = reportModal.type.charAt(0) + reportModal.type.slice(1).toLowerCase();
+    
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(79, 70, 229); 
+    doc.text(`Grouped By: ${groupByText}`, 14, startYOffset + 18);
 
     // Prepare Table Data
     const tableColumn = [
-      reportModal.type.charAt(0) + reportModal.type.slice(1).toLowerCase(), 
-      "Total Classes", 
-      "Attended", 
-      "Absent", 
-      "Rate (%)"
+      groupByText, 
+      "Total Classes", "Attended", "Absent", "Rate (%)"
     ];
     
-    const tableRows = reportData.map(row => [
-      row.key,
-      row.total,
-      row.attended,
-      row.absent,
-      `${row.rate}%`
-    ]);
+    const tableRows = reportData.map(row => [row.key, row.total, row.attended, row.absent, `${row.rate}%`]);
 
-    // FIXED: Call autoTable as a direct function instead of doc.autoTable()
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
-      startY: 48,
+      startY: startYOffset + 24,
       theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229] }, // Indigo-600
+      headStyles: { fillColor: [79, 70, 229] }, 
       alternateRowStyles: { fillColor: [249, 250, 251] }
     });
 
-    doc.save(`Attendance_Report_${reportModal.type}_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`English_Gate_Report_${reportModal.type}_${new Date().toISOString().split('T')[0]}.pdf`);
     showAlert("success", "PDF Report downloaded successfully!");
   };
 
+  // ==================== DOWNLOAD HANDLERS (FILTERED TABLE) ====================
+  
+  const downloadTableCSV = () => {
+    if (filteredData.length === 0) return showAlert("error", "No records found to download.");
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += `ENGLISH GATE - Filtered Attendance Log\n`;
+    csvContent += `Generated On: ${new Date().toLocaleString()}\n`;
+    csvContent += `Filters Applied: ${getActiveFiltersString()}\n\n`;
+    csvContent += "Date,Time,Student ID,Student Name,Course,Status\n";
+
+    filteredData.forEach(item => {
+      const date = new Date(item.date).toLocaleDateString();
+      const time = item.status === "ABSENT" || item.status === "EXCUSED" ? "--:--" : (item.arrival_time || formatTime(item.date));
+      const safeName = `"${item.name.replace(/"/g, '""')}"`;
+      const safeCourse = `"${item.course.replace(/"/g, '""')}"`;
+      
+      csvContent += `${date},${time},${item.studentId},${safeName},${safeCourse},${item.status}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `English_Gate_Attendance_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showAlert("success", "Table CSV downloaded successfully!");
+  };
+
+  const downloadTablePDF = async () => {
+    if (filteredData.length === 0) return showAlert("error", "No records found to download.");
+
+    const doc = new jsPDF();
+    
+    // 1. Attempt to Load Logo Image
+    let logoDataUrl = null;
+    try {
+      const img = new Image();
+      img.src = '/logo.png'; 
+      
+      await new Promise((resolve) => {
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          logoDataUrl = canvas.toDataURL("image/png");
+          resolve();
+        };
+        img.onerror = resolve; 
+      });
+    } catch (e) {
+      console.warn("Could not load logo for PDF");
+    }
+
+    // 2. Draw Header (Logo + Title)
+    let textStartX = 14;
+    let startYOffset = 34;
+
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', 14, 12, 16, 16); 
+      textStartX = 34; 
+    }
+
+    doc.setFontSize(22);
+    doc.setTextColor(30, 58, 138); 
+    doc.setFont("helvetica", "bold");
+    doc.text("ENGLISH GATE", textStartX, 22);
+
+    doc.setFontSize(14);
+    doc.setTextColor(50, 50, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text("Filtered Attendance Log", textStartX, 28);
+
+    // 3. Draw Metadata & Filters
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated On: ${new Date().toLocaleString()}`, 14, startYOffset + 6);
+    doc.text(`Total Records: ${filteredData.length}`, 14, startYOffset + 12);
+    
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(79, 70, 229); 
+    doc.text(`Filters Applied: ${getActiveFiltersString()}`, 14, startYOffset + 18);
+
+    // 4. Generate Table
+    const tableColumn = ["Date", "Time", "Student ID", "Student Name", "Course", "Status"];
+    const tableRows = filteredData.map(item => [
+      new Date(item.date).toLocaleDateString(),
+      item.status === "ABSENT" || item.status === "EXCUSED" ? "--:--" : (item.arrival_time || formatTime(item.date)),
+      item.studentId,
+      item.name,
+      item.course,
+      item.status
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: startYOffset + 24, 
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] }, 
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      styles: { fontSize: 8 }
+    });
+
+    doc.save(`English_Gate_Attendance_${new Date().toISOString().split('T')[0]}.pdf`);
+    showAlert("success", "Table PDF downloaded successfully!");
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 relative">
@@ -339,7 +493,7 @@ export default function AttendanceLog() {
       </div>
 
       {/* Filter Section */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 items-end text-gray-700">
         <div>
           <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Search Student</label>
           <div className="relative">
@@ -349,25 +503,33 @@ export default function AttendanceLog() {
               placeholder="Search by Name or ID..." 
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)} 
-              className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition" 
             />
           </div>
         </div>
+        
         <div>
           <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Filter by Date</label>
-          <div className="relative flex items-center gap-2">
-            <div className="relative w-full">
-              <Calendar className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
-              <input 
-                type="date" 
-                value={filterDate} 
-                onChange={(e) => setFilterDate(e.target.value)} 
-                className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
-              />
-            </div>
-            {filterDate && <button onClick={() => setFilterDate("")} className="text-xs text-indigo-600 font-bold hover:underline whitespace-nowrap">Clear</button>}
+          <div className="relative">
+            <Calendar className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
+            <input 
+              type="date" 
+              value={filterDate} 
+              onChange={(e) => setFilterDate(e.target.value)} 
+              className="w-full pl-9 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition" 
+            />
+            {filterDate && (
+              <button 
+                onClick={() => setFilterDate("")} 
+                className="absolute right-3 top-2.5 text-gray-400 hover:text-red-500 transition"
+                title="Clear date"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
         </div>
+
         <div>
           <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Filter by Course</label>
           <div className="relative">
@@ -375,7 +537,7 @@ export default function AttendanceLog() {
             <select 
               value={filterCourse} 
               onChange={(e) => setFilterCourse(e.target.value)} 
-              className="w-full pl-9 pr-8 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none bg-white"
+              className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none bg-white transition"
             >
               <option value="ALL">All Courses</option>
               {uniqueCoursesFilter.map(course => <option key={course} value={course}>{course}</option>)}
@@ -385,12 +547,14 @@ export default function AttendanceLog() {
       </div>
 
       {/* Main Content Area */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         
-        {/* --- LIVE SUMMARY STATISTICS BAR --- */}
+        {/* --- LIVE SUMMARY STATISTICS BAR & EXPORT BUTTONS --- */}
         {!loading && (
-          <div className="bg-gray-50 border-b border-gray-200 p-4 md:p-5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-2 md:divide-x divide-gray-200">
+          <div className="bg-gray-50 border-b border-gray-200 p-4 md:p-5 flex flex-col xl:flex-row justify-between gap-6 shrink-0">
+            
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-2 md:divide-x divide-gray-200 w-full xl:w-auto">
               <div className="flex flex-col px-2 md:px-4 text-center md:text-left">
                 <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mb-1 truncate">Filtered Records</span>
                 <span className="text-2xl font-black text-gray-900">{totalClasses}</span>
@@ -414,21 +578,40 @@ export default function AttendanceLog() {
                 </span>
               </div>
             </div>
+
+            {/* Export Results Buttons */}
+            <div className="flex items-center gap-2 xl:border-l border-gray-200 xl:pl-6 shrink-0">
+               <button 
+                  onClick={downloadTableCSV} 
+                  title="Download Current Table as CSV"
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-bold shadow-sm transition w-full sm:w-auto justify-center"
+                >
+                 <DownloadCloud size={16} /> Export CSV
+               </button>
+               <button 
+                  onClick={downloadTablePDF} 
+                  title="Download Current Table as PDF"
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-bold shadow-sm transition w-full sm:w-auto justify-center"
+                >
+                 <FileDown size={16} /> Export PDF
+               </button>
+            </div>
+
           </div>
         )}
 
-        {/* Data Table */}
-        <div className="overflow-x-auto">
+        {/* FIXED HEIGHT SCROLLABLE DATA TABLE */}
+        <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
           {loading ? (
             <div className="flex justify-center items-center p-16"><Loader className="animate-spin text-indigo-600 w-8 h-8"/></div>
           ) : (
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-white text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+            <table className="w-full text-left border-collapse relative">
+              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider sticky top-0 z-10 shadow-sm ring-1 ring-gray-200">
                 <tr>
-                  <th className="px-6 py-4 font-bold">Student Details</th>
-                  <th className="px-6 py-4 font-bold">Date & Time</th>
-                  <th className="px-6 py-4 font-bold">Status</th>
-                  <th className="px-6 py-4 font-bold text-right">Actions</th>
+                  <th className="px-6 py-4 font-bold bg-gray-50">Student Details</th>
+                  <th className="px-6 py-4 font-bold bg-gray-50">Date & Time</th>
+                  <th className="px-6 py-4 font-bold bg-gray-50">Status</th>
+                  <th className="px-6 py-4 font-bold text-right bg-gray-50">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
@@ -447,9 +630,9 @@ export default function AttendanceLog() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                        item.status === "PRESENT" ? "bg-green-100 text-green-700 border-green-200" : 
-                        item.status === "LATE" ? "bg-yellow-100 text-yellow-700 border-yellow-200" : 
-                        "bg-red-100 text-red-700 border-red-200"
+                        item.status === "PRESENT" ? "bg-green-50 text-green-700 border-green-200" : 
+                        item.status === "LATE" ? "bg-yellow-50 text-yellow-700 border-yellow-200" : 
+                        "bg-red-50 text-red-700 border-red-200"
                       }`}>
                         {item.status === "PRESENT" ? <CheckCircle size={14} /> : 
                          item.status === "LATE" ? <Clock size={14} /> : <XCircle size={14} />}
@@ -486,13 +669,13 @@ export default function AttendanceLog() {
 
       {/* --- MODALS --- */}
 
-      {/* DETAILED REPORT MODAL */}
+      {/* DETAILED REPORT MODAL - FIXED COLUMN ALIGNMENTS */}
       {reportModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 ">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 mar">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-5 md:p-6 border-b border-gray-100 shrink-0">
+            <div className="flex justify-between items-center p-5 md:p-6 border-b border-gray-100 shrink-0 ">
               <h2 className="text-lg md:text-xl font-bold text-gray-900 flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
                   <FileText size={20} />
@@ -514,7 +697,7 @@ export default function AttendanceLog() {
                 <select 
                   value={reportModal.type}
                   onChange={(e) => setReportModal({ ...reportModal, type: e.target.value })}
-                  className="w-full lg:w-48 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-bold text-gray-900 bg-white shadow-sm"
+                  className="w-full lg:w-48 p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-bold text-gray-900 bg-white shadow-sm transition"
                 >
                   <option value="STUDENT">Student</option>
                   <option value="CLASS">Course / Class</option>
@@ -535,28 +718,28 @@ export default function AttendanceLog() {
                 </div>
               ) : (
                 <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm overflow-x-auto">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
+                  <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-4">{reportModal.type.charAt(0) + reportModal.type.slice(1).toLowerCase()}</th>
-                        <th className="px-4 py-4 text-center">Total Records</th>
-                        <th className="px-4 py-4 text-center text-green-700">Attended</th>
-                        <th className="px-4 py-4 text-center text-red-700">Absent</th>
-                        <th className="px-6 py-4 text-right">Attendance Rate</th>
+                        <th className="px-6 py-4 whitespace-nowrap">{reportModal.type.charAt(0) + reportModal.type.slice(1).toLowerCase()}</th>
+                        <th className="px-4 py-4 text-center whitespace-nowrap">Total Records</th>
+                        <th className="px-4 py-4 text-center text-green-700 whitespace-nowrap">Attended</th>
+                        <th className="px-4 py-4 text-center text-red-700 whitespace-nowrap">Absent</th>
+                        <th className="px-6 py-4 text-center whitespace-nowrap">Attendance Rate</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {reportData.map((row, index) => (
                         <tr key={index} className="hover:bg-gray-50 transition">
-                          <td className="px-6 py-4 font-bold text-gray-900">{row.key}</td>
-                          <td className="px-4 py-4 text-center font-medium text-gray-600">{row.total}</td>
-                          <td className="px-4 py-4 text-center font-bold text-green-600 bg-green-50/30">{row.attended}</td>
-                          <td className="px-4 py-4 text-center font-bold text-red-600 bg-red-50/30">{row.absent}</td>
-                          <td className="px-6 py-4 text-right">
-                            <span className={`inline-flex items-center justify-center min-w-[3rem] px-2.5 py-1 rounded-md text-xs font-extrabold ${
-                              row.rate >= 80 ? 'bg-green-100 text-green-800' : 
-                              row.rate >= 50 ? 'bg-yellow-100 text-yellow-800' : 
-                              'bg-red-100 text-red-800'
+                          <td className="px-6 py-4 font-bold text-gray-900 min-w-[200px]">{row.key}</td>
+                          <td className="px-4 py-4 text-center font-medium text-gray-600 whitespace-nowrap">{row.total}</td>
+                          <td className="px-4 py-4 text-center font-bold text-green-600 bg-green-50/30 whitespace-nowrap">{row.attended}</td>
+                          <td className="px-4 py-4 text-center font-bold text-red-600 bg-red-50/30 whitespace-nowrap">{row.absent}</td>
+                          <td className="px-6 py-4 text-center whitespace-nowrap">
+                            <span className={`inline-flex items-center justify-center min-w-[3.5rem] px-2.5 py-1 rounded-md text-xs font-extrabold border ${
+                              row.rate >= 80 ? 'bg-green-50 text-green-700 border-green-200' : 
+                              row.rate >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
+                              'bg-red-50 text-red-700 border-red-200'
                             }`}>
                               {row.rate}%
                             </span>
@@ -575,10 +758,10 @@ export default function AttendanceLog() {
                  <button onClick={() => setReportModal({ ...reportModal, isOpen: false })} className="w-full sm:w-auto px-6 py-3 border border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl font-bold transition shadow-sm order-3 sm:order-1">
                    Close
                  </button>
-                 <button onClick={downloadCSV} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition flex justify-center items-center gap-2 shadow-sm order-2">
+                 <button onClick={downloadReportCSV} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition flex justify-center items-center gap-2 shadow-sm order-2">
                    <DownloadCloud size={18} /> CSV Export
                  </button>
-                 <button onClick={downloadPDF} className="w-full sm:w-auto px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition flex justify-center items-center gap-2 shadow-sm order-1 sm:order-3">
+                 <button onClick={downloadReportPDF} className="w-full sm:w-auto px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition flex justify-center items-center gap-2 shadow-sm order-1 sm:order-3">
                    <FileDown size={18} /> PDF Export
                  </button>
                </div>
@@ -587,97 +770,103 @@ export default function AttendanceLog() {
         </div>
       )}
 
-      {/* ABSENT MODAL */}
+      {/* ABSENT MODAL - FIXED SCROLLING & FORM SUBMISSION */}
       {absentModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 shrink-0">
               <h2 className="text-xl font-bold text-gray-900">Mark Remaining Absents</h2>
-              <button onClick={() => setAbsentModal({...absentModal, isOpen: false})} className="text-gray-400 hover:text-gray-600 transition"><X size={20} /></button>
+              <button onClick={() => setAbsentModal({...absentModal, isOpen: false})} className="text-gray-400 hover:text-gray-600 transition p-1 rounded-md hover:bg-gray-100"><X size={20} /></button>
             </div>
-            <div className="p-6 space-y-5">
-              <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm border border-amber-200 flex gap-3">
-                <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
-                <p>This will find all students enrolled in the selected course who <strong>do not</strong> have an attendance record for this date, and mark them as <strong>ABSENT</strong>.</p>
+            <form onSubmit={(e) => { e.preventDefault(); submitBulkAbsents(); }} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-6 space-y-5 overflow-y-auto flex-1">
+                <div className="bg-amber-50 text-red-700 p-4 rounded-lg text-sm border border-amber-200 flex gap-3">
+                  <AlertCircle className="w-5 h-5 shrink-0 text-red-600" />
+                  <p>This will find all students enrolled in the selected course who <strong>do not</strong> have an attendance record for this date, and mark them as <strong>ABSENT</strong>.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Select Course</label>
+                  <select 
+                    value={absentModal.courseId}
+                    onChange={(e) => setAbsentModal({...absentModal, courseId: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white text-gray-700 transition"
+                  >
+                    <option value="" disabled>-- Select a Course --</option>
+                    {allCourses.map(course => <option key={course.course_id} value={course.course_id}>{course.title}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Select Date</label>
+                  <input 
+                    type="date" 
+                    value={absentModal.date}
+                    onChange={(e) => setAbsentModal({...absentModal, date: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-gray-700 transition"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Select Course</label>
-                <select 
-                  value={absentModal.courseId}
-                  onChange={(e) => setAbsentModal({...absentModal, courseId: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white text-gray-700"
-                >
-                  <option value="" disabled>-- Select a Course --</option>
-                  {allCourses.map(course => <option key={course.course_id} value={course.course_id}>{course.title}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Select Date</label>
-                <input 
-                  type="date" 
-                  value={absentModal.date}
-                  onChange={(e) => setAbsentModal({...absentModal, date: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-gray-700"
-                />
-              </div>
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button onClick={() => setAbsentModal({...absentModal, isOpen: false})} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition">Cancel</button>
-                <button onClick={submitBulkAbsents} disabled={isMarkingAbsents} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-indigo-400 font-bold transition flex items-center justify-center gap-2">
+              <div className="flex gap-3 p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+                <button type="button" onClick={() => setAbsentModal({...absentModal, isOpen: false})} className="flex-1 px-4 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition shadow-sm">Cancel</button>
+                <button type="submit" disabled={isMarkingAbsents} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-indigo-400 font-bold transition flex items-center justify-center gap-2 shadow-sm">
                   {isMarkingAbsents ? <><Loader size={16} className="animate-spin"/> Processing...</> : "Mark Absents"}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* UPDATE MODAL */}
+      {/* UPDATE MODAL - FIXED SCROLLING & FORM SUBMISSION */}
       {updateModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 shrink-0">
               <h2 className="text-xl font-bold text-gray-900">Edit Attendance Course</h2>
-              <button onClick={() => setUpdateModal({ isOpen: false, record: null })} className="text-gray-400 hover:text-gray-600 transition"><X size={20} /></button>
+              <button onClick={() => setUpdateModal({ isOpen: false, record: null })} className="text-gray-400 hover:text-gray-600 transition p-1 rounded-md hover:bg-gray-100"><X size={20} /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Student</p>
-                <p className="font-bold text-gray-900">{updateModal.record.name} <span className="font-mono text-xs text-gray-500 font-normal ml-1">({updateModal.record.studentId})</span></p>
+            <form onSubmit={(e) => { e.preventDefault(); submitUpdate(); }} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-6 space-y-5 overflow-y-auto flex-1">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Student</p>
+                  <p className="font-bold text-gray-900">{updateModal.record.name} <span className="font-mono text-xs text-gray-500 font-normal ml-1">({updateModal.record.studentId})</span></p>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Change Course to:</label>
+                  {fetchingCourses ? (
+                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg flex items-center gap-2 text-sm font-medium border border-indigo-100"><Loader size={16} className="animate-spin" /> Fetching enrolled courses...</div>
+                  ) : (
+                    <select value={editCourseId} onChange={(e) => setEditCourseId(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium text-gray-900 bg-white transition">
+                      {studentCourses.length === 0 && <option value="">No courses enrolled</option>}
+                      {studentCourses.map(c => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
+                    </select>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Change Course to:</label>
-                {fetchingCourses ? (
-                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg flex items-center gap-2 text-sm font-medium"><Loader size={16} className="animate-spin" /> Fetching enrolled courses...</div>
-                ) : (
-                  <select value={editCourseId} onChange={(e) => setEditCourseId(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium text-gray-900 bg-white">
-                    {studentCourses.length === 0 && <option value="">No courses enrolled</option>}
-                    {studentCourses.map(c => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
-                  </select>
-                )}
-              </div>
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button onClick={() => setUpdateModal({ isOpen: false, record: null })} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition">Cancel</button>
-                <button onClick={submitUpdate} disabled={fetchingCourses || studentCourses.length === 0 || isSaving} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-indigo-400 font-bold transition flex items-center justify-center gap-2">
+              <div className="flex gap-3 p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+                <button type="button" onClick={() => setUpdateModal({ isOpen: false, record: null })} className="flex-1 px-4 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition shadow-sm">Cancel</button>
+                <button type="submit" disabled={fetchingCourses || studentCourses.length === 0 || isSaving} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-indigo-400 font-bold transition flex items-center justify-center gap-2 shadow-sm">
                   {isSaving ? <><Loader size={16} className="animate-spin"/> Saving...</> : "Save Changes"}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* DELETE MODAL */}
+      {/* DELETE MODAL - FIXED STRUCTURE */}
       {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 text-center p-6">
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><AlertTriangle size={32} /></div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Record?</h2>
-            <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete the attendance record for <span className="font-bold text-gray-700">{deleteModal.record?.name}</span> on <span className="font-bold text-gray-700">{deleteModal.record?.course}</span>? This action cannot be undone.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteModal({ isOpen: false, record: null })} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition">Cancel</button>
-              <button onClick={submitDelete} disabled={isDeleting} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:bg-red-400 font-bold transition flex items-center justify-center gap-2">
-                {isDeleting ? <><Loader size={16} className="animate-spin"/> Deleting...</> : "Yes, Delete"}
-              </button>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200 text-center p-6">
+            <div className="overflow-y-auto">
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100"><AlertTriangle size={32} /></div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Record?</h2>
+              <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete the attendance record for <span className="font-bold text-gray-700">{deleteModal.record?.name}</span> on <span className="font-bold text-gray-700">{deleteModal.record?.course}</span>? This action cannot be undone.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteModal({ isOpen: false, record: null })} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition shadow-sm">Cancel</button>
+                <button onClick={submitDelete} disabled={isDeleting} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:bg-red-400 font-bold transition flex items-center justify-center gap-2 shadow-sm">
+                  {isDeleting ? <><Loader size={16} className="animate-spin"/> Deleting...</> : "Yes, Delete"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
