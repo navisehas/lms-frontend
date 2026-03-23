@@ -16,6 +16,7 @@ import {
   MessageSquare,
   GraduationCap,
   Receipt,
+  PenTool,
 } from "lucide-react";
 import { guardRoute, logout } from "@/lib/auth";
 
@@ -192,7 +193,7 @@ export default function StudentLayout({ children }) {
                   flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-[15px] font-medium
                   transition-colors duration-150
                   ${
-                    pathname === item.href
+                    (pathname === item.href || pathname.startsWith(item.href + "/"))
                       ? "bg-white/20 text-white"
                       : "text-blue-100 hover:bg-white/10 hover:text-white"
                   }
