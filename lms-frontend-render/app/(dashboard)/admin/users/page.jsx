@@ -82,31 +82,16 @@ export default function UserManagement() {
 
     setUpdating(true);
     try {
-      // Strip base64 images — only send URL strings (not raw file data)
-      const payload = {
-        name:                editingUser.name,
-        phone_no:            editingUser.phone_no,
-        role:                editingUser.role,
-        status:              editingUser.status,
-        gender:              editingUser.gender       || null,
-        birthday:            editingUser.birthday     || null,
-        address:             editingUser.address      || null,
-        profile_picture_url: editingUser.profile_picture_url || null,
-        isic_no:             editingUser.isic_no      || null,
-        specialization:      editingUser.specialization || null,
-        description:         editingUser.description  || null,
-      };
-
       const res = await authFetch(`${API}/users/${editingUser.user_id}`, {
         method: "PUT",
-        body: JSON.stringify(payload)
+        body: JSON.stringify(editingUser)
       });
       if (res.ok) {
-        setUsers(users.map(u => u.user_id === editingUser.user_id ? { ...u, ...payload } : u));
+        setUsers(users.map(u => u.user_id === editingUser.user_id ? editingUser : u));
         setEditingUser(null);
       } else {
         const data = await res.json();
-        alert(`❌ Failed to update: ${data.error}${data.details ? " — " + data.details : ""}`);
+        alert(`❌ Failed to update: ${data.error}`);
       }
     } catch (error) {
       alert("❌ Server connection failed");
@@ -117,28 +102,13 @@ export default function UserManagement() {
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-
-    // Compress & resize to max 200x200 px before saving as base64
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX = 200;
-        let w = img.width, h = img.height;
-        if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
-        else        { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
-        canvas.width  = w;
-        canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        // JPEG at 0.7 quality — keeps size well under DB limits
-        const compressed = canvas.toDataURL("image/jpeg", 0.7);
-        setEditingUser((prev) => ({ ...prev, profile_picture_url: compressed }));
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditingUser({ ...editingUser, profile_picture_url: reader.result });
       };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleDownloadID = async (user) => {
