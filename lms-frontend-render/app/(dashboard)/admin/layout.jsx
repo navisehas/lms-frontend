@@ -17,6 +17,9 @@ export default function AdminLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   
+  // New state for the logout confirmation modal
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  
   const pathname = usePathname();
   const router = useRouter();
 
@@ -42,13 +45,45 @@ export default function AdminLayout({ children }) {
     { name: "Institute Income", href: "/admin/income",    icon: <Building2 size={20} /> },
     { name: "Feedback",         href: "/admin/feedback",  icon: <MessageSquare size={20} /> },
     { name: "Website CMS",      href: "/admin/cms",       icon: <Globe size={20} /> },
-    { name: "Notices",          href: "/admin/notice",   icon: <Bell size={20} /> },
+    { name: "Notices",          href: "/admin/notice",    icon: <Bell size={20} /> },
   ];
 
   return (
     /* h-screen and overflow-hidden prevent the entire page from scrolling */
-    <div className="h-screen w-full bg-gray-50 flex flex-col overflow-hidden">
+    <div className="h-screen w-full bg-gray-50 flex flex-col overflow-hidden relative">
       
+      {/* ── LOGOUT CONFIRMATION MODAL ── */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
+              <LogOut size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Logout</h3>
+            <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+              Are you sure you want to log out of the Admin Console? You will need to sign in again to access your account.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  logout(router);
+                }}
+                className="px-5 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm"
+              >
+                Yes, Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── FIXED TOP HEADER ── */}
       <header className="h-16 flex-shrink-0 bg-white border-b shadow-sm flex items-center justify-between px-4 md:px-6 lg:px-8 z-40 relative">
         <div className="flex items-center gap-4">
@@ -157,10 +192,10 @@ export default function AdminLayout({ children }) {
               </Link>
             ))}
 
-            {/* Logout Button moved right below navigation items */}
+            {/* Logout Button */}
             <div className="mt-4 pt-4 border-t border-blue-700/30">
               <button
-                onClick={() => logout(router)}
+                onClick={() => setShowLogoutModal(true)}
                 className="
                   w-full flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-[15px] font-medium
                   text-blue-100 hover:bg-red-500/20 hover:text-red-100
