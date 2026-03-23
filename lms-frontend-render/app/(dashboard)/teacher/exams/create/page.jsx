@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "../../../../../lib/auth";
 
+const API = process.env.NEXT_PUBLIC_API_URL;
+
 //  Empty Question Template
 const emptyQuestion = () => ({
   id: Date.now() + Math.random(),
@@ -259,7 +261,7 @@ export default function CreateExamPage() {
 
   // ── Fetch teacher's own courses on mount ─────────────────────────────────
   useEffect(() => {
-    authFetch("/api/exams/teacher/my-courses")
+    authFetch(`${API}/exams/teacher/my-courses`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setCourses(data);
@@ -304,7 +306,7 @@ export default function CreateExamPage() {
     setErrors({});
     try {
       const payload = { ...details, questions };
-      const res = await authFetch("/api/exams", {
+      const res = await authFetch(`${API}/exams`, {
         method: "POST",
         body: JSON.stringify(payload),
       });

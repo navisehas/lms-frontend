@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { authFetch } from "../../../../../lib/auth";
 
+const API = process.env.NEXT_PUBLIC_API_URL;
+
 // ─── Timer Hook ───────────────────────────────────────────────────────────────
 function useTimer(durationMinutes, onExpire) {
   const [secondsLeft, setSecondsLeft] = useState(durationMinutes * 60);
@@ -242,7 +244,7 @@ export default function TakeExamPage() {
   useEffect(() => {
     if (!examId) return;
     setLoading(true);
-    authFetch(`/api/exams/${examId}`)
+    authFetch(`${API}/exams/${examId}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
@@ -279,7 +281,7 @@ export default function TakeExamPage() {
         }
       });
 
-      const res = await authFetch(`/api/exams/${examId}/submit`, {
+      const res = await authFetch(`${API}/exams/${examId}/submit`, {
         method: "POST",
         body: JSON.stringify({ answers: answersPayload }),
       });

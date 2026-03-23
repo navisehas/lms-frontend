@@ -4,19 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "../../../../../lib/auth";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from "recharts";
+
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 // ─── Helpers ───────
 const avg = (arr) =>
@@ -150,7 +142,7 @@ export default function ExamResultsPage() {
     let cancelled = false;
     setExamsLoading(true);
 
-    authFetch("/api/exams")
+    authFetch(`${API}/exams`)
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled && Array.isArray(data)) {
@@ -183,7 +175,7 @@ export default function ExamResultsPage() {
       setFilter("all");
 
       try {
-        const res = await authFetch(`/api/exams/${selectedExamId}/results`);
+        const res = await authFetch(`${API}/exams/${selectedExamId}/results`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
         if (!cancelled) {
@@ -919,4 +911,4 @@ export default function ExamResultsPage() {
       )}
     </div>
   );
-}    
+}

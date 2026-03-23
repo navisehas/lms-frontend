@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { authFetch } from "../../../../../lib/auth";
 
+const API = process.env.NEXT_PUBLIC_API_URL;
+
 // ─── Circular Score Ring ────────────────────────────────────────────────────
 function ScoreRing({ score, passed, passMark }) {
   const radius = 54;
@@ -79,8 +81,8 @@ export default function StudentResultPage() {
       try {
         // Fetch result and exam in parallel
         const [resultRes, examRes] = await Promise.all([
-          authFetch(`/api/exams/${examId}/result`),
-          authFetch(`/api/exams/${examId}`),
+          authFetch(`${API}/exams/${examId}/result`),
+          authFetch(`${API}/exams/${examId}`),
         ]);
 
         const resultData = await resultRes.json();
