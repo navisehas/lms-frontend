@@ -34,7 +34,7 @@ export default function ManagerLayout({ children }) {
     .slice(0, 2);
 
   const menuItems = [
-    { name: "Overview",           href: "/manager/dashboard",  icon: <LayoutDashboard size={20} /> },
+    { name: "Dashboard",           href: "/manager/dashboard",  icon: <LayoutDashboard size={20} /> },
     { name: "Scan Attendance",    href: "/manager/scan",       icon: <QrCode size={20} /> },
     { name: "Student Management", href: "/manager/students",   icon: <Users size={20} /> },
     { name: "Payments & Fees",    href: "/manager/payments",   icon: <Banknote size={20} /> },
