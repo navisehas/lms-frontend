@@ -262,7 +262,6 @@ export default function StudentPaymentsPage() {
           <XCircle size={18} className="mt-0.5 flex-shrink-0 text-orange-500" />
           <div className="flex-1">
             <p className="font-semibold mb-0.5">Payment Not Completed</p>
-            <p className="text-orange-700">You left the payment gateway. No money has been charged — you can try again below.</p>
           </div>
           <button onClick={hideWarning} className="text-orange-400 hover:text-orange-600 flex-shrink-0 mt-0.5">
             <XCircle size={16} />
