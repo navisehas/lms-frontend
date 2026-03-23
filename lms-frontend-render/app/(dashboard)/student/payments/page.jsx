@@ -1,10 +1,10 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen, CreditCard, CheckCircle, Loader2, AlertCircle,
   RefreshCw, Wifi, Clock, Tag, ShieldCheck, Lock, Play,
-  DollarSign, BadgeAlert,
+  DollarSign, BadgeAlert, XCircle,
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
@@ -21,6 +21,10 @@ export default function StudentPaymentsPage() {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState("");
   const [payingCourse, setPayingCourse] = useState(null);
+  const [backWarning,  setBackWarning]  = useState(false);
+
+  // Track if we left for PayHere
+  const leftForPayHere = useRef(false);
 
   useEffect(() => {
     const auth = guardRoute("STUDENT", router);
@@ -30,6 +34,37 @@ export default function StudentPaymentsPage() {
     }
   }, [router]);
 
+  // ── Detect browser back button from PayHere ──────────────────────────────
+  useEffect(() => {
+    const handlePageShow = (e) => {
+      // persisted = true means page was restored from bfcache (back button)
+      if (e.persisted && leftForPayHere.current) {
+        leftForPayHere.current = false;
+        setPayingCourse(null);
+        setBackWarning(true);
+        // Refresh courses in case something changed
+        if (user) fetchCourses(user.user_id);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && leftForPayHere.current) {
+        leftForPayHere.current = false;
+        setPayingCourse(null);
+        setBackWarning(true);
+        if (user) fetchCourses(user.user_id);
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user]);
+
   const fetchCourses = useCallback(async (studentId) => {
     setLoading(true);
     setError("");
@@ -37,7 +72,6 @@ export default function StudentPaymentsPage() {
       const res  = await authFetch(`${API}/payments/courses/${studentId}`);
       const data = await res.json();
       if (data.success) {
-        // Only show courses that are NOT yet enrolled (pending payment)
         setCourses((data.courses || []).filter((c) => !c.is_enrolled));
       } else {
         setError(data.error || "Failed to load courses.");
@@ -52,6 +86,7 @@ export default function StudentPaymentsPage() {
   async function handlePayNow(course) {
     if (payingCourse) return;
     setPayingCourse(course.course_id);
+    setBackWarning(false);
     setError("");
 
     try {
@@ -76,7 +111,6 @@ export default function StudentPaymentsPage() {
 
       const fields = {
         merchant_id: hashData.merchant_id,
-        // ✅ Correct paths matching actual page routes
         return_url:  `${FRONTEND_URL}/student/success?order_id=${encodeURIComponent(order_id)}`,
         cancel_url:  `${FRONTEND_URL}/student/cancel?order_id=${encodeURIComponent(order_id)}`,
         notify_url:  `${API}/payments/online/notify`,
@@ -103,13 +137,15 @@ export default function StudentPaymentsPage() {
         form.appendChild(input);
       });
 
+      // Mark that we are leaving for PayHere before submitting
+      leftForPayHere.current = true;
       document.body.appendChild(form);
       form.submit();
-      // Page navigates away — payingCourse reset not needed
     } catch (err) {
       console.error("Pay error:", err);
       setError("Payment initiation failed. Please try again.");
       setPayingCourse(null);
+      leftForPayHere.current = false;
     }
   }
 
@@ -138,6 +174,26 @@ export default function StudentPaymentsPage() {
           Refresh
         </button>
       </div>
+
+      {/* ── Browser Back Warning ─────────────────────────── */}
+      {backWarning && (
+        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl px-4 py-4 text-sm">
+          <XCircle size={18} className="mt-0.5 flex-shrink-0 text-orange-500" />
+          <div className="flex-1">
+            <p className="font-semibold mb-0.5">Payment Not Completed</p>
+            <p>
+              You navigated back from the payment gateway. No money has been charged.
+              You can try paying again below.
+            </p>
+          </div>
+          <button
+            onClick={() => setBackWarning(false)}
+            className="text-orange-400 hover:text-orange-600 flex-shrink-0 mt-0.5"
+          >
+            <XCircle size={16} />
+          </button>
+        </div>
+      )}
 
       {/* ── Monthly Notice ───────────────────────────────── */}
       <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
