@@ -1,23 +1,38 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { XCircle, ArrowLeft, RefreshCw, MessageSquare, Home } from "lucide-react";
+import { XCircle, RefreshCw, MessageSquare, Home } from "lucide-react";
 import { guardRoute } from "@/lib/auth";
+
+const REDIRECT_DELAY = 5; // seconds before auto-redirect back to payments
 
 export default function PaymentCancelPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const orderId      = searchParams.get("order_id");
 
-  const [user, setUser] = useState(null);
+  const [user, setUser]         = useState(null);
+  const [countdown, setCountdown] = useState(REDIRECT_DELAY);
 
   useEffect(() => {
     const auth = guardRoute("STUDENT", router);
     if (auth) setUser(auth);
   }, [router]);
 
-  // Parse course_id from order_id (course_id::student_id)
-  const [courseId] = (orderId || "").split("::");
+  // Auto-redirect countdown back to payments page
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          router.push("/student/payments");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -30,13 +45,19 @@ export default function PaymentCancelPage() {
 
         {/* Title */}
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Payment Cancelled</h1>
-        <p className="text-gray-500 text-sm mb-6">
+        <p className="text-gray-500 text-sm mb-1">
           Your payment was <strong className="text-red-500">not completed</strong>. No money has been
-          charged to your account. You can try again whenever you're ready.
+          charged to your account.
+        </p>
+
+        {/* Auto-redirect notice */}
+        <p className="text-xs text-indigo-500 font-medium mb-5">
+          Returning to Course Payments in{" "}
+          <span className="font-bold text-indigo-600">{countdown}s</span>…
         </p>
 
         {/* Reasons block */}
-        <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 mb-6 text-left text-sm text-gray-600 space-y-1.5">
+        <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 mb-5 text-left text-sm text-gray-600 space-y-1.5">
           <p className="font-semibold text-gray-700 mb-2">Common reasons for cancellation:</p>
           <p>• You clicked "Cancel" or closed the payment window</p>
           <p>• Card details were incorrect or card was declined</p>
@@ -55,7 +76,7 @@ export default function PaymentCancelPage() {
         <div className="flex flex-col gap-2">
           <button
             onClick={() => router.push("/student/payments")}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-all"
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-all"
           >
             <RefreshCw size={16} /> Try Again
           </button>
@@ -67,11 +88,12 @@ export default function PaymentCancelPage() {
           </button>
           <button
             onClick={() => router.push("/student/feedback")}
-            className="w-full flex items-center justify-center gap-2 text-gray-500 hover:text-blue-600 text-sm py-2 transition-colors"
+            className="w-full flex items-center justify-center gap-2 text-gray-500 hover:text-indigo-600 text-sm py-2 transition-colors"
           >
             <MessageSquare size={14} /> Report a problem
           </button>
         </div>
+
       </div>
     </div>
   );
