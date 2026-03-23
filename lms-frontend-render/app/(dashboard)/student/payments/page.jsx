@@ -170,11 +170,11 @@ export default function StudentPaymentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <CreditCard className="text-indigo-600" size={24} />
-            Course Payments
+            <CreditCard className="text-blue-800" size={24} />
+            Courses & Payments
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Select a course and pay your monthly fee to maintain access.
+            Browse our courses, choose one and pay your monthly fee
           </p>
         </div>
         <button
@@ -193,7 +193,6 @@ export default function StudentPaymentsPage() {
           <XCircle size={18} className="mt-0.5 flex-shrink-0 text-orange-500" />
           <div className="flex-1">
             <p className="font-semibold mb-0.5">Payment Not Completed</p>
-            <p className="text-orange-700">You left the payment gateway. No money has been charged — you can try again below.</p>
           </div>
           <button onClick={hideWarning} className="text-orange-400 hover:text-orange-600 flex-shrink-0 mt-0.5">
             <XCircle size={16} />
@@ -342,12 +341,12 @@ function CourseCard({ course, paying, onPay }) {
             <button
               onClick={() => onPay(course)}
               disabled={paying}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold py-3 rounded-xl transition-all duration-150 shadow-sm shadow-indigo-200"
+              className="w-full flex items-center justify-center gap-2 bg-blue-800 hover:bg-blue-900 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold py-3 rounded-xl transition-all duration-150 shadow-sm shadow-blue-200"
             >
               {paying ? (
                 <><Loader2 size={15} className="animate-spin" /> Redirecting…</>
               ) : (
-                <><Wifi size={15} /> Pay with PayHere</>
+                <><Wifi size={15} /> Pay </>
               )}
             </button>
           )}
