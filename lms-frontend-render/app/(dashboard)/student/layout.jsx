@@ -52,7 +52,7 @@ export default function StudentLayout({ children }) {
     { name: "My Courses",       href: "/student/courses",       icon: <GraduationCap size={20} /> },
     { name: "Schedule",         href: "/student/schedule",      icon: <Calendar size={20} /> },
     { name: "Attendance",       href: "/student/attendance",    icon: <BookOpen size={20} /> },
-    { name: "Exams & Quizes",     href: "/student/exams",icon: <PenTool size={20} /> },
+    { name: "Exams & Quizes",     href: "/student/exams",       icon: <PenTool size={20} /> },
     { name: "Courses & Payments", href: "/student/payments",    icon: <CreditCard size={20} /> },
     { name: "Payment History",  href: "/student/history",       icon: <Receipt size={20} /> },
     { name: "Feedback",         href: "/student/feedback",      icon: <MessageSquare size={20} /> },
