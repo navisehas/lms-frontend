@@ -2,9 +2,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BookOpen, CreditCard, CheckCircle, Loader2, AlertCircle,
-  RefreshCw, Wifi, Clock, Tag, ShieldCheck, Lock, Play,
-  DollarSign, BadgeAlert, XCircle,
+  CreditCard, Loader2, AlertCircle, RefreshCw,
+  Wifi, Clock, Tag, ShieldCheck, Lock, Play,
+  CheckCircle, XCircle, BookOpen,
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
@@ -26,7 +26,6 @@ export default function StudentPaymentsPage() {
   const leftForPayHere = useRef(false);
   const warningTimer   = useRef(null);
 
-  // Show warning and auto-hide after 10 seconds
   function showWarning() {
     setBackWarning(true);
     clearTimeout(warningTimer.current);
@@ -47,9 +46,7 @@ export default function StudentPaymentsPage() {
     return () => clearTimeout(warningTimer.current);
   }, [router]);
 
-  // ── Detect PayHere "Back to Site" (cancel_url) OR browser back button ────
   useEffect(() => {
-    // cancelled=1 means PayHere redirected here via cancel_url
     const params = new URLSearchParams(window.location.search);
     if (params.get("cancelled") === "1") {
       showWarning();
@@ -65,7 +62,7 @@ export default function StudentPaymentsPage() {
       }
     };
 
-    const handleVisibilityChange = () => {
+    const handleVisibility = () => {
       if (document.visibilityState === "visible" && leftForPayHere.current) {
         leftForPayHere.current = false;
         setPayingCourse(null);
@@ -75,10 +72,10 @@ export default function StudentPaymentsPage() {
     };
 
     window.addEventListener("pageshow", handlePageShow);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       window.removeEventListener("pageshow", handlePageShow);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [user]);
 
@@ -89,6 +86,7 @@ export default function StudentPaymentsPage() {
       const res  = await authFetch(`${API}/payments/courses/${studentId}`);
       const data = await res.json();
       if (data.success) {
+        // Only show courses NOT yet enrolled (pending payment)
         setCourses((data.courses || []).filter((c) => !c.is_enrolled));
       } else {
         setError(data.error || "Failed to load courses.");
@@ -165,149 +163,106 @@ export default function StudentPaymentsPage() {
     }
   }
 
-  const totalDue = courses.reduce((sum, c) => sum + parseFloat(c.fee || 0), 0);
-
   return (
     <div className="max-w-6xl mx-auto space-y-6">
 
-      {/* ── Page Header ─────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <CreditCard className="text-indigo-600" size={26} />
+            <CreditCard className="text-indigo-600" size={24} />
             Course Payments
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Pay your monthly course fee to maintain access. Enrollments reset on the 8th of every month.
+            Select a course and pay your monthly fee to maintain access.
           </p>
         </div>
         <button
           onClick={() => user && fetchCourses(user.user_id)}
           disabled={loading}
-          className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 self-start sm:self-auto shadow-sm"
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           Refresh
         </button>
       </div>
 
-      {/* ── Cancelled / Back Button Warning (auto-hides in 10s) ─────────── */}
+      {/* ── Cancelled Warning (auto-hides 10s) ──────────── */}
       {backWarning && (
-        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl px-4 py-4 text-sm">
+        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-2xl px-5 py-4 text-sm">
           <XCircle size={18} className="mt-0.5 flex-shrink-0 text-orange-500" />
           <div className="flex-1">
             <p className="font-semibold mb-0.5">Payment Not Completed</p>
-            <p>You left the payment gateway without completing payment. No money has been charged. You can try again below.</p>
+            <p className="text-orange-700">You left the payment gateway. No money has been charged — you can try again below.</p>
           </div>
-          <button
-            onClick={hideWarning}
-            className="text-orange-400 hover:text-orange-600 flex-shrink-0"
-          >
+          <button onClick={hideWarning} className="text-orange-400 hover:text-orange-600 flex-shrink-0 mt-0.5">
             <XCircle size={16} />
           </button>
         </div>
       )}
 
-      {/* ── Monthly Notice ───────────────────────────────── */}
-      <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
-        <Clock size={16} className="mt-0.5 flex-shrink-0 text-amber-600" />
-        <span>
-          <strong>Monthly Subscription:</strong> All enrollments are automatically removed on the{" "}
-          <strong>8th of each month</strong>. Pay before the 8th to maintain uninterrupted access.
-        </span>
-      </div>
-
-      {/* ── Error Alert ─────────────────────────────────── */}
+      {/* ── Error ───────────────────────────────────────── */}
       {error && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-2xl px-5 py-4 text-sm">
           <AlertCircle size={16} className="flex-shrink-0" /> {error}
         </div>
       )}
 
-      {/* ── Stats Row ───────────────────────────────────── */}
-      {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-            <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl flex-shrink-0">
-              <BookOpen size={18} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Courses to Pay</p>
-              <p className="text-2xl font-bold text-gray-800 mt-0.5">{courses.length}</p>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-            <div className="bg-green-50 text-green-600 p-2.5 rounded-xl flex-shrink-0">
-              <DollarSign size={18} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Total Due This Month</p>
-              <p className="text-2xl font-bold text-gray-800 mt-0.5">
-                Rs. {totalDue.toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Main Content ─────────────────────────────────── */}
+      {/* ── Loading ─────────────────────────────────────── */}
       {loading ? (
-        <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-          <Loader2 size={22} className="animate-spin" /> Loading courses…
+        <div className="flex items-center justify-center py-32 text-gray-400 gap-3">
+          <Loader2 size={22} className="animate-spin text-indigo-400" />
+          <span className="text-sm">Loading your courses…</span>
         </div>
 
       ) : courses.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-          <CheckCircle size={48} className="mx-auto text-green-400 mb-4" />
-          <h2 className="text-lg font-bold text-gray-800">All Payments Up to Date!</h2>
-          <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">
-            You have no pending course payments this month. Check back after the 8th if enrollments reset.
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+          <BookOpen size={48} className="mx-auto text-indigo-200 mb-4" />
+          <h2 className="text-lg font-bold text-gray-800">No courses found</h2>
+          <p className="text-sm text-gray-500 mt-2">
+            Contact your manager to get assigned to a course.
           </p>
         </div>
 
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <BadgeAlert size={17} className="text-indigo-500" />
-            <h2 className="text-base font-semibold text-gray-800">Courses Awaiting Payment</h2>
-            <span className="ml-auto text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium px-2.5 py-0.5 rounded-full">
-              {courses.length} Pending
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {courses.map((course) => (
-              <CourseCard
-                key={course.course_id}
-                course={course}
-                paying={payingCourse === course.course_id}
-                onPay={handlePayNow}
-              />
-            ))}
-          </div>
+        /* ── Course Grid ──────────────────────────────── */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {courses.map((course) => (
+            <CourseCard
+              key={course.course_id}
+              course={course}
+              paying={payingCourse === course.course_id}
+              onPay={handlePayNow}
+            />
+          ))}
         </div>
       )}
 
-      {/* ── PayHere Trust Badge ──────────────────────────── */}
-      <div className="flex items-center justify-center gap-2 mt-6 text-xs text-gray-400">
+      {/* ── Trust Badge ─────────────────────────────────── */}
+      <div className="flex items-center justify-center gap-2 pt-2 pb-4 text-xs text-gray-400">
         <ShieldCheck size={14} className="text-green-500" />
         Payments secured by{" "}
-        <span className="font-semibold text-gray-500">PayHere</span> — Sri Lanka's trusted payment gateway
+        <span className="font-semibold text-gray-500">PayHere</span>
+        {" "}— Sri Lanka's trusted payment gateway
         <Lock size={12} className="text-gray-300 ml-1" />
       </div>
+
     </div>
   );
 }
 
 // ── Course Card ───────────────────────────────────────────────────────────────
 function CourseCard({ course, paying, onPay }) {
-  const fee = parseFloat(course.fee || 0);
+  const fee      = parseFloat(course.fee || 0);
+  const enrolled = course.is_enrolled;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md">
+    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:-translate-y-0.5 ${
+      enrolled ? "border-emerald-200" : "border-gray-100"
+    }`}>
 
-      {/* Thumbnail */}
-      <div className="relative h-36 bg-gradient-to-br from-indigo-500 to-blue-600 overflow-hidden">
+      {/* ── Thumbnail ─────────────────────────────────── */}
+      <div className="relative h-40 bg-gradient-to-br from-indigo-500 to-blue-600 overflow-hidden">
         {course.thumbnail_url ? (
           <img
             src={course.thumbnail_url}
@@ -316,47 +271,78 @@ function CourseCard({ course, paying, onPay }) {
           />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <Play size={34} className="text-white opacity-40" />
+            <Play size={36} className="text-white opacity-30" />
           </div>
         )}
+
+        {/* Enrolled badge */}
+        {enrolled && (
+          <div className="absolute top-3 right-3 flex items-center gap-1 bg-emerald-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+            <CheckCircle size={11} /> Enrolled
+          </div>
+        )}
+
+        {/* Category */}
         {course.category && (
-          <div className="absolute bottom-2 left-2 bg-black/40 backdrop-blur-sm text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+          <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/40 backdrop-blur-sm text-white text-xs px-2 py-0.5 rounded-full">
             <Tag size={10} /> {course.category}
           </div>
         )}
       </div>
 
-      {/* Body */}
+      {/* ── Body ──────────────────────────────────────── */}
       <div className="p-5 flex flex-col flex-1">
-        <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 mb-1">
+
+        {/* Title */}
+        <h3 className="font-bold text-gray-900 text-base leading-snug line-clamp-2 mb-1">
           {course.title}
         </h3>
+
+        {/* Description */}
         {course.description && (
-          <p className="text-xs text-gray-500 line-clamp-2 mb-2">{course.description}</p>
-        )}
-        {course.duration && (
-          <p className="text-xs text-gray-400 flex items-center gap-1 mb-3">
-            <Clock size={11} /> {course.duration}
+          <p className="text-sm text-gray-500 line-clamp-2 mb-3 leading-relaxed">
+            {course.description}
           </p>
         )}
 
-        <div className="mt-auto">
-          <div className="flex items-end justify-between mb-3">
-            <span className="text-2xl font-extrabold text-gray-800">
-              Rs.&nbsp;{fee.toLocaleString()}
+        {/* Duration */}
+        {course.duration && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
+            <Clock size={12} />
+            <span>{course.duration}</span>
+          </div>
+        )}
+
+        {/* ── Fee + Action ──────────────────────────── */}
+        <div className="mt-auto pt-4 border-t border-gray-100">
+          {/* Fee row */}
+          <div className="flex items-baseline justify-between mb-4">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xs text-gray-400 font-medium">Rs.</span>
+              <span className="text-3xl font-black text-gray-900 tracking-tight">
+                {fee.toLocaleString()}
+              </span>
+            </div>
+            <span className="text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2.5 py-1">
+              per month
             </span>
-            <span className="text-xs text-gray-400">/ month</span>
           </div>
 
-          {fee === 0 ? (
-            <div className="w-full text-center text-sm text-gray-400 py-2.5 border border-dashed border-gray-200 rounded-xl">
+          {/* Button */}
+          {enrolled ? (
+            <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 text-sm font-semibold py-3 rounded-xl border border-emerald-200">
+              <CheckCircle size={15} />
+              Access Granted
+            </div>
+          ) : fee === 0 ? (
+            <div className="w-full text-center text-sm text-gray-400 py-3 border border-dashed border-gray-200 rounded-xl">
               Free Course
             </div>
           ) : (
             <button
               onClick={() => onPay(course)}
               disabled={paying}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold py-2.5 rounded-xl transition-all"
+              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold py-3 rounded-xl transition-all duration-150 shadow-sm shadow-indigo-200"
             >
               {paying ? (
                 <><Loader2 size={15} className="animate-spin" /> Redirecting…</>
