@@ -257,9 +257,9 @@ export default function CreateExamPage() {
 
   const steps = ["Exam Details", "Add Questions", "Review & Publish"];
 
-  // ── Fetch real courses on mount ──────────────────────────────────────────
+  // ── Fetch teacher's own courses on mount ─────────────────────────────────
   useEffect(() => {
-    fetch("/api/courses")
+    authFetch("/api/exams/teacher/my-courses")
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setCourses(data);
