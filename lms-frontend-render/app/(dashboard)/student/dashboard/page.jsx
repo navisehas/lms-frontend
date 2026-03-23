@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { 
   Clock, BookOpen, CheckCircle, Video, ArrowRight, 
   Megaphone, Loader2, CalendarClock, MessageSquare, MapPin
 } from "lucide-react";
 import { authFetch, getUser } from "@/lib/auth"; 
+
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function StudentDashboard() {
@@ -12,6 +14,7 @@ export default function StudentDashboard() {
   const [loadingNotices, setLoadingNotices] = useState(true);
   
   // Dynamic User & Dashboard Data States
+  const [greeting, setGreeting] = useState("Hello"); // <-- ADDED MISSING STATE
   const [studentName, setStudentName] = useState("Student");
   const [loadingData, setLoadingData] = useState(true);
   const [stats, setStats] = useState({
@@ -24,13 +27,23 @@ export default function StudentDashboard() {
   const [nextExam, setNextExam] = useState(null); // Optional: null if no exams
 
   useEffect(() => {
-    // 1. Get Current User Name
+    // 1. Set Greeting based on Time
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      setGreeting("Good Morning");
+    } else if (hour < 18) {
+      setGreeting("Good Afternoon");
+    } else {
+      setGreeting("Good Evening");
+    }
+
+    // 2. Get Current User Name
     const user = getUser();
     if (user && user.name) {
       setStudentName(user.name.split(" ")[0]); // Get first name
     }
 
-    // 2. Fetch Announcements
+    // 3. Fetch Announcements
     const fetchAnnouncements = async () => {
       try {
         const res = await authFetch(`${API}/admin/notice`);
@@ -48,7 +61,7 @@ export default function StudentDashboard() {
       }
     };
 
-    // 3. Fetch Dashboard Stats & Schedule
+    // 4. Fetch Dashboard Stats & Schedule
     const fetchDashboardData = async () => {
       try {
         let attRate = 0;
@@ -65,14 +78,14 @@ export default function StudentDashboard() {
         }
 
         // B. Get Active Courses Count
-        const curRes = await authFetch(`${API}/student/courses`); // Adjust endpoint if needed
+        const curRes = await authFetch(`${API}/student/courses`);
         if (curRes.ok) {
           const curData = await curRes.json();
           coursesCount = Array.isArray(curData) ? curData.length : 0;
         }
 
         // C. Get Today's Schedule
-        const schRes = await authFetch(`${API}/student/schedule/today`); // Adjust endpoint if needed
+        const schRes = await authFetch(`${API}/student/schedule/today`);
         if (schRes.ok) {
           schedule = await schRes.json();
         }
@@ -81,7 +94,7 @@ export default function StudentDashboard() {
         setStats({
           attendanceRate: attRate,
           activeCourses: coursesCount,
-          dueAmount: 0, // Update this if you have a payments endpoint: e.g., paymentsData.totalDue
+          dueAmount: 0, 
           dueMonth: "None"
         });
         setTodayClasses(Array.isArray(schedule) ? schedule : []);
@@ -116,7 +129,7 @@ export default function StudentDashboard() {
       {/* 1. WELCOME SECTION */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Good Morning, {studentName}! 👋</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{greeting}, {studentName}! 👋</h1>
           <p className="text-gray-500">
             {loadingData ? "Loading your schedule..." : 
              todayClasses.length > 0 
@@ -208,9 +221,9 @@ export default function StudentDashboard() {
             {loadingData ? <Loader2 className="animate-spin w-8 h-8 text-gray-300" /> : stats.activeCourses}
           </h3>
           <p className="text-gray-500 text-sm mt-1">Active Courses</p>
-          <a href="/student/courses" className="mt-auto pt-4 text-sm text-blue-600 font-bold cursor-pointer hover:underline flex items-center gap-1">
+          <Link href="/student/courses" className="mt-auto pt-4 text-sm text-blue-600 font-bold cursor-pointer hover:underline flex items-center gap-1">
             View All Courses <ArrowRight size={14} />
-          </a>
+          </Link>
         </div>
 
         {/* Card 3: Pending Payments */}
@@ -294,18 +307,18 @@ export default function StudentDashboard() {
           <div>
             <h2 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h2>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 divide-y divide-gray-100">
-              <a href="/student/results" className="w-full text-left p-4 hover:bg-blue-50 rounded-t-2xl flex items-center justify-between group transition block">
+              <Link href="/student/results" className="w-full text-left p-4 hover:bg-blue-50 rounded-t-2xl flex items-center justify-between group transition block">
                 <span className="text-sm font-bold text-gray-700 group-hover:text-blue-700">Download Exam Results</span>
                 <ArrowRight size={16} className="text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-transform" />
-              </a>
-              <a href="/student/leave" className="w-full text-left p-4 hover:bg-blue-50 flex items-center justify-between group transition block">
+              </Link>
+              <Link href="/student/leave" className="w-full text-left p-4 hover:bg-blue-50 flex items-center justify-between group transition block">
                 <span className="text-sm font-bold text-gray-700 group-hover:text-blue-700">Request Leave</span>
                 <ArrowRight size={16} className="text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-transform" />
-              </a>
-              <a href="/student/history" className="w-full text-left p-4 hover:bg-blue-50 rounded-b-2xl flex items-center justify-between group transition block">
+              </Link>
+              <Link href="/student/history" className="w-full text-left p-4 hover:bg-blue-50 rounded-b-2xl flex items-center justify-between group transition block">
                 <span className="text-sm font-bold text-gray-700 group-hover:text-blue-700">View Payment History</span>
                 <ArrowRight size={16} className="text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-transform" />
-              </a>
+              </Link>
             </div>
           </div>
 

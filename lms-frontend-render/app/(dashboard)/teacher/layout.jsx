@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -8,9 +9,16 @@ import {
 } from "lucide-react";
 import { guardRoute, logout } from "@/lib/auth";
 
+const BRAND = "#1E40AF";       // blue-800
+const BRAND_BG = "#DBEAFE";    // blue-100
+
 export default function TeacherLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
+  
+  // New state for the logout confirmation modal
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  
   const pathname = usePathname();
   const router = useRouter();
 
@@ -38,52 +46,84 @@ export default function TeacherLayout({ children }) {
     { name: "Feedback",         href: "/teacher/feedback",  icon: <MessageSquare size={20} /> },
   ];
 
-  const BRAND = "#1E40AF"; // indigo-800
-  const BRAND_BG = "#DBEAFE"; // indigo-100
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    /* h-screen and overflow-hidden prevent the entire page from scrolling */
+    <div className="h-screen w-full bg-gray-50 flex flex-col overflow-hidden relative">
+      
+      {/* ── LOGOUT CONFIRMATION MODAL ── */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
+              <LogOut size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Logout</h3>
+            <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+              Are you sure you want to log out of the Teacher Portal? You will need to sign in again to access your account.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  logout(router);
+                }}
+                className="px-5 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm"
+              >
+                Yes, Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* ── NAVBAR ── */}
-      <header
-        className="fixed top-0 left-0 right-0 z-40 h-16 bg-white border-b shadow-sm
-                   flex items-center justify-between px-4 md:px-8"
-      >
+      {/* ── FIXED TOP HEADER ── */}
+      <header className="h-16 flex-shrink-0 bg-white border-b shadow-sm flex items-center justify-between px-4 md:px-6 lg:px-8 z-40 relative">
         <div className="flex items-center gap-4">
+          {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 -ml-2 text-gray-600 md:hidden hover:bg-gray-100 rounded-lg"
+            className="p-2 -ml-2 text-gray-600 md:hidden hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Open menu"
           >
             <Menu size={24} />
           </button>
 
-          <div className="hidden md:flex items-center gap-2" style={{ width: "200px" }}>
+          {/* Logo */}
+          <div className="flex items-center gap-2 md:w-[200px]">
             <GraduationCap size={22} style={{ color: BRAND }} />
-            <span className="text-lg font-bold tracking-wide" style={{ color: BRAND }}>
-              Teacher Portal
+            <span className="text-lg font-bold tracking-tight" style={{ color: BRAND }}>
+              <span className="hidden sm:inline">Teacher Portal</span>
+              <span className="sm:hidden">Portal</span>
             </span>
           </div>
-
-          <h2 className="text-lg font-semibold text-gray-700 hidden sm:block">
-            Welcome back, {user.name.split(" ")[0]}
-          </h2>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4 ml-auto">
-          <button className="p-2 text-gray-400 hover:text-blue-800 transition-colors relative">
+        {/* Right side */}
+        <div className="flex items-center gap-3 sm:gap-5">
+          <button
+            className="p-2 text-gray-400 hover:text-blue-800 relative transition-colors"
+            aria-label="Notifications"
+          >
             <Bell size={20} />
-            <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
           </button>
-
-          <div className="w-px h-8 bg-gray-200 mx-1 hidden sm:block" />
 
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-gray-900">{user.name}</p>
-              <p className="text-xs font-bold" style={{ color: BRAND }}>Teacher</p>
+              <p className="text-sm font-semibold text-gray-900">{user.name}</p>
+              <p className="text-xs font-medium" style={{ color: BRAND }}>
+                Teacher
+              </p>
             </div>
+
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-sm sm:text-base shadow-sm"
               style={{ backgroundColor: BRAND_BG, color: BRAND }}
             >
               {initials}
@@ -92,83 +132,88 @@ export default function TeacherLayout({ children }) {
         </div>
       </header>
 
-      <div className="flex pt-16 min-h-screen">
-
+      {/* ── LOWER SECTION (Sidebar + Content) ── */}
+      <div className="flex-1 flex overflow-hidden relative">
+        
+        {/* Mobile backdrop */}
         {sidebarOpen && (
-          <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+          <div
+            className="fixed inset-0 bg-black/60 z-[45] md:hidden backdrop-blur-sm transition-opacity"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
         )}
 
-        {/* ── SIDEBAR ── */}
+        {/* ── FIXED SIDEBAR ── */}
         <aside
-          style={{ backgroundColor: BRAND, width: "256px", top: "64px" }}
-          className={`fixed left-0 bottom-0 z-30 flex flex-col
+          className={`
+            fixed inset-y-0 left-0 z-50 w-64 bg-[#1E40AF] text-white shadow-2xl flex flex-col
+            md:relative md:z-0 md:shadow-none
             transition-transform duration-300 ease-in-out
-            ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+            ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+            md:translate-x-0
+          `}
         >
-          <div
-            className="h-14 flex items-center px-6 gap-2 flex-shrink-0 md:hidden"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.15)" }}
-          >
-            <GraduationCap className="text-blue-200" size={20} />
-            <span className="text-lg font-bold tracking-wide text-white">Teacher Portal</span>
-            <button className="ml-auto text-blue-200" onClick={() => setSidebarOpen(false)}>
-              <X size={22} />
+          {/* Mobile header inside sidebar */}
+          <div className="md:hidden h-16 flex items-center justify-between px-5 border-b border-blue-700/30 flex-shrink-0">
+            <div className="flex items-center gap-2.5">
+              <GraduationCap size={20} className="text-blue-200" />
+              <span className="text-lg font-bold tracking-tight">Teacher Portal</span>
+            </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-1 -mr-1 text-blue-200 hover:text-white rounded-md"
+            >
+              <X size={24} />
             </button>
           </div>
 
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {/* Navigation Links */}
+          <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
             {menuItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors"
-                style={
-                  pathname === item.href
-                    ? { backgroundColor: "rgba(255,255,255,0.2)", color: "#ffffff" }
-                    : { color: "#BFDBFE" }
-                }
-                onMouseEnter={(e) => {
-                  if (pathname !== item.href) {
-                    e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
-                    e.currentTarget.style.color = "#ffffff";
+                className={`
+                  flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-[15px] font-medium
+                  transition-colors duration-150
+                  ${
+                    pathname === item.href
+                      ? "bg-white/20 text-white"
+                      : "text-blue-100 hover:bg-white/10 hover:text-white"
                   }
-                }}
-                onMouseLeave={(e) => {
-                  if (pathname !== item.href) {
-                    e.currentTarget.style.backgroundColor = "";
-                    e.currentTarget.style.color = "#BFDBFE";
-                  }
-                }}
+                `}
               >
-                {item.icon}
+                <span className="text-blue-200">{item.icon}</span>
                 {item.name}
               </Link>
             ))}
-          </nav>
 
-          <div className="p-4 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.15)" }}>
-            <button
-              onClick={() => logout(router)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors"
-              style={{ color: "#BFDBFE" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
-                e.currentTarget.style.color = "#ffffff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "";
-                e.currentTarget.style.color = "#BFDBFE";
-              }}
-            >
-              <LogOut size={20} /> Logout
-            </button>
-          </div>
+            {/* Logout Button */}
+            <div className="mt-4 pt-4 border-t border-blue-700/30">
+              <button
+                onClick={() => setShowLogoutModal(true)}
+                className="
+                  w-full flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-[15px] font-medium
+                  text-blue-100 hover:bg-red-500/20 hover:text-red-100
+                  transition-colors duration-150
+                "
+              >
+                <LogOut size={20} className="text-blue-200" />
+                Logout
+              </button>
+            </div>
+          </nav>
         </aside>
 
-        <main className="flex-1 min-w-0 md:ml-64 overflow-auto p-4 md:p-8">
-          {children}
+        {/* ── SCROLLABLE MAIN CONTENT ── */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-gray-50 relative">
+          <div className="max-w-7xl mx-auto pb-12">
+            {children}
+          </div>
         </main>
+
       </div>
     </div>
   );
