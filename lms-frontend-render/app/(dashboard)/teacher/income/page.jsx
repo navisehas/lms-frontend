@@ -1,30 +1,169 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   TrendingUp, DollarSign, Download, Loader, AlertCircle,
-  RefreshCw, Calendar, ChevronDown, BarChart2, Receipt, Info,
-  Wallet, Award, CreditCard, Banknote
+  RefreshCw, BookOpen, Users, BarChart3, ChevronRight,
+  ArrowUpRight, Wallet, GraduationCap, Star, Clock
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-// ── Brand colours (matches layout.jsx BRAND = "#1E40AF") ──
-const BRAND       = "#1E40AF"; // blue-800
-const BRAND_BG    = "#DBEAFE"; // blue-100
-const BRAND_LIGHT = "#EFF6FF"; // blue-50
+// ─── Helpers ────────────────────────────────────────────────────────────────
+const fmt = (n) =>
+  parseFloat(n || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
+function buildCourseMap(monthly) {
+  const map = {};
+  for (const m of monthly) {
+    for (const p of m.payments || []) {
+      const key = p.course_id;
+      if (!map[key]) {
+        map[key] = {
+          course_id: key,
+          course_title: p.course_title,
+          gross_total: 0,
+          teacher_income: 0,
+          institute_cut: 0,
+          payment_count: 0,
+          enrolled_students: new Set(),
+          payments: [],
+        };
+      }
+      map[key].gross_total += parseFloat(p.amount);
+      map[key].teacher_income += parseFloat(p.teacher_share);
+      map[key].institute_cut += parseFloat(p.amount) - parseFloat(p.teacher_share);
+      map[key].payment_count += 1;
+      map[key].enrolled_students.add(p.student_id);
+      map[key].payments.push({ ...p, month_label: m.month_label });
+    }
+  }
+  return Object.values(map)
+    .map((c) => ({ ...c, enrolled_students: c.enrolled_students.size }))
+    .sort((a, b) => b.teacher_income - a.teacher_income);
+}
+
+function exportCSV(courses, teacherPct) {
+  const headers = [
+    "Course", "Students Enrolled", "Gross Amount (Rs.)",
+    `Your Share ${teacherPct}% (Rs.)`, `Institute (Rs.)`
+  ];
+  const rows = courses.map((c) => [
+    c.course_title, c.enrolled_students,
+    c.gross_total.toFixed(2), c.teacher_income.toFixed(2), c.institute_cut.toFixed(2)
+  ]);
+  const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows].map((r) => r.map(escape).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `teacher-course-income-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ─── Course Card ─────────────────────────────────────────────────────────────
+function CourseCard({ course, teacherPct, isTop, maxIncome, onClick, isSelected }) {
+  const pct = maxIncome > 0 ? (course.teacher_income / maxIncome) * 100 : 0;
+  const colors = [
+    { bar: "#10b981", bg: "rgba(16,185,129,0.08)", accent: "#10b981" },
+    { bar: "#6366f1", bg: "rgba(99,102,241,0.08)", accent: "#6366f1" },
+    { bar: "#f59e0b", bg: "rgba(245,158,11,0.08)", accent: "#f59e0b" },
+    { bar: "#ef4444", bg: "rgba(239,68,68,0.08)", accent: "#ef4444" },
+    { bar: "#8b5cf6", bg: "rgba(139,92,246,0.08)", accent: "#8b5cf6" },
+  ];
+  const colorIdx = Math.abs(course.course_id?.toString().split("").reduce((a, c) => a + c.charCodeAt(0), 0) || 0) % colors.length;
+  const c = colors[colorIdx];
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: isSelected ? c.bg : "#fff",
+        border: isSelected ? `1.5px solid ${c.accent}` : "1.5px solid #f0f0f0",
+        borderRadius: 16,
+        padding: "20px 22px",
+        cursor: "pointer",
+        transition: "all 0.18s ease",
+        position: "relative",
+        overflow: "hidden",
+      }}
+      className="hover:shadow-md"
+    >
+      {isTop && (
+        <span style={{
+          position: "absolute", top: 12, right: 12,
+          background: "#fef3c7", color: "#d97706",
+          fontSize: 10, fontWeight: 700, padding: "2px 8px",
+          borderRadius: 99, display: "flex", alignItems: "center", gap: 3
+        }}>
+          <Star size={9} fill="#d97706" /> TOP
+        </span>
+      )}
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8,
+            background: c.bg, display: "flex", alignItems: "center", justifyContent: "center"
+          }}>
+            <BookOpen size={15} color={c.accent} />
+          </div>
+          <p style={{ fontWeight: 700, fontSize: 14, color: "#1a1a2e", lineHeight: 1.3, flex: 1 }}>
+            {course.course_title}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, marginBottom: 14 }}>
+        <div>
+          <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>Your Income</p>
+          <p style={{ fontSize: 20, fontWeight: 800, color: c.accent, fontFamily: "'DM Mono', monospace" }}>
+            Rs. {fmt(course.teacher_income)}
+          </p>
+        </div>
+        <div style={{ marginLeft: "auto", textAlign: "right" }}>
+          <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>Students</p>
+          <p style={{ fontSize: 18, fontWeight: 700, color: "#374151" }}>
+            {course.enrolled_students}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ background: "#f3f4f6", borderRadius: 99, height: 6, marginBottom: 8 }}>
+        <div style={{
+          width: `${pct}%`, height: "100%",
+          background: c.bar, borderRadius: 99,
+          transition: "width 0.6s ease"
+        }} />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <p style={{ fontSize: 11, color: "#9ca3af" }}>
+          {course.payment_count} payment{course.payment_count !== 1 ? "s" : ""} · Gross Rs. {fmt(course.gross_total)}
+        </p>
+        <ChevronRight size={14} color={isSelected ? c.accent : "#d1d5db"} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 export default function TeacherIncomePage() {
   const router = useRouter();
-  const [user, setUser]           = useState(null);
-  const [data, setData]           = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
+  const [user, setUser] = useState(null);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
-  const [viewMode, setViewMode]   = useState("monthly");
-  const [selectedMonth, setSelectedMonth] = useState("ALL");
-  const [expandedMonth, setExpandedMonth] = useState(null);
+  const [selectedCourse, setSelectedCourse] = useState(null);
 
   useEffect(() => {
     const auth = guardRoute("TEACHER", router);
@@ -35,7 +174,7 @@ export default function TeacherIncomePage() {
     setLoading(true);
     setError("");
     try {
-      const res  = await authFetch(`${API}/income/teacher/${teacherId}/monthly`);
+      const res = await authFetch(`${API}/income/teacher/${teacherId}/monthly`);
       const json = await res.json();
       if (json.success) setData(json);
       else setError(json.error || "Failed to load income data.");
@@ -43,439 +182,228 @@ export default function TeacherIncomePage() {
     finally { setLoading(false); }
   }
 
-  const monthly      = data?.monthly || [];
-  const totals       = data?.totals  || {};
-  const teacherPct   = data?.teacher_share_pct || 80;
+  const monthly = data?.monthly || [];
+  const totals = data?.totals || {};
+  const teacherPct = data?.teacher_share_pct || 80;
   const institutePct = data?.institute_share_pct || 20;
 
-  const currentMonthKey = (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  })();
-  const currentMonth = monthly.find(m => m.month_key === currentMonthKey);
-  const bestMonth    = monthly.reduce(
-    (best, m) => m.teacher_income > (best?.teacher_income || 0) ? m : best, null
-  );
+  const courses = useMemo(() => buildCourseMap(monthly), [monthly]);
+  const maxIncome = courses[0]?.teacher_income || 0;
 
-  const allPayments = monthly.flatMap(m => m.payments || []);
-  const filteredPayments = selectedMonth === "ALL"
-    ? allPayments
-    : (monthly.find(m => m.month_key === selectedMonth)?.payments || []);
+  const activeCourse = selectedCourse
+    ? courses.find((c) => c.course_id === selectedCourse)
+    : null;
 
-  function exportMonthly() {
+  function doExport() {
     setExporting(true);
-    try {
-      const headers = ["Month","Total Payments","Gross Amount (Rs.)",`Your Share ${teacherPct}% (Rs.)`,`Institute ${institutePct}% (Rs.)`];
-      const rows    = monthly.map(m=>[m.month_label,m.payment_count,m.gross_total.toFixed(2),m.teacher_income.toFixed(2),m.institute_cut.toFixed(2)]);
-      const summary = [[],["--- TOTALS ---"],["All Time",totals.payment_count,totals.gross_total?.toFixed(2),totals.teacher_income?.toFixed(2),totals.institute_cut?.toFixed(2)]];
-      const escape  = v=>`"${String(v??"").replace(/"/g,'""')}"`;
-      const csv     = [...[headers,...rows,...summary].map(r=>r.map(escape).join(","))].join("\n");
-      const blob    = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
-      const url     = URL.createObjectURL(blob);
-      const a       = document.createElement("a");
-      a.href=url; a.download=`teacher-monthly-income-${new Date().toISOString().slice(0,10)}.csv`;
-      document.body.appendChild(a);a.click();document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } finally { setTimeout(()=>setExporting(false),800); }
+    try { exportCSV(courses, teacherPct); }
+    finally { setTimeout(() => setExporting(false), 800); }
   }
 
-  function exportDetailed() {
-    setExporting(true);
-    try {
-      const headers = ["Payment ID","Student Name","Student ID","Course","Gross Amount (Rs.)",`Your Share ${teacherPct}% (Rs.)`,"Method","Date"];
-      const rows    = filteredPayments.map(p=>[p.payment_id,p.student_name,p.student_id,p.course_title,parseFloat(p.amount).toFixed(2),parseFloat(p.teacher_share).toFixed(2),p.payment_type==="ONLINE"?"Online":"Cash",new Date(p.payment_date).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"})]);
-      const escape  = v=>`"${String(v??"").replace(/"/g,'""')}"`;
-      const csv     = [...[headers,...rows].map(r=>r.map(escape).join(","))].join("\n");
-      const blob    = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
-      const url     = URL.createObjectURL(blob);
-      const a       = document.createElement("a");
-      a.href=url; a.download=`teacher-income-${selectedMonth==="ALL"?"all-time":selectedMonth}.csv`;
-      document.body.appendChild(a);a.click();document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } finally { setTimeout(()=>setExporting(false),800); }
-  }
-
-  const fmt = (n) => (parseFloat(n||0)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  const stats = [
+    {
+      label: "Total Earnings",
+      value: `Rs. ${fmt(totals.teacher_income)}`,
+      sub: `${teacherPct}% of gross Rs. ${fmt(totals.gross_total)}`,
+      icon: <Wallet size={18} />, color: "#10b981", bg: "#ecfdf5"
+    },
+    {
+      label: "My Courses",
+      value: courses.length,
+      sub: "With enrollment activity",
+      icon: <BookOpen size={18} />, color: "#6366f1", bg: "#eef2ff"
+    },
+    {
+      label: "Total Enrollments",
+      value: courses.reduce((s, c) => s + c.enrolled_students, 0),
+      sub: "Unique students across courses",
+      icon: <GraduationCap size={18} />, color: "#f59e0b", bg: "#fffbeb"
+    },
+    {
+      label: "Payments Received",
+      value: totals.payment_count || 0,
+      sub: "All-time transactions",
+      icon: <BarChart3 size={18} />, color: "#ef4444", bg: "#fef2f2"
+    },
+  ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div style={{ minHeight: "100vh", background: "#f8f9fb", fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap');
+        * { box-sizing: border-box; }
+        .hover\\:shadow-md:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+      `}</style>
 
-      {/* ── PAGE HEADER ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-            <span className="p-1.5 rounded-lg" style={{ backgroundColor: BRAND_BG }}>
-              <Wallet size={22} style={{ color: BRAND }} />
-            </span>
-            My Income
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            You receive{" "}
-            <span className="font-semibold" style={{ color: BRAND }}>{teacherPct}%</span>
-            {" "}of every course payment.
-          </p>
-        </div>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 20px" }}>
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => user && fetchIncome(user.user_id)}
-            className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button
-            onClick={exportMonthly}
-            disabled={exporting || monthly.length === 0}
-            className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60"
-            style={{ backgroundColor: BRAND }}
-          >
-            {exporting ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
-            Export Monthly
-          </button>
-        </div>
-      </div>
-
-      {/* ── ERROR ── */}
-      {error && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-          <AlertCircle size={16} />{error}
-        </div>
-      )}
-
-      {/* ── INCOME SPLIT BANNER ── */}
-      <div
-        className="flex items-start gap-3 rounded-xl px-4 py-3 text-sm border"
-        style={{ backgroundColor: BRAND_LIGHT, borderColor: "#BFDBFE" }}
-      >
-        <Info size={16} style={{ color: BRAND }} className="mt-0.5 flex-shrink-0" />
-        <span style={{ color: "#1e3a8a" }}>
-          <span className="font-bold">Income Split Policy:</span> You earn{" "}
-          <span className="font-bold">{teacherPct}%</span> of each student course fee.
-          The institute retains{" "}
-          <span className="font-bold">{institutePct}%</span>.
-          All figures below show your {teacherPct}% share.
-        </span>
-      </div>
-
-      {/* ── STAT CARDS ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: `All-Time Income (${teacherPct}%)`,
-            val:   `Rs. ${fmt(totals.teacher_income)}`,
-            sub:   `Gross: Rs. ${fmt(totals.gross_total)}`,
-            icon:  <DollarSign size={22} />,
-            accent: BRAND,
-            bg:     BRAND_BG,
-          },
-          {
-            label: `This Month (${teacherPct}%)`,
-            val:   currentMonth ? `Rs. ${fmt(currentMonth.teacher_income)}` : "Rs. 0.00",
-            sub:   currentMonth ? `${currentMonth.payment_count} payment(s)` : "No payments yet",
-            icon:  <Calendar size={22} />,
-            accent: "#0891b2", // cyan-600
-            bg:     "#CFFAFE",
-          },
-          {
-            label: "Best Month",
-            val:   bestMonth ? `Rs. ${fmt(bestMonth.teacher_income)}` : "—",
-            sub:   bestMonth?.month_label || "",
-            icon:  <Award size={22} />,
-            accent: "#7c3aed", // violet-600
-            bg:     "#EDE9FE",
-          },
-          {
-            label: "Total Payments",
-            val:   totals.payment_count || 0,
-            sub:   "All-time enrollments",
-            icon:  <Receipt size={22} />,
-            accent: "#d97706", // amber-600
-            bg:     "#FEF3C7",
-          },
-        ].map((s, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center gap-4"
-          >
-            <div
-              className="p-3 rounded-xl flex-shrink-0"
-              style={{ backgroundColor: s.bg, color: s.accent }}
-            >
-              {s.icon}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-400 leading-tight">{s.label}</p>
-              <p className="text-xl font-bold mt-0.5" style={{ color: s.accent }}>{s.val}</p>
-              {s.sub && <p className="text-xs text-gray-400 mt-0.5 truncate">{s.sub}</p>}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── VIEW TOGGLE ── */}
-      <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
-        {[
-          { key: "monthly", label: "Monthly Summary", icon: <BarChart2 size={14} /> },
-          { key: "all",     label: "Payment Details", icon: <Receipt size={14} /> },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setViewMode(t.key)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            style={
-              viewMode === t.key
-                ? { backgroundColor: BRAND, color: "#fff" }
-                : { color: "#6b7280" }
-            }
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── CONTENT ── */}
-      {loading ? (
-        <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-          <Loader size={20} className="animate-spin" style={{ color: BRAND }} />
-          <span>Loading income data…</span>
-        </div>
-
-      ) : monthly.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-xl border border-gray-200 text-gray-400">
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-            style={{ backgroundColor: BRAND_BG }}
-          >
-            <DollarSign size={32} style={{ color: BRAND }} />
-          </div>
-          <p className="font-semibold text-gray-600">No income data yet.</p>
-          <p className="text-sm mt-1">Income appears once students pay for your courses.</p>
-        </div>
-
-      ) : viewMode === "monthly" ? (
-        /* ── MONTHLY SUMMARY ── */
-        <div className="space-y-3">
-          {monthly.map((m, idx) => {
-            const pct        = bestMonth ? (m.teacher_income / bestMonth.teacher_income) * 100 : 0;
-            const isExpanded = expandedMonth === m.month_key;
-            return (
-              <div
-                key={m.month_key}
-                className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
-              >
-                {/* Row header */}
-                <div
-                  className="p-5 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => setExpandedMonth(isExpanded ? null : m.month_key)}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-gray-900 text-base">{m.month_label}</span>
-                        {idx === 0 && (
-                          <span
-                            className="text-xs font-bold px-2 py-0.5 rounded-full"
-                            style={{ backgroundColor: BRAND_BG, color: BRAND }}
-                          >
-                            Latest
-                          </span>
-                        )}
-                        {bestMonth && m.month_key === bestMonth.month_key && (
-                          <span className="text-xs font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
-                            Best Month
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {m.payment_count} payment{m.payment_count !== 1 ? "s" : ""} ·{" "}
-                        Click to {isExpanded ? "hide" : "view"} breakdown
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <p className="text-xl font-bold" style={{ color: BRAND }}>
-                        Rs. {fmt(m.teacher_income)}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Gross: Rs. {fmt(m.gross_total)} ·{" "}
-                        <span style={{ color: BRAND }}>{teacherPct}% your share</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: BRAND }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1.5">{pct.toFixed(0)}% of best month</p>
-                </div>
-
-                {/* Expanded breakdown */}
-                {isExpanded && (
-                  <div className="border-t border-gray-100 px-5 pb-5 pt-3">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                      Payment Breakdown
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {(m.payments || []).map(p => (
-                        <div
-                          key={p.payment_id}
-                          className="flex items-center justify-between rounded-lg px-3 py-2.5"
-                          style={{ backgroundColor: BRAND_LIGHT }}
-                        >
-                          <div className="min-w-0 mr-2">
-                            <p className="text-xs font-semibold text-gray-800 truncate">{p.student_name}</p>
-                            <p className="text-xs text-gray-500 truncate">{p.course_title}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {new Date(p.payment_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                              {" · "}
-                              <span
-                                className="font-medium"
-                                style={{ color: p.payment_type === "ONLINE" ? BRAND : "#d97706" }}
-                              >
-                                {p.payment_type === "ONLINE" ? "Online" : "Cash"}
-                              </span>
-                            </p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xs font-bold" style={{ color: BRAND }}>
-                              Rs. {fmt(p.teacher_share)}
-                            </p>
-                            <p className="text-xs text-gray-400">of Rs. {fmt(p.amount)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+        {/* ── Header ── */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 28 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <div style={{ background: "#ecfdf5", borderRadius: 10, padding: 8 }}>
+                <TrendingUp size={22} color="#10b981" />
               </div>
-            );
-          })}
-        </div>
-
-      ) : (
-        /* ── PAYMENT DETAILS ── */
-        <div className="space-y-4">
-          {/* Filter + export row */}
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <div className="relative">
-              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <select
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-                className="pl-8 pr-8 py-2.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none appearance-none cursor-pointer"
-                style={{ "--tw-ring-color": BRAND }}
-              >
-                <option value="ALL">All Months</option>
-                {monthly.map(m => (
-                  <option key={m.month_key} value={m.month_key}>{m.month_label}</option>
-                ))}
-              </select>
-              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: "#111827", margin: 0 }}>
+                My Income
+              </h1>
             </div>
-
+            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>
+              Course-wise earnings · You keep <strong style={{ color: "#10b981" }}>{teacherPct}%</strong> of every enrollment
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={exportDetailed}
-              disabled={exporting || filteredPayments.length === 0}
-              className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60"
-              style={{ backgroundColor: BRAND }}
-            >
-              {exporting ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
-              Export {selectedMonth === "ALL" ? "All" : "Month"}
+              onClick={() => user && fetchIncome(user.user_id)}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "9px 14px", fontSize: 13, color: "#374151", cursor: "pointer", fontWeight: 500 }}>
+              <RefreshCw size={13} /> Refresh
+            </button>
+            <button
+              onClick={doExport}
+              disabled={exporting || courses.length === 0}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "#10b981", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, color: "#fff", cursor: "pointer", fontWeight: 700, opacity: exporting || courses.length === 0 ? 0.6 : 1 }}>
+              {exporting ? <Loader size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
+              Export CSV
             </button>
           </div>
-
-          {/* Summary bar */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div
-              className="px-5 py-3 border-b border-gray-100 flex flex-wrap gap-4 items-center"
-              style={{ backgroundColor: BRAND_LIGHT }}
-            >
-              <span className="text-sm text-gray-600">
-                <span className="font-bold text-gray-900">{filteredPayments.length}</span> payments
-              </span>
-              <span className="text-sm text-gray-600">
-                Your {teacherPct}% income:{" "}
-                <span className="font-bold" style={{ color: BRAND }}>
-                  Rs. {fmt(filteredPayments.reduce((s, p) => s + parseFloat(p.teacher_share || 0), 0))}
-                </span>
-              </span>
-              <span className="text-sm text-gray-600">
-                Gross:{" "}
-                <span className="font-bold text-gray-800">
-                  Rs. {fmt(filteredPayments.reduce((s, p) => s + parseFloat(p.amount || 0), 0))}
-                </span>
-              </span>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-gray-100">
-                  <tr style={{ backgroundColor: BRAND_LIGHT }}>
-                    {["Student", "Course", "Gross Amount", `Your Share (${teacherPct}%)`, "Method", "Date"].map(h => (
-                      <th
-                        key={h}
-                        className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide"
-                        style={{ color: BRAND }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filteredPayments.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
-                        No payments found for the selected period.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredPayments.map(p => (
-                      <tr key={p.payment_id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <p className="font-semibold text-gray-800">{p.student_name}</p>
-                          <p className="text-xs font-mono text-gray-400">{p.student_id}</p>
-                        </td>
-                        <td className="px-5 py-3.5 text-gray-600 max-w-[160px]">
-                          <p className="truncate">{p.course_title}</p>
-                        </td>
-                        <td className="px-5 py-3.5 text-gray-600">Rs. {fmt(p.amount)}</td>
-                        <td className="px-5 py-3.5">
-                          <span className="font-bold" style={{ color: BRAND }}>
-                            Rs. {fmt(p.teacher_share)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <span
-                            className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                            style={
-                              p.payment_type === "ONLINE"
-                                ? { backgroundColor: BRAND_BG, color: BRAND }
-                                : { backgroundColor: "#FEF3C7", color: "#d97706" }
-                            }
-                          >
-                            {p.payment_type === "ONLINE" ? "Online" : "Cash"}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap">
-                          {new Date(p.payment_date).toLocaleDateString("en-US", {
-                            year: "numeric", month: "short", day: "numeric",
-                          })}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
-      )}
+
+        {error && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13 }}>
+            <AlertCircle size={15} /> {error}
+          </div>
+        )}
+
+        {/* ── Stat Cards ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 28 }}>
+          {stats.map((s, i) => (
+            <div key={i} style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #f0f0f0", padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ background: s.bg, borderRadius: 10, padding: 10, flexShrink: 0 }}>
+                <span style={{ color: s.color }}>{s.icon}</span>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 3px" }}>{s.label}</p>
+                <p style={{ fontSize: 20, fontWeight: 800, color: s.color, margin: "0 0 2px", fontFamily: "'DM Mono', monospace" }}>{s.value}</p>
+                <p style={{ fontSize: 11, color: "#d1d5db", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Main Content ── */}
+        {loading ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", color: "#9ca3af", gap: 10 }}>
+            <Loader size={20} style={{ animation: "spin 1s linear infinite" }} /> Loading income data…
+          </div>
+        ) : courses.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "80px 0", background: "#fff", borderRadius: 16, border: "1.5px solid #f0f0f0" }}>
+            <DollarSign size={48} color="#e5e7eb" style={{ marginBottom: 12 }} />
+            <p style={{ fontWeight: 700, color: "#374151", margin: "0 0 6px" }}>No income data yet</p>
+            <p style={{ fontSize: 13, color: "#9ca3af" }}>Income appears once students enroll in your courses.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: activeCourse ? "1fr 380px" : "1fr", gap: 16, alignItems: "start" }}>
+
+            {/* Course Grid */}
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+                {courses.length} Course{courses.length !== 1 ? "s" : ""} with Income
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+                {courses.map((course, idx) => (
+                  <CourseCard
+                    key={course.course_id}
+                    course={course}
+                    teacherPct={teacherPct}
+                    isTop={idx === 0}
+                    maxIncome={maxIncome}
+                    isSelected={selectedCourse === course.course_id}
+                    onClick={() => setSelectedCourse(selectedCourse === course.course_id ? null : course.course_id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Course Detail Panel */}
+            {activeCourse && (
+              <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #f0f0f0", overflow: "hidden", position: "sticky", top: 20 }}>
+                {/* Panel Header */}
+                <div style={{ padding: "20px 22px 16px", borderBottom: "1px solid #f3f4f6" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1, marginRight: 12 }}>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Course Detail</p>
+                      <p style={{ fontWeight: 800, fontSize: 15, color: "#111827", margin: 0, lineHeight: 1.3 }}>
+                        {activeCourse.course_title}
+                      </p>
+                    </div>
+                    <button onClick={() => setSelectedCourse(null)}
+                      style={{ background: "#f3f4f6", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>
+                      ✕
+                    </button>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+                    {[
+                      { label: "Your Income", val: `Rs. ${fmt(activeCourse.teacher_income)}`, color: "#10b981" },
+                      { label: "Gross Total", val: `Rs. ${fmt(activeCourse.gross_total)}`, color: "#374151" },
+                      { label: "Students", val: activeCourse.enrolled_students, color: "#6366f1" },
+                      { label: "Payments", val: activeCourse.payment_count, color: "#f59e0b" },
+                    ].map((s, i) => (
+                      <div key={i} style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 14px" }}>
+                        <p style={{ fontSize: 10, color: "#9ca3af", margin: "0 0 3px", textTransform: "uppercase" }}>{s.label}</p>
+                        <p style={{ fontSize: 16, fontWeight: 800, color: s.color, margin: 0, fontFamily: "'DM Mono', monospace" }}>{s.val}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Enrolled Students List */}
+                <div style={{ padding: "16px 22px" }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+                    Enrollment History
+                  </p>
+                  <div style={{ maxHeight: 340, overflowY: "auto" }}>
+                    {activeCourse.payments.map((p, i) => (
+                      <div key={p.payment_id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+                        <div style={{ flex: 1, marginRight: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#eef2ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <Users size={12} color="#6366f1" />
+                            </div>
+                            <div>
+                              <p style={{ fontSize: 12, fontWeight: 600, color: "#111827", margin: 0 }}>{p.student_name}</p>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                                <Clock size={9} color="#9ca3af" />
+                                <p style={{ fontSize: 10, color: "#9ca3af", margin: 0 }}>
+                                  {new Date(p.payment_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                </p>
+                                <span style={{ fontSize: 10, background: p.payment_type === "ONLINE" ? "#dbeafe" : "#fef3c7", color: p.payment_type === "ONLINE" ? "#1d4ed8" : "#92400e", padding: "1px 6px", borderRadius: 99, fontWeight: 600 }}>
+                                  {p.payment_type === "ONLINE" ? "Online" : "Cash"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 800, color: "#10b981", margin: "0 0 1px", fontFamily: "'DM Mono', monospace" }}>
+                            Rs. {fmt(p.teacher_share)}
+                          </p>
+                          <p style={{ fontSize: 10, color: "#d1d5db", margin: 0 }}>of Rs. {fmt(p.amount)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }

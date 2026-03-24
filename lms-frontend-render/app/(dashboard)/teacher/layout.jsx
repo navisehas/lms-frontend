@@ -39,11 +39,11 @@ export default function TeacherLayout({ children }) {
   const menuItems = [
     { name: "Overview",         href: "/teacher/dashboard", icon: <LayoutGrid size={20} /> },
     { name: "My Courses",       href: "/teacher/courses",   icon: <BookOpen size={20} /> },
-    { name: "Course Materials", href: "/teacher/materials", icon: <FileText size={20} /> },
-    { name: "Exams & Quizzes",  href: "/teacher/exams/create",     icon: <PenTool size={20} /> },
-    { name: "Exam Results",     href: "/teacher/exams/results",     icon: <PenTool size={20} /> },
-    { name: "Student Progress", href: "/teacher/analytics", icon: <BarChart2 size={20} /> },
-    { name: "My Income",        href: "/teacher/income",    icon: <BarChart2 size={20} /> },
+    { name: "Course Materials", href: "/teacher/materials", icon: <FolderOpen size={20} /> },
+    { name: "Exams & Quizzes",  href: "/teacher/exams/create",     icon: <ClipboardEdit  size={20} /> },
+    { name: "Exam Results",     href: "/teacher/exams/results",     icon: <ClipboardList  size={20} /> },
+    { name: "Student Progress", href: "/teacher/analytics", icon: <LineChart size={20} /> },
+    { name: "My Income",        href: "/teacher/income",    icon: <Wallet size={20} /> },
     { name: "Feedback",         href: "/teacher/feedback",  icon: <MessageSquare size={20} /> },
   ];
 
