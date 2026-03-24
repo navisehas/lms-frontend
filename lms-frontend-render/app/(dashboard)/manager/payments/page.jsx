@@ -5,11 +5,16 @@ import {
   Banknote, CheckCircle, Search, Loader, AlertCircle,
   User, BookOpen, ChevronDown, RefreshCw, Receipt, X,
   Building2, Users, DollarSign, Hash, Phone, BadgeCheck,
-  Download, Wifi, Calendar, GraduationCap
+  Download, Wifi, Calendar, GraduationCap, TrendingUp,
+  CreditCard, ArrowUpRight, Clock, Filter
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
+
+// ─── Design tokens (match layout.jsx brand) ────────────────────────────────
+const BRAND      = "#1E40AF";   // blue-800
+const BRAND_LIGHT = "#DBEAFE";  // blue-100
 
 export default function ManagerPaymentsPage() {
   const router = useRouter();
@@ -23,19 +28,14 @@ export default function ManagerPaymentsPage() {
   const [loading, setLoading]       = useState(false);
   const [coursesLoading, setCoursesLoading] = useState(true);
 
-  // Course search
   const [courseSearch, setCourseSearch] = useState("");
-
-  // Student filters
   const [search, setSearch]         = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
-
-  // Payment history filters
   const [historySearch, setHistorySearch] = useState("");
   const [historyMonth, setHistoryMonth]   = useState("ALL");
 
-  const [error, setError]           = useState("");
-  const [success, setSuccess]       = useState("");
+  const [error, setError]   = useState("");
+  const [success, setSuccess] = useState("");
 
   const [payModal, setPayModal]     = useState(null);
   const [customAmount, setCustomAmount] = useState("");
@@ -119,7 +119,6 @@ export default function ManagerPaymentsPage() {
     finally { setSubmitting(false); }
   }
 
-  // ── Filtered courses (search by title, course_id, or teacher) ──
   const filteredCourses = useMemo(() => {
     const q = courseSearch.trim().toLowerCase();
     if (!q) return courses;
@@ -130,7 +129,6 @@ export default function ManagerPaymentsPage() {
     );
   }, [courses, courseSearch]);
 
-  // Highlight matching text
   function highlight(text, query) {
     if (!query || !text) return text;
     const idx = text.toLowerCase().indexOf(query.toLowerCase());
@@ -146,7 +144,6 @@ export default function ManagerPaymentsPage() {
     );
   }
 
-  // ── Payment history filters ──
   const monthOptions = Array.from(new Set(
     allPayments.map(p => {
       const d = new Date(p.payment_date);
@@ -167,7 +164,6 @@ export default function ManagerPaymentsPage() {
     return matchSearch && matchMonth;
   });
 
-  // ── Student list filters ──
   const filteredStudents = students.filter(s => {
     const matchSearch =
       s.student_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -182,6 +178,10 @@ export default function ManagerPaymentsPage() {
 
   const paidCount   = students.filter(s =>  s.is_enrolled).length;
   const unpaidCount = students.filter(s => !s.is_enrolled).length;
+
+  const totalRevenue = allPayments.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+  const cashCount    = allPayments.filter(p => p.payment_type === "CASH").length;
+  const onlineCount  = allPayments.filter(p => p.payment_type === "ONLINE").length;
 
   function exportToExcel() {
     setExporting(true);
@@ -215,288 +215,365 @@ export default function ManagerPaymentsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="space-y-6">
 
-      {/* ── Header ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      {/* ══ PAGE HEADER ══════════════════════════════════════════════════════ */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
-            <Banknote className="text-indigo-600" size={32} /> Payments &amp; Enrollment
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: BRAND_LIGHT }}>
+              <Banknote size={18} style={{ color: BRAND }} />
+            </div>
+            Payments &amp; Enrollment
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Record cash payments and manually enroll students into courses.</p>
+          <p className="text-sm text-gray-500 mt-1 ml-10.5">Record cash payments and enroll students into courses.</p>
         </div>
         <button
           onClick={() => { loadAllPayments(); if (selectedCourse) loadStudentsForCourse(selectedCourse); }}
-          className="flex items-center justify-center gap-2 text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-5 py-3 rounded-xl transition w-full md:w-auto"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl transition-colors shadow-sm self-start sm:self-auto"
         >
-          <RefreshCw size={16} /> Refresh Data
+          <RefreshCw size={15} /> Refresh
         </button>
       </div>
 
-      {/* ── Alerts ── */}
-      {error   && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-4 text-sm font-bold animate-in fade-in zoom-in duration-300">
-          <AlertCircle size={20} /> {error}
+      {/* ══ KPI CARDS ════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          {
+            label: "Total Payments",
+            value: allPayments.length,
+            icon: <Receipt size={20} />,
+            color: "blue",
+            suffix: "records",
+          },
+          {
+            label: "Total Revenue",
+            value: `Rs. ${totalRevenue.toLocaleString()}`,
+            icon: <TrendingUp size={20} />,
+            color: "green",
+            suffix: "collected",
+          },
+          {
+            label: "Cash Payments",
+            value: cashCount,
+            icon: <Building2 size={20} />,
+            color: "orange",
+            suffix: "transactions",
+          },
+          {
+            label: "Online Payments",
+            value: onlineCount,
+            icon: <Wifi size={20} />,
+            color: "purple",
+            suffix: "transactions",
+          },
+        ].map((kpi, i) => {
+          const palette = {
+            blue:   { bg: "bg-blue-50",   icon: "text-blue-600",   val: "text-blue-700"  },
+            green:  { bg: "bg-green-50",  icon: "text-green-600",  val: "text-green-700" },
+            orange: { bg: "bg-orange-50", icon: "text-orange-600", val: "text-orange-700"},
+            purple: { bg: "bg-violet-50", icon: "text-violet-600", val: "text-violet-700"},
+          }[kpi.color];
+          return (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className={`w-10 h-10 ${palette.bg} ${palette.icon} rounded-xl flex items-center justify-center mb-3`}>
+                {kpi.icon}
+              </div>
+              <p className={`text-xl font-bold ${palette.val}`}>{kpi.value}</p>
+              <p className="text-xs font-semibold text-gray-500 mt-0.5">{kpi.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ══ ALERTS ═══════════════════════════════════════════════════════════ */}
+      {error && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-5 py-3.5 text-sm font-semibold">
+          <AlertCircle size={18} className="shrink-0" /> {error}
         </div>
       )}
       {success && (
-        <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4 text-sm font-bold animate-in fade-in zoom-in duration-300">
-          <CheckCircle size={20} /> {success}
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 rounded-xl px-5 py-3.5 text-sm font-semibold">
+          <CheckCircle size={18} className="shrink-0" /> {success}
         </div>
       )}
 
-      {/* ── Tabs ── */}
-      <div className="flex flex-wrap bg-gray-200/50 p-1.5 rounded-xl w-max border border-gray-200/60">
+      {/* ══ TABS ═════════════════════════════════════════════════════════════ */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit border border-gray-200">
         {[
-          { key: "mark",    label: "Mark Physical Payment", icon: <Building2 size={16} /> },
-          { key: "history", label: "All Payment Records",   icon: <Receipt size={16} /> },
+          { key: "mark",    label: "Mark Payment",     icon: <CreditCard size={15} /> },
+          { key: "history", label: "Payment History",  icon: <Receipt size={15} />,
+            badge: allPayments.length > 0 ? allPayments.length : null },
         ].map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`flex items-center gap-2 px-6 py-2.5 text-sm font-bold rounded-lg transition-all duration-300 ${
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all ${
               activeTab === t.key
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-100/50"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            {t.icon} {t.label}
-            {t.key === "history" && allPayments.length > 0 && (
-              <span className={`ml-1 text-[10px] px-2 py-0.5 rounded-full ${activeTab === t.key ? "bg-indigo-100 text-indigo-700" : "bg-gray-200 text-gray-500"}`}>
-                {allPayments.length}
+            <span className={activeTab === t.key ? "text-blue-700" : ""}>{t.icon}</span>
+            {t.label}
+            {t.badge && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                activeTab === t.key ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-500"
+              }`}>
+                {t.badge}
               </span>
             )}
           </button>
         ))}
       </div>
 
-      {/* ══════════════════════════════════════════
+
+      {/* ══════════════════════════════════════════════════════════════════════
           TAB 1 — MARK PHYSICAL PAYMENT
-      ══════════════════════════════════════════ */}
+      ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "mark" && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-5">
 
-          {/* Step 1 — Select Course */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-            <h2 className="text-sm font-extrabold text-gray-400 uppercase tracking-widest mb-4">
-              Step 1 — Select Course
-            </h2>
+          {/* ── Step 1: Select Course ─────────────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
 
-            {coursesLoading ? (
-              <div className="flex items-center gap-2 text-indigo-600 font-medium">
-                <Loader size={16} className="animate-spin" /> Loading available courses...
+            {/* Section header */}
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: BRAND }}>
+                1
               </div>
-            ) : (
-              <>
-                {/* Course search input */}
-                <div className="relative max-w-xl mb-4">
-                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={courseSearch}
-                    onChange={e => setCourseSearch(e.target.value)}
-                    placeholder="Search by course title, ID, or teacher name…"
-                    className="w-full border-2 border-gray-200 hover:border-indigo-300 rounded-xl pl-12 pr-10 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition"
-                  />
-                  {courseSearch && (
-                    <button
-                      onClick={() => setCourseSearch("")}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                    >
-                      <X size={16} />
-                    </button>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Select a Course</p>
+                <p className="text-xs text-gray-400">Choose the course you want to enroll the student into</p>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {coursesLoading ? (
+                <div className="flex items-center gap-2.5 text-sm font-medium text-gray-500 py-4">
+                  <Loader size={16} className="animate-spin text-blue-600" /> Loading courses…
+                </div>
+              ) : (
+                <>
+                  {/* Search */}
+                  <div className="relative max-w-lg mb-4">
+                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={courseSearch}
+                      onChange={e => setCourseSearch(e.target.value)}
+                      placeholder="Search by title, course ID, or teacher…"
+                      className="w-full border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-blue-400 transition"
+                      style={{ "--tw-ring-color": BRAND_LIGHT }}
+                    />
+                    {courseSearch && (
+                      <button onClick={() => setCourseSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-400 font-medium mb-3">
+                    {courseSearch.trim()
+                      ? `${filteredCourses.length} of ${courses.length} courses`
+                      : `${courses.length} courses available`}
+                  </p>
+
+                  {filteredCourses.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                      <BookOpen size={32} className="mb-2 opacity-20" />
+                      <p className="text-sm text-gray-500 font-medium">No courses match your search.</p>
+                      <button onClick={() => setCourseSearch("")} className="mt-1.5 text-xs text-blue-600 hover:underline">Clear search</button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {filteredCourses.map(c => {
+                        const isSelected = selectedCourse?.course_id === c.course_id;
+                        const q = courseSearch.trim();
+                        return (
+                          <button
+                            key={c.course_id}
+                            onClick={() => handleCourseSelect(c)}
+                            className={`text-left p-4 rounded-xl border-2 transition-all duration-150 ${
+                              isSelected
+                                ? "border-blue-600 bg-blue-50 shadow-sm"
+                                : "border-gray-200 bg-white hover:border-blue-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {/* Selected indicator */}
+                            {isSelected && (
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <CheckCircle size={13} className="text-blue-600" />
+                                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Selected</span>
+                              </div>
+                            )}
+                            <p className={`text-sm font-semibold leading-snug mb-2.5 ${isSelected ? "text-blue-900" : "text-gray-900"}`}>
+                              {highlight(c.title, q)}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-500">
+                                <Hash size={9} /> {highlight(c.course_id, q)}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-green-100 text-green-700">
+                                <DollarSign size={9} /> Rs. {parseFloat(c.fee).toLocaleString()}
+                              </span>
+                              {c.teacher_name && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">
+                                  <GraduationCap size={9} /> {highlight(c.teacher_name, q)}
+                                </span>
+                              )}
+                              {c.enrolled_count != null && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700">
+                                  <Users size={9} /> {c.enrolled_count}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
 
-                {/* Results count */}
-                <p className="text-xs font-semibold text-gray-400 mb-3">
-                  {courseSearch.trim()
-                    ? `${filteredCourses.length} of ${courses.length} courses match "${courseSearch.trim()}"`
-                    : `Showing all ${courses.length} courses`}
-                </p>
-
-                {/* Course cards grid */}
-                {filteredCourses.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                    <BookOpen size={36} className="mb-3 opacity-20" />
-                    <p className="font-medium text-gray-500">No courses match your search.</p>
-                    <button
-                      onClick={() => setCourseSearch("")}
-                      className="mt-2 text-sm text-indigo-500 hover:underline"
-                    >
-                      Clear search
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {filteredCourses.map(c => {
-                      const isSelected = selectedCourse?.course_id === c.course_id;
-                      const q = courseSearch.trim();
-                      return (
-                        <button
-                          key={c.course_id}
-                          onClick={() => handleCourseSelect(c)}
-                          className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-                            isSelected
-                              ? "border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100"
-                              : "border-gray-200 bg-white hover:border-indigo-300 hover:shadow-sm"
-                          }`}
-                        >
-                          <p className={`text-sm font-bold leading-tight mb-2 ${isSelected ? "text-indigo-900" : "text-gray-900"}`}>
-                            {highlight(c.title, q)}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {/* Course ID */}
-                            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
-                              <Hash size={10} /> {highlight(c.course_id, q)}
-                            </span>
-                            {/* Fee */}
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-green-100 text-green-700">
-                              <DollarSign size={10} /> Rs. {parseFloat(c.fee).toLocaleString()}
-                            </span>
-                            {/* Teacher */}
-                            {c.teacher_name && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">
-                                <GraduationCap size={10} /> {highlight(c.teacher_name, q)}
-                              </span>
-                            )}
-                            {/* Enrolled count */}
-                            {c.enrolled_count != null && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700">
-                                <Users size={10} /> {c.enrolled_count} enrolled
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Selected course summary bar */}
-            {selectedCourse && (
-              <div className="mt-5 bg-indigo-50 border border-indigo-100 rounded-xl px-5 py-4 flex flex-wrap gap-6 items-center">
-                <div className="flex items-center gap-2 text-indigo-800">
-                  <Hash size={16} className="opacity-50" />
-                  <span className="text-sm font-mono font-bold">{selectedCourse.course_id}</span>
-                </div>
-                <div className="w-px h-6 bg-indigo-200 hidden sm:block" />
-                <div className="flex items-center gap-2 text-indigo-800">
-                  <DollarSign size={16} className="opacity-50" />
-                  <span className="text-sm font-extrabold">Fee: Rs. {parseFloat(selectedCourse.fee).toLocaleString()}</span>
-                </div>
-                {selectedCourse.teacher_name && (
-                  <>
-                    <div className="w-px h-6 bg-indigo-200 hidden sm:block" />
-                    <div className="flex items-center gap-2 text-indigo-800">
-                      <GraduationCap size={16} className="opacity-50" />
-                      <span className="text-sm font-bold">{selectedCourse.teacher_name}</span>
+                  {/* Selected course bar */}
+                  {selectedCourse && (
+                    <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 items-center bg-blue-50 border border-blue-100 rounded-xl px-5 py-3.5">
+                      <span className="text-xs font-bold text-blue-800 uppercase tracking-widest">Selected:</span>
+                      <span className="text-sm font-semibold text-blue-900">{selectedCourse.title}</span>
+                      <span className="text-xs font-mono text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">{selectedCourse.course_id}</span>
+                      <span className="text-sm font-bold text-green-700">Rs. {parseFloat(selectedCourse.fee).toLocaleString()}</span>
+                      {selectedCourse.teacher_name && (
+                        <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                          <GraduationCap size={12} /> {selectedCourse.teacher_name}
+                        </span>
+                      )}
                     </div>
-                  </>
-                )}
-                {selectedCourse.enrolled_count != null && (
-                  <>
-                    <div className="w-px h-6 bg-indigo-200 hidden sm:block" />
-                    <div className="flex items-center gap-2 text-indigo-800">
-                      <Users size={16} className="opacity-50" />
-                      <span className="text-sm font-bold">{selectedCourse.enrolled_count} Students Enrolled</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Step 2 — Student List */}
+          {/* ── Step 2: Student List ─────────────────────────────────────── */}
           {selectedCourse && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+
+              {/* Section header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: BRAND }}>
+                    2
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Student Payment Status</p>
+                    <p className="text-xs text-gray-400">{selectedCourse.title}</p>
+                  </div>
+                </div>
+
+                {/* Status pills */}
+                <div className="flex items-center gap-3 text-xs font-semibold">
+                  <span className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg">
+                    <CheckCircle size={13} /> {paidCount} Paid
+                  </span>
+                  <span className="flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg">
+                    <Clock size={13} /> {unpaidCount} Pending
+                  </span>
+                </div>
+              </div>
 
               {/* Toolbar */}
-              <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="w-full md:w-1/2 relative">
-                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-100 flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   <input
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    placeholder="Search by student name, ID, or phone..."
-                    className="w-full pl-11 pr-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm"
+                    placeholder="Search name, ID, or phone…"
+                    className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 transition"
                   />
                 </div>
-                <div className="flex gap-2 w-full md:w-auto bg-gray-200/50 p-1 rounded-xl border border-gray-200">
+                <div className="flex gap-1 bg-gray-200/70 p-1 rounded-xl border border-gray-200 self-start">
                   {["ALL", "UNPAID", "PAID"].map(s => (
-                    <button key={s} onClick={() => setFilterStatus(s)}
-                      className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                    <button
+                      key={s}
+                      onClick={() => setFilterStatus(s)}
+                      className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
                         filterStatus === s
-                          ? s === "UNPAID" ? "bg-white text-yellow-700 shadow-sm border border-yellow-200"
+                          ? s === "UNPAID" ? "bg-white text-amber-700 shadow-sm border border-amber-200"
                           : s === "PAID"   ? "bg-white text-green-700 shadow-sm border border-green-200"
-                          : "bg-white text-gray-900 shadow-sm border border-gray-200"
-                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-100/50"
+                          : "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-500 hover:text-gray-700"
                       }`}
                     >
-                      {s === "ALL"    ? `All (${students.length})`
-                       : s === "PAID" ? `Paid (${paidCount})`
-                       : `Unpaid (${unpaidCount})`}
+                      {s === "ALL" ? `All (${students.length})` : s === "PAID" ? `Paid (${paidCount})` : `Pending (${unpaidCount})`}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Student rows */}
+              {/* Student list */}
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-indigo-600 gap-3">
-                  <Loader size={28} className="animate-spin" />
-                  <span className="font-bold">Fetching student data...</span>
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+                  <Loader size={24} className="animate-spin text-blue-600" />
+                  <span className="text-sm font-medium">Loading student data…</span>
                 </div>
               ) : filteredStudents.length === 0 ? (
-                <div className="text-center py-20 text-gray-400">
-                  <User size={48} className="mx-auto mb-3 opacity-20" />
-                  <p className="font-medium text-gray-500">No students match your search filters.</p>
+                <div className="text-center py-16 text-gray-400">
+                  <User size={40} className="mx-auto mb-3 opacity-20" />
+                  <p className="text-sm font-medium text-gray-500">No students match your filters.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
-                  {filteredStudents.map(student => (
+                <div className="divide-y divide-gray-50 max-h-[550px] overflow-y-auto">
+                  {filteredStudents.map((student, idx) => (
                     <div
                       key={student.student_id}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between p-5 hover:bg-gray-50 transition-colors gap-4 ${student.is_enrolled ? "bg-green-50/20" : ""}`}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between px-6 py-4 hover:bg-gray-50/80 transition-colors gap-4 ${
+                        student.is_enrolled ? "bg-green-50/20" : ""
+                      }`}
                     >
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-sm border-2 ${
+                      {/* Left: student info */}
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
                           student.is_enrolled
-                            ? "bg-green-100 text-green-700 border-green-200"
-                            : "bg-gray-100 text-gray-700 border-gray-200"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-600"
                         }`}>
                           {student.student_name.charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-gray-900 text-base truncate">{student.student_name}</p>
-                          <div className="flex items-center gap-3 mt-1 flex-wrap">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                              <Hash size={12} /> {student.student_id}
+                          <p className="font-semibold text-gray-900 text-sm truncate">{student.student_name}</p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                              <Hash size={10} /> {student.student_id}
                             </span>
                             {student.phone_no && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
-                                <Phone size={12} /> {student.phone_no}
+                              <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
+                                <Phone size={10} /> {student.phone_no}
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
+
+                      {/* Right: status / action */}
                       <div className="flex items-center sm:justify-end flex-shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-gray-100">
                         {student.is_enrolled ? (
                           <div className="text-left sm:text-right">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-green-700 bg-green-100 border border-green-200 px-3 py-1.5 rounded-lg">
-                              <BadgeCheck size={16} /> Paid &amp; Enrolled
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-green-700 bg-green-100 border border-green-200 px-3 py-1.5 rounded-lg">
+                              <BadgeCheck size={14} /> Enrolled
                             </span>
-                            <p className="text-xs font-bold text-gray-400 mt-2">
-                              Rs. {parseFloat(student.paid_amount || 0).toLocaleString()} &bull; {student.payment_type === "ONLINE" ? "Online PayHere" : "Physical Cash"}
+                            <p className="text-[11px] text-gray-400 font-medium mt-1.5">
+                              Rs. {parseFloat(student.paid_amount || 0).toLocaleString()} · {student.payment_type === "ONLINE" ? "Online" : "Cash"}
                             </p>
                           </div>
                         ) : (
                           <button
                             onClick={() => openPayModal(student)}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gray-900 hover:bg-indigo-600 text-white text-sm font-bold px-6 py-3 rounded-xl transition shadow-md hover:shadow-lg"
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md"
+                            style={{ backgroundColor: BRAND }}
+                            onMouseOver={e => e.currentTarget.style.opacity = "0.9"}
+                            onMouseOut={e => e.currentTarget.style.opacity = "1"}
                           >
-                            <Banknote size={18} /> Mark Payment
+                            <Banknote size={15} /> Mark Payment
                           </button>
                         )}
                       </div>
@@ -509,138 +586,130 @@ export default function ManagerPaymentsPage() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════
+
+      {/* ══════════════════════════════════════════════════════════════════════
           TAB 2 — PAYMENT HISTORY
-      ══════════════════════════════════════════ */}
+      ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "history" && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
           {/* Toolbar */}
-          <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full md:max-w-md flex-1">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="px-6 py-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-gray-50/50">
+            <div className="relative w-full md:max-w-sm">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <input
                 value={historySearch}
                 onChange={e => setHistorySearch(e.target.value)}
-                placeholder="Search history by name, ID, or course..."
-                className="w-full pl-12 pr-4 py-3 text-sm font-medium text-gray-900 placeholder-gray-400 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"
+                placeholder="Search name, ID, or course…"
+                className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 transition"
               />
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-              <div className="relative w-full sm:w-auto">
-                <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500" />
+
+            <div className="flex flex-wrap gap-3 w-full md:w-auto">
+              <div className="relative">
+                <Calendar size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none" />
                 <select
                   value={historyMonth}
                   onChange={e => setHistoryMonth(e.target.value)}
-                  className="w-full sm:w-48 pl-11 pr-10 py-3 text-sm font-bold text-gray-900 border border-gray-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                  className="pl-9 pr-8 py-2.5 text-sm font-semibold text-gray-700 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 appearance-none cursor-pointer min-w-[160px]"
                 >
                   <option value="ALL">All Months</option>
                   {monthOptions.map(m => {
                     const [y, mo] = m.split("-");
-                    const label = new Date(parseInt(y), parseInt(mo) - 1).toLocaleString("en-US", {
-                      month: "long", year: "numeric",
-                    });
+                    const label = new Date(parseInt(y), parseInt(mo) - 1).toLocaleString("en-US", { month: "long", year: "numeric" });
                     return <option key={m} value={m}>{label}</option>;
                   })}
                 </select>
-                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
+
               <button
                 onClick={exportToExcel}
                 disabled={exporting || filteredHistory.length === 0}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold px-6 py-3 rounded-xl transition shadow-md hover:shadow-lg"
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition shadow-sm"
               >
-                {exporting ? <Loader size={18} className="animate-spin" /> : <Download size={18} />} Export Excel
+                {exporting ? <Loader size={15} className="animate-spin" /> : <Download size={15} />}
+                Export CSV
               </button>
             </div>
           </div>
 
           {filteredHistory.length === 0 ? (
-            <div className="text-center py-24 text-gray-400 bg-white">
-              <Receipt size={48} className="mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-bold text-gray-500">No payment records found.</p>
-              <p className="text-sm mt-1">Try adjusting your search or month filter.</p>
+            <div className="text-center py-20 text-gray-400">
+              <Receipt size={40} className="mx-auto mb-3 opacity-20" />
+              <p className="text-sm font-medium text-gray-500">No payment records found.</p>
+              <p className="text-xs mt-1 text-gray-400">Try adjusting your search or month filter.</p>
             </div>
           ) : (
             <>
-              {/* Summary bar */}
-              <div className="px-6 py-4 bg-white border-b border-gray-100 flex flex-wrap gap-8 items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-black text-gray-900">{filteredHistory.length}</span>
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Total Records</span>
+              {/* Summary strip */}
+              <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center gap-8">
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{filteredHistory.length}</p>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Records</p>
                 </div>
                 <div className="w-px h-8 bg-gray-200 hidden sm:block" />
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Revenue</span>
-                  <span className="text-lg font-black text-green-600">
+                <div>
+                  <p className="text-lg font-bold text-green-600">
                     Rs. {filteredHistory.reduce((s, p) => s + parseFloat(p.amount || 0), 0).toLocaleString()}
-                  </span>
+                  </p>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Revenue</p>
                 </div>
                 <div className="w-px h-8 bg-gray-200 hidden sm:block" />
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cash Payments</span>
-                  <span className="text-lg font-black text-orange-600">
-                    {filteredHistory.filter(p => p.payment_type === "CASH").length}
-                  </span>
+                <div>
+                  <p className="text-lg font-bold text-orange-600">{filteredHistory.filter(p => p.payment_type === "CASH").length}</p>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Cash</p>
                 </div>
                 <div className="w-px h-8 bg-gray-200 hidden sm:block" />
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Online Payments</span>
-                  <span className="text-lg font-black text-blue-600">
-                    {filteredHistory.filter(p => p.payment_type === "ONLINE").length}
-                  </span>
+                <div>
+                  <p className="text-lg font-bold text-blue-600">{filteredHistory.filter(p => p.payment_type === "ONLINE").length}</p>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Online</p>
                 </div>
               </div>
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left whitespace-nowrap">
-                  <thead className="bg-gray-50 text-xs font-extrabold text-gray-500 uppercase tracking-wider">
-                    <tr>
-                      {["Student Details", "Course", "Course ID", "Amount Paid", "Method", "Date & Time", "Reference No"].map(h => (
-                        <th key={h} className="px-6 py-4 border-b border-gray-200">{h}</th>
+                <table className="w-full text-left whitespace-nowrap text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      {["Student", "Course", "Amount", "Method", "Date & Time", "Ref #"].map(h => (
+                        <th key={h} className="px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 bg-white">
+                  <tbody className="divide-y divide-gray-50">
                     {filteredHistory.map(p => (
-                      <tr key={p.payment_id} className="hover:bg-indigo-50/30 transition-colors">
+                      <tr key={p.payment_id} className="hover:bg-blue-50/20 transition-colors">
                         <td className="px-6 py-4">
-                          <p className="font-bold text-gray-900 text-sm">{p.student_name}</p>
-                          <p className="text-xs font-mono text-gray-500 mt-0.5">{p.student_id}</p>
+                          <p className="font-semibold text-gray-900">{p.student_name}</p>
+                          <p className="text-[11px] font-mono text-gray-400 mt-0.5">{p.student_id}</p>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="text-sm font-semibold text-gray-700 truncate max-w-[200px]" title={p.course_title}>
-                            {p.course_title}
-                          </p>
+                          <p className="text-gray-700 font-medium max-w-[180px] truncate" title={p.course_title}>{p.course_title}</p>
+                          <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mt-1 inline-block">{p.course_id}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center gap-1 text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
-                            <Hash size={11} /> {p.course_id}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-black text-green-600 bg-green-50 px-3 py-1 rounded-lg">
+                          <span className="text-sm font-bold text-green-700 bg-green-50 border border-green-100 px-3 py-1 rounded-lg">
                             Rs. {parseFloat(p.amount).toLocaleString()}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-lg border ${
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border ${
                             p.payment_type === "ONLINE"
                               ? "bg-blue-50 text-blue-700 border-blue-200"
                               : "bg-orange-50 text-orange-700 border-orange-200"
                           }`}>
-                            {p.payment_type === "ONLINE" ? <Wifi size={14} /> : <Building2 size={14} />}
-                            {p.payment_type === "ONLINE" ? "Online PayHere" : "Cash Counter"}
+                            {p.payment_type === "ONLINE" ? <Wifi size={12} /> : <Building2 size={12} />}
+                            {p.payment_type === "ONLINE" ? "Online" : "Cash"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                        <td className="px-6 py-4 text-xs text-gray-500 font-medium">
                           {new Date(p.payment_date).toLocaleString("en-US", {
                             year: "numeric", month: "short", day: "numeric",
                             hour: "2-digit", minute: "2-digit",
                           })}
                         </td>
-                        <td className="px-6 py-4 text-xs font-mono font-bold text-gray-400">
+                        <td className="px-6 py-4 text-[11px] font-mono text-gray-400">
                           {p.payment_id}
                         </td>
                       </tr>
@@ -653,105 +722,113 @@ export default function ManagerPaymentsPage() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════
-          PAYMENT CONFIRMATION MODAL
-      ══════════════════════════════════════════ */}
+
+      {/* ══ PAYMENT CONFIRMATION MODAL ═══════════════════════════════════════ */}
       {payModal && selectedCourse && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-extrabold text-gray-900 flex items-center gap-3 text-xl">
-                <Building2 size={24} className="text-indigo-600" /> Confirm Payment
-              </h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: BRAND_LIGHT }}>
+                  <CreditCard size={18} style={{ color: BRAND }} />
+                </div>
+                <h3 className="font-bold text-gray-900 text-lg">Confirm Payment</h3>
+              </div>
               <button
                 onClick={() => setPayModal(null)}
-                className="text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition"
+                className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 p-1.5 rounded-lg transition"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-5 space-y-4 mb-6">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                  <User size={14} /> Student Name
-                </span>
-                <span className="text-sm font-bold text-gray-900">{payModal.student.student_name}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                  <Hash size={14} /> Student ID
-                </span>
-                <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-100 px-2 py-1 rounded-md">
-                  {payModal.student.student_id}
-                </span>
-              </div>
-              <div className="w-full h-px bg-indigo-100" />
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2 mt-0.5">
-                  <BookOpen size={14} /> Course
-                </span>
-                <span className="text-sm font-bold text-gray-900 text-right max-w-[200px] leading-tight">
-                  {selectedCourse.title}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                  <Hash size={14} /> Course ID
-                </span>
-                <span className="text-xs font-mono font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md">
-                  {selectedCourse.course_id}
-                </span>
-              </div>
-              {selectedCourse.teacher_name && (
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                    <GraduationCap size={14} /> Teacher
+            {/* Details card */}
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 space-y-3 mb-5">
+              {[
+                { label: "Student", value: payModal.student.student_name, icon: <User size={13} /> },
+                {
+                  label: "Student ID",
+                  value: <span className="font-mono text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{payModal.student.student_id}</span>,
+                  icon: <Hash size={13} />
+                },
+              ].map((row, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    {row.icon} {row.label}
                   </span>
-                  <span className="text-sm font-bold text-gray-900">{selectedCourse.teacher_name}</span>
+                  <span className="text-sm font-semibold text-gray-900">{row.value}</span>
                 </div>
-              )}
+              ))}
+
+              <div className="border-t border-gray-200 pt-3 space-y-3">
+                <div className="flex items-start justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide mt-0.5">
+                    <BookOpen size={13} /> Course
+                  </span>
+                  <span className="text-sm font-semibold text-gray-900 text-right max-w-[200px] leading-snug">{selectedCourse.title}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    <Hash size={13} /> Course ID
+                  </span>
+                  <span className="font-mono text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{selectedCourse.course_id}</span>
+                </div>
+                {selectedCourse.teacher_name && (
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                      <GraduationCap size={13} /> Teacher
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">{selectedCourse.teacher_name}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-sm font-extrabold text-gray-800 mb-2">
-                Amount Received (Cash) <span className="text-red-500">*</span>
+            {/* Amount input */}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Cash Amount Received <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">Rs.</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">Rs.</span>
                 <input
                   type="number"
                   value={customAmount}
                   onChange={e => setCustomAmount(e.target.value)}
                   min="0" step="0.01"
-                  className="w-full border-2 border-gray-200 focus:border-indigo-500 rounded-xl pl-12 pr-4 py-4 text-xl font-black text-gray-900 bg-white focus:outline-none shadow-sm transition"
+                  className="w-full border-2 border-gray-200 focus:border-blue-500 rounded-xl pl-12 pr-4 py-3.5 text-xl font-bold text-gray-900 bg-white focus:outline-none transition"
                 />
               </div>
-              <p className="text-xs font-bold text-indigo-500 mt-2 flex justify-between">
-                <span>Standard Course Fee:</span>
-                <span>Rs. {parseFloat(selectedCourse.fee).toLocaleString()}</span>
+              <p className="flex justify-between text-xs font-medium text-gray-400 mt-2">
+                <span>Standard fee</span>
+                <span className="text-blue-600 font-semibold">Rs. {parseFloat(selectedCourse.fee).toLocaleString()}</span>
               </p>
             </div>
 
+            {/* Actions */}
             <div className="flex gap-3">
               <button
                 onClick={() => setPayModal(null)}
-                className="w-full py-3.5 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition"
+                className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmPayment}
                 disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white rounded-xl text-sm font-bold disabled:opacity-60 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 py-3 text-white rounded-xl text-sm font-semibold disabled:opacity-60 transition-all shadow-md"
+                style={{ backgroundColor: BRAND }}
               >
-                {submitting ? <Loader size={18} className="animate-spin" /> : <CheckCircle size={18} />}
-                Enroll &amp; Print Receipt
+                {submitting ? <Loader size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                {submitting ? "Processing…" : "Confirm & Enroll"}
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
