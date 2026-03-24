@@ -1,21 +1,101 @@
+"use client";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Users, DollarSign, BookOpen, Activity, 
-  TrendingUp, ArrowRight, UserPlus 
+  TrendingUp, ArrowRight, UserPlus, Loader2, AlertCircle
 } from "lucide-react";
+import { authFetch, getUser } from "@/lib/auth";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function AdminDashboard() {
+  // --- Dynamic States ---
+  const [greeting, setGreeting] = useState("Hello");
+  const [adminName, setAdminName] = useState("Admin");
+  const [loading, setLoading] = useState(true);
   
-  // MOCK DATA for Chart/List
-  const recentPayments = [
-    { id: 1, student: "Kasun Perera", amount: "Rs. 3,500", date: "Just now", method: "Online (PayHere)" },
-    { id: 2, student: "Amal Silva", amount: "Rs. 3,000", date: "5 mins ago", method: "Cash (Counter)" },
-    { id: 3, student: "Nimali Fernando", amount: "Rs. 2,500", date: "1 hour ago", method: "Online (PayHere)" },
-  ];
+  const [stats, setStats] = useState({
+    monthlyRevenue: 0,
+    revenueGrowth: 0,
+    totalStudents: 0,
+    newStudents: 0,
+    activeCourses: 0,
+    systemStatus: "Checking..."
+  });
+  
+  const [recentPayments, setRecentPayments] = useState([]);
+
+  useEffect(() => {
+    // 1. Set Greeting based on Time
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      setGreeting("Good Morning");
+    } else if (hour < 18) {
+      setGreeting("Good Afternoon");
+    } else {
+      setGreeting("Good Evening");
+    }
+
+    // 2. Get Current Admin Name
+    const user = getUser();
+    if (user && user.name) {
+      setAdminName(user.name.split(" ")[0] || "Admin"); 
+    }
+
+    // 3. Fetch Dashboard Data
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // A. Fetch Admin Stats (Replace with actual endpoint)
+        const statsRes = await authFetch(`${API}/admin/dashboard/stats`);
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setStats({
+            monthlyRevenue: statsData.monthly_revenue || 0,
+            revenueGrowth: statsData.revenue_growth || 0,
+            totalStudents: statsData.total_students || 0,
+            newStudents: statsData.new_students || 0,
+            activeCourses: statsData.active_courses || 0,
+            systemStatus: statsData.system_status || "Operational"
+          });
+        }
+
+        // B. Fetch Recent Payments (Replace with actual endpoint)
+        const paymentsRes = await authFetch(`${API}/admin/finance/recent`);
+        if (paymentsRes.ok) {
+          const paymentsData = await paymentsRes.json();
+          setRecentPayments(Array.isArray(paymentsData) ? paymentsData : []);
+        }
+
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+        setStats(prev => ({ ...prev, systemStatus: "Degraded" }));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  // Helper to format timestamps to readable time (e.g., "10:30 AM")
+  const formatTime = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       
+      {/* WELCOME GREETING */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">{greeting}, {adminName}! 👋</h1>
+        <p className="text-gray-500 mt-1">Here is your system overview for today.</p>
+      </div>
+
       {/* 1. FINANCIAL & USER STATS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
@@ -24,15 +104,17 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Monthly Revenue</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-1">Rs. 1.2M</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">
+                {loading ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" /> : `Rs. ${stats.monthlyRevenue.toLocaleString()}`}
+              </h3>
             </div>
             <div className="p-2 bg-green-100 text-green-600 rounded-lg">
               <DollarSign size={24} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-xs text-green-600 font-bold">
-            <TrendingUp size={14} className="mr-1" />
-            <span>+15% from last month</span>
+          <div className={`mt-4 flex items-center text-xs font-bold ${stats.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <TrendingUp size={14} className={`mr-1 ${stats.revenueGrowth < 0 && 'rotate-180'}`} />
+            <span>{stats.revenueGrowth >= 0 ? '+' : ''}{stats.revenueGrowth}% from last month</span>
           </div>
         </div>
 
@@ -41,14 +123,16 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Total Students</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-1">1,250</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">
+                {loading ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" /> : stats.totalStudents.toLocaleString()}
+              </h3>
             </div>
             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
               <Users size={24} />
             </div>
           </div>
           <div className="mt-4 text-xs text-gray-500">
-            54 new enrollments this week
+            {stats.newStudents} new enrollments this week
           </div>
         </div>
 
@@ -57,14 +141,16 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Active Courses</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-1">24</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">
+                {loading ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" /> : stats.activeCourses}
+              </h3>
             </div>
             <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
               <BookOpen size={24} />
             </div>
           </div>
           <div className="mt-4 text-xs text-gray-500">
-            Across 3 main departments
+            Across all departments
           </div>
         </div>
 
@@ -73,14 +159,16 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">System Status</p>
-              <h3 className="text-xl font-bold text-gray-900 mt-2">Operational</h3>
+              <h3 className={`text-xl font-bold mt-2 ${stats.systemStatus === 'Operational' ? 'text-gray-900' : 'text-red-600'}`}>
+                {loading ? <Loader2 className="w-5 h-5 animate-spin text-gray-300" /> : stats.systemStatus}
+              </h3>
             </div>
-            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
-              <Activity size={24} />
+            <div className={`p-2 rounded-lg ${stats.systemStatus === 'Operational' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+              {stats.systemStatus === 'Operational' ? <Activity size={24} /> : <AlertCircle size={24} />}
             </div>
           </div>
-          <div className="mt-4 text-xs text-emerald-600 font-bold">
-            All services running
+          <div className={`mt-4 text-xs font-bold ${stats.systemStatus === 'Operational' ? 'text-emerald-600' : 'text-red-600'}`}>
+            {stats.systemStatus === 'Operational' ? 'All services running' : 'Attention required'}
           </div>
         </div>
       </div>
@@ -88,30 +176,45 @@ export default function AdminDashboard() {
       <div className="grid lg:grid-cols-3 gap-8">
         
         {/* 2. RECENT FINANCIAL ACTIVITY (2/3 Width) */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-900">Recent Transactions</h2>
-            <Link href="/admin/finance" className="text-sm text-blue-600 hover:underline">View All</Link>
+            <Link href="/admin/finance" className="text-sm text-blue-600 hover:underline font-medium">View All</Link>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto flex-1">
             <table className="w-full text-left">
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                 <tr>
-                  <th className="px-6 py-3">Student</th>
-                  <th className="px-6 py-3">Amount</th>
-                  <th className="px-6 py-3">Method</th>
-                  <th className="px-6 py-3">Time</th>
+                  <th className="px-6 py-3 font-semibold">Student</th>
+                  <th className="px-6 py-3 font-semibold">Amount</th>
+                  <th className="px-6 py-3 font-semibold">Method</th>
+                  <th className="px-6 py-3 font-semibold">Time</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {recentPayments.map((pay) => (
-                  <tr key={pay.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900">{pay.student}</td>
-                    <td className="px-6 py-4 text-sm text-green-600 font-bold">{pay.amount}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{pay.method}</td>
-                    <td className="px-6 py-4 text-sm text-gray-400">{pay.date}</td>
+                {loading ? (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600 mb-2" />
+                      Loading transactions...
+                    </td>
                   </tr>
-                ))}
+                ) : recentPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
+                      No recent transactions found.
+                    </td>
+                  </tr>
+                ) : (
+                  recentPayments.map((pay, idx) => (
+                    <tr key={pay.transaction_id || idx} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 text-sm font-bold text-gray-900">{pay.student_name}</td>
+                      <td className="px-6 py-4 text-sm text-green-600 font-bold">Rs. {pay.amount?.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{pay.method || "Online"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-400 font-mono">{formatTime(pay.created_at)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -144,14 +247,19 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-gray-900 text-white p-6 rounded-xl">
-            <h3 className="font-bold text-lg mb-2">System Update</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              A new security patch (v2.4.0) is available for the PayHere integration.
-            </p>
-            <button className="w-full bg-white text-gray-900 text-sm font-bold py-2 rounded-lg hover:bg-gray-100">
-              View Changelog
-            </button>
+          <div className="bg-gray-900 text-white p-6 rounded-xl relative overflow-hidden">
+            <div className="relative z-10">
+              <h3 className="font-bold text-lg mb-2">System Update</h3>
+              <p className="text-gray-400 text-sm mb-4 leading-relaxed">
+                A new security patch (v2.4.0) is available for the PayHere integration.
+              </p>
+              <button className="w-full bg-white text-gray-900 text-sm font-bold py-2.5 rounded-lg hover:bg-gray-100 transition shadow-sm">
+                View Changelog
+              </button>
+            </div>
+            {/* Background design elements */}
+            <div className="absolute -top-10 -right-10 w-24 h-24 bg-white opacity-5 rounded-full blur-xl"></div>
+            <div className="absolute -bottom-8 -left-8 w-20 h-20 bg-white opacity-5 rounded-full blur-lg"></div>
           </div>
         </div>
 
