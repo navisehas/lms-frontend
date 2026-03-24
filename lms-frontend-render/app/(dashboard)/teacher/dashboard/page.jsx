@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Users, BookOpen, Clock, FileText, Plus, 
-  MoreVertical, Video, ArrowRight, PenTool, Loader2
+  MoreVertical, Video, ArrowRight, PenTool, Loader2,
+  Megaphone, MapPin // <-- Added MapPin here
 } from "lucide-react";
 import { authFetch, getUser } from "@/lib/auth";
 
@@ -15,6 +16,8 @@ export default function TeacherDashboard() {
   const [greeting, setGreeting] = useState("Hello");
   const [teacherName, setTeacherName] = useState("Teacher");
   const [loading, setLoading] = useState(true);
+  const [loadingNotices, setLoadingNotices] = useState(true);
+  const [notices, setNotices] = useState([]);
   
   const [stats, setStats] = useState({
     totalStudents: 0,
@@ -23,6 +26,29 @@ export default function TeacherDashboard() {
   });
   
   const [todayClasses, setTodayClasses] = useState([]);
+
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        // FIXED: Using dynamic API variable instead of hardcoded localhost
+        const res = await authFetch(`${API}/admin/notice`);
+        if (res.ok) {
+          const data = await res.json();
+          // Teachers should see "All Users" or "Teachers Only"
+          const teacherNotices = data.filter(n =>
+            n.target_audience === 'All Users' || n.target_audience === 'Teachers Only'
+          );
+          setNotices(teacherNotices);
+        }
+      } catch (error) {
+        console.error("Failed to load announcements:", error);
+      } finally {
+        setLoadingNotices(false);
+      }
+    };
+
+    fetchAnnouncements();
+  }, []);
 
   useEffect(() => {
     // 1. Set Greeting based on Time
@@ -46,8 +72,6 @@ export default function TeacherDashboard() {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        
-        // Note: Replace these API endpoints with your actual backend routes
         
         // A. Fetch Teacher Stats
         const statsRes = await authFetch(`${API}/teacher/dashboard/stats`);
@@ -87,6 +111,11 @@ export default function TeacherDashboard() {
     const formatted = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     const [time, period] = formatted.split(' ');
     return { time, period };
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   return (
@@ -146,9 +175,51 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
+      {/* 2. ANNOUNCEMENTS */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <Megaphone size={20} className="text-blue-600" /> Important Announcements
+        </h2>
+
+        {loadingNotices ? (
+          <div className="flex justify-center items-center p-8 bg-white rounded-2xl shadow-sm border border-gray-100">
+            <Loader2 className="animate-spin text-blue-500 w-8 h-8" />
+          </div>
+        ) : notices.length === 0 ? (
+          <div className="p-6 text-center text-gray-500 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center gap-3">
+            <Megaphone className="w-5 h-5 text-gray-400" />
+            <p className="text-sm font-medium">No new announcements at this time.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {notices.slice(0, 3).map((notice) => (
+              <div
+                key={notice.announcement_id}
+                className={`bg-white p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow border-y border-r border-gray-100 border-l-4 flex flex-col justify-between min-h-[120px] ${
+                  notice.target_audience === 'Teachers Only' ? 'border-l-purple-500' : 'border-l-blue-500'
+                }`}
+              >
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
+                      notice.target_audience === 'Teachers Only' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+                    }`}>
+                      {notice.target_audience === 'Teachers Only' ? 'Teachers' : 'General'}
+                    </span>
+                    <span className="text-[11px] font-bold text-gray-400">{formatDate(notice.created_at)}</span>
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed line-clamp-3">{notice.message}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* FIXED: The Grid wrapper now properly wraps both columns instead of closing immediately */}
       <div className="grid lg:grid-cols-3 gap-8">
         
-        {/* 2. TODAY'S SCHEDULE (Left - 2/3 width) */}
+        {/* 3. TODAY'S SCHEDULE (Left - 2/3 width) */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">Today's Schedule</h2>
@@ -215,7 +286,7 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
-        {/* 3. QUICK ACTIONS (Right - 1/3 width) */}
+        {/* 4. QUICK ACTIONS (Right - 1/3 width) */}
         <div className="space-y-6">
           <h2 className="text-lg font-bold text-gray-900">Quick Create</h2>
           
