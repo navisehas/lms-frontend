@@ -10,7 +10,7 @@ import {
 import { guardRoute, authFetch } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
-const REPORT_API_PATH = "/api/admin/course-report";
+const REPORT_API_PATH = `${API}/admin/course-report`;
 
 
 const EMPTY = { title: "", description: "", duration: "", teacher_id: "", fee: "", thumbnail_url: "" };
