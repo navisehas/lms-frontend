@@ -5,6 +5,11 @@ import {
   BarChart2, Users, AlertCircle 
 } from "lucide-react";
 
+const getLocalISODate = (value = new Date()) => {
+  const offsetMs = value.getTimezoneOffset() * 60000;
+  return new Date(value.getTime() - offsetMs).toISOString().slice(0, 10);
+};
+
 export default function AdminAttendance() {
   
   // 1. MOCK DATA
@@ -15,7 +20,7 @@ export default function AdminAttendance() {
     { id: 4, date: "2026-02-03", student: "Ruwan Dias", course: "A/L Maths", status: "Present", method: "QR Scan" },
   ];
 
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getLocalISODate());
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">

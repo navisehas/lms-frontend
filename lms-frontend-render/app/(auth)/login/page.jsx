@@ -21,13 +21,21 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      if (!API) {
+        setError("API URL is not configured. Set NEXT_PUBLIC_API_URL in .env.local and restart the frontend.");
+        return;
+      }
+
       const res = await fetch(`${API}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await res.json()
+        : { error: await res.text() };
 
       if (res.ok) {
         // Save token and user data using your auth utility

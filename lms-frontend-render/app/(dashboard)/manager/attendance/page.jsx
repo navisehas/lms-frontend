@@ -8,6 +8,11 @@ import { authFetch } from "@/lib/auth";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const getLocalISODate = (value = new Date()) => {
+  const offsetMs = value.getTimezoneOffset() * 60000;
+  return new Date(value.getTime() - offsetMs).toISOString().slice(0, 10);
+};
+
 export default function AttendanceLog() {
   
   const [attendanceData, setAttendanceData] = useState([]);
@@ -20,7 +25,7 @@ export default function AttendanceLog() {
   
   const [updateModal, setUpdateModal] = useState({ isOpen: false, record: null });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, record: null });
-  const [absentModal, setAbsentModal] = useState({ isOpen: false, courseId: "", date: new Date().toISOString().split('T')[0] });
+  const [absentModal, setAbsentModal] = useState({ isOpen: false, courseId: "", date: getLocalISODate() });
   
   // Report Modal State
   const [reportModal, setReportModal] = useState({ isOpen: false, type: "STUDENT" });
@@ -139,7 +144,7 @@ export default function AttendanceLog() {
       const data = await res.json();
       if (res.ok) {
         showAlert("success", data.message);
-        setAbsentModal({ isOpen: false, courseId: "", date: new Date().toISOString().split('T')[0] });
+        setAbsentModal({ isOpen: false, courseId: "", date: getLocalISODate() });
         fetchAttendance();
       } else {
         showAlert("error", data.error || "Failed to mark absents");

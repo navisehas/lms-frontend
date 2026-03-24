@@ -13,6 +13,11 @@ import autoTable from "jspdf-autotable";
 import { authFetch } from "@/lib/auth"; 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
+const toInputDate = (value) => {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+};
+
 export default function UserManagement() {
   
   const [users, setUsers] = useState([]);
@@ -464,7 +469,7 @@ export default function UserManagement() {
                     name="birthday"
                     type="date" 
                     max={maxDate}
-                    value={editingUser.birthday ? new Date(editingUser.birthday).toISOString().split('T')[0] : ""} 
+                    value={toInputDate(editingUser.birthday)} 
                     onChange={(e) => setEditingUser({...editingUser, birthday: e.target.value})} 
                     className="w-full p-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-600" 
                     

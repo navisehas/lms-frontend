@@ -3,14 +3,14 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen, Plus, Pencil, Trash2, Search, X,
-  CheckCircle, AlertCircle, Loader, Users, DollarSign,
+  CheckCircle, Loader, Users, DollarSign,
   RefreshCw, Save, Clock, ChevronDown,
   GraduationCap, Eye, Upload, UserX, ImageIcon
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
-const REPORT_API_PATH = `${API}/admin/course-report`;
+const REPORT_API_PATH = "/api/admin/course-report";
 
 
 const EMPTY = { title: "", description: "", duration: "", teacher_id: "", fee: "", thumbnail_url: "" };
@@ -74,6 +74,7 @@ export default function AdminCoursesPage() {
 
   async function handleGenerateReport() {
     if (reportInFlightRef.current || reporting) return;
+    setError("");
     reportInFlightRef.current = true;
     setReporting(true);
     try {
@@ -91,18 +92,18 @@ export default function AdminCoursesPage() {
         return;
       }
 
-      const isPdf = (res.headers.get("content-type") || "").includes("application/pdf");
-      if (!isPdf) {
-        const text = await res.text().catch(() => "");
-        flash(text || "Invalid report response from server.", true);
+      const blob = await res.blob();
+      if (blob.size === 0) {
+        flash("Report file is empty. Please try again.", true);
         return;
       }
 
-      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "course-report.pdf";
+      const disposition = res.headers.get("content-disposition") || "";
+      const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";\n]+)/i);
+      link.download = fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/\"/g, "")) : "course-report.pdf";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -121,8 +122,15 @@ export default function AdminCoursesPage() {
 
   // ── flash ─────────────────────────────────────────────────────────────────
   function flash(msg, isErr = false) {
-    if (isErr) { setError(msg);   setTimeout(() => setError(""),   5000); }
-    else       { setSuccess(msg); setTimeout(() => setSuccess(""), 4000); }
+    if (isErr) {
+      setSuccess("");
+      setError(msg);
+      setTimeout(() => setError(""), 5000);
+    } else {
+      setError("");
+      setSuccess(msg);
+      setTimeout(() => setSuccess(""), 4000);
+    }
   }
 
   // ── modal helpers ─────────────────────────────────────────────────────────
@@ -262,7 +270,6 @@ export default function AdminCoursesPage() {
       </div>
 
       {/* ── Alerts ── */}
-      {error   && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm"><AlertCircle size={16} />{error}</div>}
       {success && <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg px-4 py-3 mb-4 text-sm"><CheckCircle size={16} />{success}</div>}
 
       {/* ── Stats ── */}
@@ -379,12 +386,6 @@ export default function AdminCoursesPage() {
 
             {/* Body */}
             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
-
-              {formErr && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2.5 text-sm">
-                  <AlertCircle size={15} /> {formErr}
-                </div>
-              )}
 
               {/* Thumbnail upload */}
               <FormLabel label="Course Photo" hint="optional · max 2 MB">
