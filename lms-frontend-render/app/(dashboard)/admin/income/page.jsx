@@ -353,7 +353,20 @@ export default function AdminInstituteincomePage() {
           TAB: PER-TEACHER
       ════════════════════════════════════════ */}
       {tab === "teachers" && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+
+          {/* Current month label */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <CalendarDays size={15} className="text-blue-700" />
+              <span className="text-sm font-bold text-gray-900">{currentLabel}</span>
+              <span className="text-xs font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">Current Month</span>
+            </div>
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <RefreshCw size={11} /> Auto-refreshes {nextRefreshLabel}
+            </span>
+          </div>
+
           {loading ? (
             <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
               <Loader2 size={20} className="animate-spin" /> Loading teacher data…
@@ -365,48 +378,84 @@ export default function AdminInstituteincomePage() {
             </div>
           ) : teachers.map(t => {
             const isExpanded = expandedTeacher === t.teacher_id;
-            const topMonth   = t.monthly.reduce((best, m) => m.teacher_payout > (best?.teacher_payout || 0) ? m : best, null);
+
+            // Current month data for this teacher
+            const currentMonthData = t.monthly?.find(m => m.month_key === currentMonthKey) || null;
+
+            // Past months only (exclude current month from history)
+            const historyMonths = t.monthly?.filter(m => m.month_key !== currentMonthKey) || [];
+
+            const topMonth = t.monthly?.reduce(
+              (best, m) => m.teacher_payout > (best?.teacher_payout || 0) ? m : best, null
+            );
+
             return (
               <div key={t.teacher_id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div
-                  className="p-5 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => setExpandedTeacher(isExpanded ? null : t.teacher_id)}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+
+                {/* ── Teacher name + current month stats ── */}
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-4">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-gray-900 text-base">{t.teacher_name}</span>
                         <span className="text-xs font-mono text-gray-300">{t.teacher_id}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {t.payment_count} payment{t.payment_count !== 1 ? "s" : ""} · Click to {isExpanded ? "hide" : "view"} monthly breakdown
+                        {currentMonthData?.payment_count || 0} payment{(currentMonthData?.payment_count || 0) !== 1 ? "s" : ""} this month
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-4">
-                      <div className="text-center">
-                        <p className="text-xs text-gray-400">Gross</p>
-                        <p className="text-base font-bold text-gray-700">Rs. {fmt(t.gross_total)}</p>
+                    {topMonth && (
+                      <span className="text-xs text-gray-400 hidden sm:block text-right">
+                        Best: <span className="font-medium text-gray-600">{topMonth.month_label}</span><br />
+                        Rs. {fmt(topMonth.teacher_payout)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Current month 3 stat mini-cards */}
+                  {currentMonthData ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+                        <p className="text-xs text-gray-400 mb-1">Gross</p>
+                        <p className="text-sm font-bold text-gray-700">Rs. {fmt(currentMonthData.gross_total)}</p>
                       </div>
-                      <div className="text-center">
-                        <p className="text-xs text-amber-500">Teacher Payout ({teacherPct}%)</p>
-                        <p className="text-base font-bold text-amber-700">Rs. {fmt(t.teacher_payout)}</p>
+                      <div className="bg-amber-50 rounded-xl p-3 text-center border border-amber-100">
+                        <p className="text-xs text-amber-500 mb-1">Payout ({teacherPct}%)</p>
+                        <p className="text-sm font-bold text-amber-700">Rs. {fmt(currentMonthData.teacher_payout)}</p>
                       </div>
-                      <div className="text-center">
-                        <p className="text-xs text-blue-500">Institute Share ({institutePct}%)</p>
-                        <p className="text-base font-bold text-blue-700">Rs. {fmt(t.institute_share)}</p>
+                      <div className="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
+                        <p className="text-xs text-blue-500 mb-1">Institute ({institutePct}%)</p>
+                        <p className="text-sm font-bold text-blue-700">Rs. {fmt(currentMonthData.institute_share)}</p>
                       </div>
                     </div>
-                  </div>
-                  {topMonth && (
-                    <p className="text-xs text-gray-400 mt-2">
-                      Best month: <span className="font-medium text-gray-600">{topMonth.month_label}</span> — Rs. {fmt(topMonth.teacher_payout)}
-                    </p>
+                  ) : (
+                    <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+                      <p className="text-xs text-gray-400">No payments recorded this month</p>
+                    </div>
                   )}
                 </div>
 
-                {isExpanded && t.monthly.length > 0 && (
+                {/* ── Show history toggle button ── */}
+                {historyMonths.length > 0 && (
+                  <div
+                    className="flex items-center justify-between px-5 py-3 border-t border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setExpandedTeacher(isExpanded ? null : t.teacher_id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <History size={13} className="text-gray-400" />
+                      <span className="text-xs font-semibold text-gray-500">
+                        Monthly History ({historyMonths.length} month{historyMonths.length !== 1 ? "s" : ""})
+                      </span>
+                    </div>
+                    <span className={`text-xs font-semibold ${isExpanded ? "text-blue-700" : "text-gray-400"}`}>
+                      {isExpanded ? "▲ Hide" : "▼ Show"}
+                    </span>
+                  </div>
+                )}
+
+                {/* ── Expandable monthly history table ── */}
+                {isExpanded && historyMonths.length > 0 && (
                   <div className="border-t border-gray-100 px-5 pb-5 pt-3">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Monthly Payout History</p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -417,7 +466,7 @@ export default function AdminInstituteincomePage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {t.monthly.map(m => (
+                          {historyMonths.map(m => (
                             <tr key={m.month_key} className="hover:bg-gray-50">
                               <td className="py-2.5 pr-6 font-medium text-gray-700 whitespace-nowrap">{m.month_label}</td>
                               <td className="py-2.5 pr-6 text-gray-500">{m.payment_count}</td>
@@ -428,8 +477,8 @@ export default function AdminInstituteincomePage() {
                           ))}
                         </tbody>
                         <tfoot>
-                          <tr className="border-t border-gray-200 font-bold">
-                            <td className="py-2.5 pr-6 text-gray-700">Total</td>
+                          <tr className="border-t-2 border-gray-200 font-bold bg-gray-50">
+                            <td className="py-2.5 pr-6 text-gray-700">All Time Total</td>
                             <td className="py-2.5 pr-6 text-gray-600">{t.payment_count}</td>
                             <td className="py-2.5 pr-6 text-gray-700">Rs. {fmt(t.gross_total)}</td>
                             <td className="py-2.5 pr-6 text-amber-700">Rs. {fmt(t.teacher_payout)}</td>
