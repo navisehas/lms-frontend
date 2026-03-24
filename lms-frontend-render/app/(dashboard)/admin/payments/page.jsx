@@ -91,7 +91,7 @@ export default function AdminPaymentsPage() {
   }
 
   return (
-    <>
+    <div className="h-full overflow-y-auto p-4 md:p-6 space-y-6">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -251,6 +251,6 @@ export default function AdminPaymentsPage() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
