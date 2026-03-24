@@ -2,15 +2,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  TrendingUp, DollarSign, Download, Loader, AlertCircle,
+  TrendingUp, DollarSign, Download, Loader2, AlertCircle,
   RefreshCw, BookOpen, Users, BarChart3, ChevronRight,
-  ArrowUpRight, Wallet, GraduationCap, Star, Clock
+  Wallet, GraduationCap, Star, Clock,
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n) =>
   parseFloat(n || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -34,10 +34,10 @@ function buildCourseMap(monthly) {
           payments: [],
         };
       }
-      map[key].gross_total += parseFloat(p.amount);
+      map[key].gross_total    += parseFloat(p.amount);
       map[key].teacher_income += parseFloat(p.teacher_share);
-      map[key].institute_cut += parseFloat(p.amount) - parseFloat(p.teacher_share);
-      map[key].payment_count += 1;
+      map[key].institute_cut  += parseFloat(p.amount) - parseFloat(p.teacher_share);
+      map[key].payment_count  += 1;
       map[key].enrolled_students.add(p.student_id);
       map[key].payments.push({ ...p, month_label: m.month_label });
     }
@@ -50,118 +50,102 @@ function buildCourseMap(monthly) {
 function exportCSV(courses, teacherPct) {
   const headers = [
     "Course", "Students Enrolled", "Gross Amount (Rs.)",
-    `Your Share ${teacherPct}% (Rs.)`, `Institute (Rs.)`
+    `Your Share ${teacherPct}% (Rs.)`, "Institute (Rs.)",
   ];
-  const rows = courses.map((c) => [
+  const rows   = courses.map((c) => [
     c.course_title, c.enrolled_students,
-    c.gross_total.toFixed(2), c.teacher_income.toFixed(2), c.institute_cut.toFixed(2)
+    c.gross_total.toFixed(2), c.teacher_income.toFixed(2), c.institute_cut.toFixed(2),
   ]);
   const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows].map((r) => r.map(escape).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `teacher-course-income-${new Date().toISOString().slice(0, 10)}.csv`;
+  const csv    = [headers, ...rows].map((r) => r.map(escape).join(",")).join("\n");
+  const blob   = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url    = URL.createObjectURL(blob);
+  const a      = document.createElement("a");
+  a.href       = url;
+  a.download   = `teacher-course-income-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-// ─── Course Card ─────────────────────────────────────────────────────────────
-function CourseCard({ course, teacherPct, isTop, maxIncome, onClick, isSelected }) {
+// ─── Per-course colour palette ────────────────────────────────────────────────
+const PALETTE = [
+  { bar: "bg-blue-600",   accent: "text-blue-700",   icon: "text-blue-600",   iconBg: "bg-blue-50",   border: "border-blue-400"   },
+  { bar: "bg-indigo-500", accent: "text-indigo-700",  icon: "text-indigo-600", iconBg: "bg-indigo-50", border: "border-indigo-400" },
+  { bar: "bg-amber-500",  accent: "text-amber-700",   icon: "text-amber-600",  iconBg: "bg-amber-50",  border: "border-amber-400"  },
+  { bar: "bg-rose-500",   accent: "text-rose-700",    icon: "text-rose-600",   iconBg: "bg-rose-50",   border: "border-rose-400"   },
+  { bar: "bg-violet-500", accent: "text-violet-700",  icon: "text-violet-600", iconBg: "bg-violet-50", border: "border-violet-400" },
+];
+
+function getPalette(courseId) {
+  const idx = Math.abs(
+    String(courseId ?? "").split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+  ) % PALETTE.length;
+  return PALETTE[idx];
+}
+
+// ─── Course Card ──────────────────────────────────────────────────────────────
+function CourseCard({ course, isTop, maxIncome, onClick, isSelected }) {
   const pct = maxIncome > 0 ? (course.teacher_income / maxIncome) * 100 : 0;
-  const colors = [
-    { bar: "#10b981", bg: "rgba(16,185,129,0.08)", accent: "#10b981" },
-    { bar: "#6366f1", bg: "rgba(99,102,241,0.08)", accent: "#6366f1" },
-    { bar: "#f59e0b", bg: "rgba(245,158,11,0.08)", accent: "#f59e0b" },
-    { bar: "#ef4444", bg: "rgba(239,68,68,0.08)", accent: "#ef4444" },
-    { bar: "#8b5cf6", bg: "rgba(139,92,246,0.08)", accent: "#8b5cf6" },
-  ];
-  const colorIdx = Math.abs(course.course_id?.toString().split("").reduce((a, c) => a + c.charCodeAt(0), 0) || 0) % colors.length;
-  const c = colors[colorIdx];
+  const p   = getPalette(course.course_id);
 
   return (
     <div
       onClick={onClick}
-      style={{
-        background: isSelected ? c.bg : "#fff",
-        border: isSelected ? `1.5px solid ${c.accent}` : "1.5px solid #f0f0f0",
-        borderRadius: 16,
-        padding: "20px 22px",
-        cursor: "pointer",
-        transition: "all 0.18s ease",
-        position: "relative",
-        overflow: "hidden",
-      }}
-      className="hover:shadow-md"
+      className={`bg-white rounded-xl border shadow-sm p-5 cursor-pointer hover:shadow-md transition-all duration-150 relative overflow-hidden ${
+        isSelected ? `${p.border} border-2` : "border-gray-200"
+      }`}
     >
       {isTop && (
-        <span style={{
-          position: "absolute", top: 12, right: 12,
-          background: "#fef3c7", color: "#d97706",
-          fontSize: 10, fontWeight: 700, padding: "2px 8px",
-          borderRadius: 99, display: "flex", alignItems: "center", gap: 3
-        }}>
-          <Star size={9} fill="#d97706" /> TOP
+        <span className="absolute top-3 right-3 flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <Star size={9} fill="currentColor" /> TOP
         </span>
       )}
 
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: c.bg, display: "flex", alignItems: "center", justifyContent: "center"
-          }}>
-            <BookOpen size={15} color={c.accent} />
-          </div>
-          <p style={{ fontWeight: 700, fontSize: 14, color: "#1a1a2e", lineHeight: 1.3, flex: 1 }}>
-            {course.course_title}
-          </p>
+      {/* Title */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className={`${p.iconBg} p-2 rounded-lg flex-shrink-0`}>
+          <BookOpen size={16} className={p.icon} />
         </div>
+        <p className="text-sm font-bold text-gray-900 leading-snug">{course.course_title}</p>
       </div>
 
-      <div style={{ display: "flex", gap: 16, marginBottom: 14 }}>
+      {/* Income + Students */}
+      <div className="flex items-end justify-between mb-4">
         <div>
-          <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>Your Income</p>
-          <p style={{ fontSize: 20, fontWeight: 800, color: c.accent, fontFamily: "'DM Mono', monospace" }}>
-            Rs. {fmt(course.teacher_income)}
-          </p>
+          <p className="text-xs font-medium text-gray-500 mb-0.5">Your Income</p>
+          <p className={`text-xl font-bold ${p.accent}`}>Rs. {fmt(course.teacher_income)}</p>
         </div>
-        <div style={{ marginLeft: "auto", textAlign: "right" }}>
-          <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>Students</p>
-          <p style={{ fontSize: 18, fontWeight: 700, color: "#374151" }}>
-            {course.enrolled_students}
-          </p>
+        <div className="text-right">
+          <p className="text-xs font-medium text-gray-500 mb-0.5">Students</p>
+          <p className="text-xl font-bold text-gray-900">{course.enrolled_students}</p>
         </div>
       </div>
 
-      <div style={{ background: "#f3f4f6", borderRadius: 99, height: 6, marginBottom: 8 }}>
-        <div style={{
-          width: `${pct}%`, height: "100%",
-          background: c.bar, borderRadius: 99,
-          transition: "width 0.6s ease"
-        }} />
+      {/* Progress bar */}
+      <div className="w-full bg-gray-100 rounded-full h-1.5 mb-3">
+        <div className={`${p.bar} h-1.5 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <p style={{ fontSize: 11, color: "#9ca3af" }}>
+      {/* Footer */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-400">
           {course.payment_count} payment{course.payment_count !== 1 ? "s" : ""} · Gross Rs. {fmt(course.gross_total)}
         </p>
-        <ChevronRight size={14} color={isSelected ? c.accent : "#d1d5db"} />
+        <ChevronRight size={14} className={isSelected ? p.icon : "text-gray-300"} />
       </div>
     </div>
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TeacherIncomePage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [user, setUser]           = useState(null);
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState("");
   const [exporting, setExporting] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
 
@@ -174,22 +158,20 @@ export default function TeacherIncomePage() {
     setLoading(true);
     setError("");
     try {
-      const res = await authFetch(`${API}/income/teacher/${teacherId}/monthly`);
+      const res  = await authFetch(`${API}/income/teacher/${teacherId}/monthly`);
       const json = await res.json();
       if (json.success) setData(json);
       else setError(json.error || "Failed to load income data.");
     } catch { setError("Network error. Please try again."); }
-    finally { setLoading(false); }
+    finally  { setLoading(false); }
   }
 
-  const monthly = data?.monthly || [];
-  const totals = data?.totals || {};
+  const monthly    = data?.monthly || [];
+  const totals     = data?.totals  || {};
   const teacherPct = data?.teacher_share_pct || 80;
-  const institutePct = data?.institute_share_pct || 20;
 
-  const courses = useMemo(() => buildCourseMap(monthly), [monthly]);
+  const courses   = useMemo(() => buildCourseMap(monthly), [monthly]);
   const maxIncome = courses[0]?.teacher_income || 0;
-
   const activeCourse = selectedCourse
     ? courses.find((c) => c.course_id === selectedCourse)
     : null;
@@ -200,210 +182,217 @@ export default function TeacherIncomePage() {
     finally { setTimeout(() => setExporting(false), 800); }
   }
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
+  // Stat cards — same markup pattern as dashboard
   const stats = [
     {
       label: "Total Earnings",
       value: `Rs. ${fmt(totals.teacher_income)}`,
-      sub: `${teacherPct}% of gross Rs. ${fmt(totals.gross_total)}`,
-      icon: <Wallet size={18} />, color: "#10b981", bg: "#ecfdf5"
+      sub:   `${teacherPct}% of gross Rs. ${fmt(totals.gross_total)}`,
+      icon:  <Wallet size={24} />,
+      iconBg: "bg-blue-50", iconColor: "text-blue-600",
     },
     {
       label: "My Courses",
       value: courses.length,
-      sub: "With enrollment activity",
-      icon: <BookOpen size={18} />, color: "#6366f1", bg: "#eef2ff"
+      sub:   "With enrollment activity",
+      icon:  <BookOpen size={24} />,
+      iconBg: "bg-emerald-50", iconColor: "text-emerald-600",
     },
     {
       label: "Total Enrollments",
       value: courses.reduce((s, c) => s + c.enrolled_students, 0),
-      sub: "Unique students across courses",
-      icon: <GraduationCap size={18} />, color: "#f59e0b", bg: "#fffbeb"
+      sub:   "Unique students",
+      icon:  <GraduationCap size={24} />,
+      iconBg: "bg-orange-50", iconColor: "text-orange-600",
     },
     {
       label: "Payments Received",
       value: totals.payment_count || 0,
-      sub: "All-time transactions",
-      icon: <BarChart3 size={18} />, color: "#ef4444", bg: "#fef2f2"
+      sub:   "All-time transactions",
+      icon:  <BarChart3 size={24} />,
+      iconBg: "bg-violet-50", iconColor: "text-violet-600",
     },
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8f9fb", fontFamily: "'DM Sans', sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap');
-        * { box-sizing: border-box; }
-        .hover\\:shadow-md:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-      `}</style>
+    <div className="max-w-7xl mx-auto space-y-8">
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 20px" }}>
+      {/* ── Page heading — identical pattern to dashboard h1 ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">My Income</h1>
+          <p className="text-sm font-medium text-gray-500 mt-1">
+            Course-wise earnings · You keep{" "}
+            <span className="font-bold text-blue-700">{teacherPct}%</span> of every enrollment
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => user && fetchIncome(user.user_id)}
+            className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition"
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button
+            onClick={doExport}
+            disabled={exporting || courses.length === 0}
+            className="flex items-center gap-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 px-4 py-2 rounded-lg transition shadow-sm"
+          >
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            Export CSV
+          </button>
+        </div>
+      </div>
 
-        {/* ── Header ── */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 28 }}>
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+
+      {/* Info banner */}
+      <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm">
+        <TrendingUp size={16} className="text-blue-700 flex-shrink-0" />
+        <span className="text-blue-800">
+          <span className="font-bold">Income Split:</span> You earn{" "}
+          <span className="font-bold">{teacherPct}%</span> of each course fee. The institute retains{" "}
+          <span className="font-bold">{100 - teacherPct}%</span>.
+        </span>
+      </div>
+
+      {/* ── Stat Cards — same structure as dashboard ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((s, i) => (
+          <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+            <div className="min-w-0 mr-3">
+              <p className="text-sm font-medium text-gray-500">{s.label}</p>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">
+                {loading
+                  ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" />
+                  : s.value}
+              </h3>
+              <span className="text-xs text-gray-400 mt-1 block">{s.sub}</span>
+            </div>
+            <div className={`p-3 ${s.iconBg} ${s.iconColor} rounded-full flex-shrink-0`}>
+              {s.icon}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Main content ── */}
+      {loading ? (
+        <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
+          <Loader2 size={20} className="animate-spin" /> Loading income data…
+        </div>
+      ) : courses.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+          <DollarSign size={48} className="mx-auto mb-3 text-gray-200" />
+          <p className="font-bold text-gray-500">No income data yet.</p>
+          <p className="text-sm text-gray-400 mt-1">Income appears once students enroll in your courses.</p>
+        </div>
+      ) : (
+        <div className={`grid gap-6 ${activeCourse ? "lg:grid-cols-[1fr_380px]" : "grid-cols-1"}`}>
+
+          {/* Course grid */}
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div style={{ background: "#ecfdf5", borderRadius: 10, padding: 8 }}>
-                <TrendingUp size={22} color="#10b981" />
-              </div>
-              <h1 style={{ fontSize: 24, fontWeight: 800, color: "#111827", margin: 0 }}>
-                My Income
-              </h1>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">
+              {courses.length} Course{courses.length !== 1 ? "s" : ""} with Income
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {courses.map((course, i) => (
+                <CourseCard
+                  key={course.course_id}
+                  course={course}
+                  isTop={i === 0}
+                  maxIncome={maxIncome}
+                  isSelected={selectedCourse === course.course_id}
+                  onClick={() =>
+                    setSelectedCourse(selectedCourse === course.course_id ? null : course.course_id)
+                  }
+                />
+              ))}
             </div>
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>
-              Course-wise earnings · You keep <strong style={{ color: "#10b981" }}>{teacherPct}%</strong> of every enrollment
-            </p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => user && fetchIncome(user.user_id)}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "9px 14px", fontSize: 13, color: "#374151", cursor: "pointer", fontWeight: 500 }}>
-              <RefreshCw size={13} /> Refresh
-            </button>
-            <button
-              onClick={doExport}
-              disabled={exporting || courses.length === 0}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "#10b981", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, color: "#fff", cursor: "pointer", fontWeight: 700, opacity: exporting || courses.length === 0 ? 0.6 : 1 }}>
-              {exporting ? <Loader size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
-              Export CSV
-            </button>
-          </div>
-        </div>
 
-        {error && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13 }}>
-            <AlertCircle size={15} /> {error}
-          </div>
-        )}
+          {/* Detail panel */}
+          {activeCourse && (() => {
+            return (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden sticky top-4">
 
-        {/* ── Stat Cards ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 28 }}>
-          {stats.map((s, i) => (
-            <div key={i} style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #f0f0f0", padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ background: s.bg, borderRadius: 10, padding: 10, flexShrink: 0 }}>
-                <span style={{ color: s.color }}>{s.icon}</span>
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 3px" }}>{s.label}</p>
-                <p style={{ fontSize: 20, fontWeight: 800, color: s.color, margin: "0 0 2px", fontFamily: "'DM Mono', monospace" }}>{s.value}</p>
-                <p style={{ fontSize: 11, color: "#d1d5db", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Main Content ── */}
-        {loading ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", color: "#9ca3af", gap: 10 }}>
-            <Loader size={20} style={{ animation: "spin 1s linear infinite" }} /> Loading income data…
-          </div>
-        ) : courses.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "80px 0", background: "#fff", borderRadius: 16, border: "1.5px solid #f0f0f0" }}>
-            <DollarSign size={48} color="#e5e7eb" style={{ marginBottom: 12 }} />
-            <p style={{ fontWeight: 700, color: "#374151", margin: "0 0 6px" }}>No income data yet</p>
-            <p style={{ fontSize: 13, color: "#9ca3af" }}>Income appears once students enroll in your courses.</p>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: activeCourse ? "1fr 380px" : "1fr", gap: 16, alignItems: "start" }}>
-
-            {/* Course Grid */}
-            <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
-                {courses.length} Course{courses.length !== 1 ? "s" : ""} with Income
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                {courses.map((course, idx) => (
-                  <CourseCard
-                    key={course.course_id}
-                    course={course}
-                    teacherPct={teacherPct}
-                    isTop={idx === 0}
-                    maxIncome={maxIncome}
-                    isSelected={selectedCourse === course.course_id}
-                    onClick={() => setSelectedCourse(selectedCourse === course.course_id ? null : course.course_id)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Course Detail Panel */}
-            {activeCourse && (
-              <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #f0f0f0", overflow: "hidden", position: "sticky", top: 20 }}>
-                {/* Panel Header */}
-                <div style={{ padding: "20px 22px 16px", borderBottom: "1px solid #f3f4f6" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ flex: 1, marginRight: 12 }}>
-                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Course Detail</p>
-                      <p style={{ fontWeight: 800, fontSize: 15, color: "#111827", margin: 0, lineHeight: 1.3 }}>
-                        {activeCourse.course_title}
-                      </p>
+                {/* Header */}
+                <div className="bg-blue-50 border-b border-blue-100 px-5 py-4">
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Course Detail</p>
+                      <p className="text-sm font-bold text-gray-900 leading-snug">{activeCourse.course_title}</p>
                     </div>
-                    <button onClick={() => setSelectedCourse(null)}
-                      style={{ background: "#f3f4f6", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>
-                      ✕
+                    <button
+                      onClick={() => setSelectedCourse(null)}
+                      className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 flex-shrink-0"
+                    >
+                      ✕ Close
                     </button>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+                  <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: "Your Income", val: `Rs. ${fmt(activeCourse.teacher_income)}`, color: "#10b981" },
-                      { label: "Gross Total", val: `Rs. ${fmt(activeCourse.gross_total)}`, color: "#374151" },
-                      { label: "Students", val: activeCourse.enrolled_students, color: "#6366f1" },
-                      { label: "Payments", val: activeCourse.payment_count, color: "#f59e0b" },
+                      { label: "Your Income", val: `Rs. ${fmt(activeCourse.teacher_income)}`, color: "text-blue-700" },
+                      { label: "Gross Total",  val: `Rs. ${fmt(activeCourse.gross_total)}`,   color: "text-gray-900" },
+                      { label: "Students",     val: activeCourse.enrolled_students,            color: "text-indigo-700" },
+                      { label: "Payments",     val: activeCourse.payment_count,                color: "text-amber-700" },
                     ].map((s, i) => (
-                      <div key={i} style={{ background: "#f8f9fb", borderRadius: 10, padding: "12px 14px" }}>
-                        <p style={{ fontSize: 10, color: "#9ca3af", margin: "0 0 3px", textTransform: "uppercase" }}>{s.label}</p>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: s.color, margin: 0, fontFamily: "'DM Mono', monospace" }}>{s.val}</p>
+                      <div key={i} className="bg-white rounded-lg px-3 py-2.5 border border-gray-100">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">{s.label}</p>
+                        <p className={`text-base font-bold ${s.color}`}>{s.val}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Enrolled Students List */}
-                <div style={{ padding: "16px 22px" }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-                    Enrollment History
-                  </p>
-                  <div style={{ maxHeight: 340, overflowY: "auto" }}>
-                    {activeCourse.payments.map((p, i) => (
-                      <div key={p.payment_id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
-                        <div style={{ flex: 1, marginRight: 8 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#eef2ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <Users size={12} color="#6366f1" />
-                            </div>
-                            <div>
-                              <p style={{ fontSize: 12, fontWeight: 600, color: "#111827", margin: 0 }}>{p.student_name}</p>
-                              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                                <Clock size={9} color="#9ca3af" />
-                                <p style={{ fontSize: 10, color: "#9ca3af", margin: 0 }}>
-                                  {new Date(p.payment_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                </p>
-                                <span style={{ fontSize: 10, background: p.payment_type === "ONLINE" ? "#dbeafe" : "#fef3c7", color: p.payment_type === "ONLINE" ? "#1d4ed8" : "#92400e", padding: "1px 6px", borderRadius: 99, fontWeight: 600 }}>
-                                  {p.payment_type === "ONLINE" ? "Online" : "Cash"}
-                                </span>
-                              </div>
+                {/* Enrollment history */}
+                <div className="px-5 py-4">
+                  <h3 className="text-sm font-bold text-gray-900 mb-3">Enrollment History</h3>
+                  <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-100">
+                    {activeCourse.payments.map((pay, i) => (
+                      <div key={pay.payment_id || i} className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Users size={13} className="text-blue-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-gray-900 truncate">{pay.student_name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <Clock size={10} className="text-gray-400" />
+                              <span className="text-xs text-gray-400">
+                                {new Date(pay.payment_date).toLocaleDateString("en-US", {
+                                  month: "short", day: "numeric", year: "numeric",
+                                })}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                pay.payment_type === "ONLINE"
+                                  ? "bg-blue-50 text-blue-700"
+                                  : "bg-amber-50 text-amber-700"
+                              }`}>
+                                {pay.payment_type === "ONLINE" ? "Online" : "Cash"}
+                              </span>
                             </div>
                           </div>
                         </div>
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <p style={{ fontSize: 13, fontWeight: 800, color: "#10b981", margin: "0 0 1px", fontFamily: "'DM Mono', monospace" }}>
-                            Rs. {fmt(p.teacher_share)}
-                          </p>
-                          <p style={{ fontSize: 10, color: "#d1d5db", margin: 0 }}>of Rs. {fmt(p.amount)}</p>
+                        <div className="text-right flex-shrink-0 ml-2">
+                          <p className="text-sm font-bold text-blue-700">Rs. {fmt(pay.teacher_share)}</p>
+                          <p className="text-[10px] text-gray-400">of Rs. {fmt(pay.amount)}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }
