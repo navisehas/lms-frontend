@@ -4,23 +4,22 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutGrid, BookOpen, FileText, PenTool,
-  BarChart2, Menu, X, LogOut, MessageSquare, GraduationCap, Bell,
+  LayoutDashboard, BookOpen, FolderOpen, ClipboardEdit,
+  ClipboardList, LineChart, Wallet, MessageSquare,
+  GraduationCap, Bell, Menu, X, LogOut,
 } from "lucide-react";
 import { guardRoute, logout } from "@/lib/auth";
 
-const BRAND = "#1E40AF";       // blue-800
-const BRAND_BG = "#DBEAFE";    // blue-100
+const BRAND    = "#1E40AF";
+const BRAND_BG = "#DBEAFE";
 
 export default function TeacherLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState(null);
-  
-  // New state for the logout confirmation modal
+  const [sidebarOpen, setSidebarOpen]     = useState(false);
+  const [user, setUser]                   = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  
+
   const pathname = usePathname();
-  const router = useRouter();
+  const router   = useRouter();
 
   useEffect(() => {
     const authorised = guardRoute("TEACHER", router);
@@ -37,21 +36,20 @@ export default function TeacherLayout({ children }) {
     .slice(0, 2);
 
   const menuItems = [
-    { name: "Overview",         href: "/teacher/dashboard", icon: <LayoutGrid size={20} /> },
-    { name: "My Courses",       href: "/teacher/courses",   icon: <BookOpen size={20} /> },
-    { name: "Course Materials", href: "/teacher/materials", icon: <FolderOpen size={20} /> },
-    { name: "Exams & Quizzes",  href: "/teacher/exams/create",     icon: <ClipboardEdit  size={20} /> },
-    { name: "Exam Results",     href: "/teacher/exams/results",     icon: <ClipboardList  size={20} /> },
-    { name: "Student Progress", href: "/teacher/analytics", icon: <LineChart size={20} /> },
-    { name: "My Income",        href: "/teacher/income",    icon: <Wallet size={20} /> },
-    { name: "Feedback",         href: "/teacher/feedback",  icon: <MessageSquare size={20} /> },
+    { name: "Overview",         href: "/teacher/dashboard",      icon: <LayoutDashboard  size={20} /> },
+    { name: "My Courses",       href: "/teacher/courses",         icon: <BookOpen         size={20} /> },
+    { name: "Course Materials", href: "/teacher/materials",       icon: <FolderOpen       size={20} /> },
+    { name: "Exams & Quizzes",  href: "/teacher/exams/create",    icon: <ClipboardEdit    size={20} /> },
+    { name: "Exam Results",     href: "/teacher/exams/results",   icon: <ClipboardList    size={20} /> },
+    { name: "Student Progress", href: "/teacher/analytics",       icon: <LineChart        size={20} /> },
+    { name: "My Income",        href: "/teacher/income",          icon: <Wallet           size={20} /> },
+    { name: "Feedback",         href: "/teacher/feedback",        icon: <MessageSquare    size={20} /> },
   ];
 
   return (
-    /* h-screen and overflow-hidden prevent the entire page from scrolling */
     <div className="h-screen w-full bg-gray-50 flex flex-col overflow-hidden relative">
-      
-      {/* ── LOGOUT CONFIRMATION MODAL ── */}
+
+      {/* ── LOGOUT MODAL ── */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200">
@@ -70,10 +68,7 @@ export default function TeacherLayout({ children }) {
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  setShowLogoutModal(false);
-                  logout(router);
-                }}
+                onClick={() => { setShowLogoutModal(false); logout(router); }}
                 className="px-5 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm"
               >
                 Yes, Log out
@@ -83,10 +78,9 @@ export default function TeacherLayout({ children }) {
         </div>
       )}
 
-      {/* ── FIXED TOP HEADER ── */}
+      {/* ── TOP HEADER ── */}
       <header className="h-16 flex-shrink-0 bg-white border-b shadow-sm flex items-center justify-between px-4 md:px-6 lg:px-8 z-40 relative">
         <div className="flex items-center gap-4">
-          {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 -ml-2 text-gray-600 md:hidden hover:bg-gray-100 rounded-lg transition-colors"
@@ -94,8 +88,6 @@ export default function TeacherLayout({ children }) {
           >
             <Menu size={24} />
           </button>
-
-          {/* Logo */}
           <div className="flex items-center gap-2 md:w-[200px]">
             <GraduationCap size={22} style={{ color: BRAND }} />
             <span className="text-lg font-bold tracking-tight" style={{ color: BRAND }}>
@@ -105,24 +97,16 @@ export default function TeacherLayout({ children }) {
           </div>
         </div>
 
-        {/* Right side */}
         <div className="flex items-center gap-3 sm:gap-5">
-          <button
-            className="p-2 text-gray-400 hover:text-blue-800 relative transition-colors"
-            aria-label="Notifications"
-          >
+          <button className="p-2 text-gray-400 hover:text-blue-800 relative transition-colors" aria-label="Notifications">
             <Bell size={20} />
             <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
           </button>
-
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-              <p className="text-xs font-medium" style={{ color: BRAND }}>
-                Teacher
-              </p>
+              <p className="text-xs font-medium" style={{ color: BRAND }}>Teacher</p>
             </div>
-
             <div
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-sm sm:text-base shadow-sm"
               style={{ backgroundColor: BRAND_BG, color: BRAND }}
@@ -133,10 +117,9 @@ export default function TeacherLayout({ children }) {
         </div>
       </header>
 
-      {/* ── LOWER SECTION (Sidebar + Content) ── */}
+      {/* ── LOWER SECTION ── */}
       <div className="flex-1 flex overflow-hidden relative">
-        
-        {/* Mobile backdrop */}
+
         {sidebarOpen && (
           <div
             className="fixed inset-0 bg-black/60 z-[45] md:hidden backdrop-blur-sm transition-opacity"
@@ -145,7 +128,7 @@ export default function TeacherLayout({ children }) {
           />
         )}
 
-        {/* ── FIXED SIDEBAR ── */}
+        {/* ── SIDEBAR ── */}
         <aside
           className={`
             fixed inset-y-0 left-0 z-50 w-64 bg-[#1E40AF] text-white shadow-2xl flex flex-col
@@ -155,21 +138,18 @@ export default function TeacherLayout({ children }) {
             md:translate-x-0
           `}
         >
-          {/* Mobile header inside sidebar */}
+          {/* Mobile sidebar header */}
           <div className="md:hidden h-16 flex items-center justify-between px-5 border-b border-blue-700/30 flex-shrink-0">
             <div className="flex items-center gap-2.5">
               <GraduationCap size={20} className="text-blue-200" />
               <span className="text-lg font-bold tracking-tight">Teacher Portal</span>
             </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1 -mr-1 text-blue-200 hover:text-white rounded-md"
-            >
+            <button onClick={() => setSidebarOpen(false)} className="p-1 -mr-1 text-blue-200 hover:text-white rounded-md">
               <X size={24} />
             </button>
           </div>
 
-          {/* Navigation Links */}
+          {/* Nav links */}
           <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
             {menuItems.map((item) => (
               <Link
@@ -179,10 +159,9 @@ export default function TeacherLayout({ children }) {
                 className={`
                   flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-[15px] font-medium
                   transition-colors duration-150
-                  ${
-                    pathname === item.href
-                      ? "bg-white/20 text-white"
-                      : "text-blue-100 hover:bg-white/10 hover:text-white"
+                  ${pathname === item.href
+                    ? "bg-white/20 text-white"
+                    : "text-blue-100 hover:bg-white/10 hover:text-white"
                   }
                 `}
               >
@@ -191,15 +170,11 @@ export default function TeacherLayout({ children }) {
               </Link>
             ))}
 
-            {/* Logout Button */}
+            {/* Logout */}
             <div className="mt-4 pt-4 border-t border-blue-700/30">
               <button
                 onClick={() => setShowLogoutModal(true)}
-                className="
-                  w-full flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-[15px] font-medium
-                  text-blue-100 hover:bg-red-500/20 hover:text-red-100
-                  transition-colors duration-150
-                "
+                className="w-full flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-[15px] font-medium text-blue-100 hover:bg-red-500/20 hover:text-red-100 transition-colors duration-150"
               >
                 <LogOut size={20} className="text-blue-200" />
                 Logout
@@ -208,7 +183,7 @@ export default function TeacherLayout({ children }) {
           </nav>
         </aside>
 
-        {/* ── SCROLLABLE MAIN CONTENT ── */}
+        {/* ── MAIN CONTENT ── */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-gray-50 relative">
           <div className="max-w-7xl mx-auto pb-12">
             {children}
