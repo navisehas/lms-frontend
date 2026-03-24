@@ -40,7 +40,7 @@ export default function ManagerLayout({ children }) {
     { name: "Dashboard",          href: "/manager/dashboard",  icon: <LayoutDashboard size={20} /> },
     { name: "Scan Attendance",    href: "/manager/scan",       icon: <QrCode size={20} /> },
     { name: "Student Management", href: "/manager/students",   icon: <Users size={20} /> },
-    { name: "Payments & Fees",    href: "/manager/payments",   icon: <Banknote size={20} /> },
+    { name: "Payments & Enrollment", href: "/manager/payments",   icon: <Banknote size={20} /> },
     { name: "Class Schedule",     href: "/manager/schedule",   icon: <GraduationCap size={20} /> },
     { name: "All Attendance",     href: "/manager/attendance", icon: <Clock size={20} /> },
     { name: "Feedback",           href: "/manager/feedback",   icon: <MessageSquare size={20} /> },
