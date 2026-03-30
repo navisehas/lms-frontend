@@ -8,6 +8,9 @@ import { authFetch } from "@/lib/auth";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+// Define your API base URL here or ensure it's imported
+const API = process.env.NEXT_PUBLIC_API_URL || "";
+
 const getLocalISODate = (value = new Date()) => {
   const offsetMs = value.getTimezoneOffset() * 60000;
   return new Date(value.getTime() - offsetMs).toISOString().slice(0, 10);
@@ -51,7 +54,8 @@ export default function AttendanceLog() {
 
   const fetchAttendance = async () => {
     try {
-      const res = await authFetch("http://localhost:5000/attendance/all");
+      // FIX: Changed double quotes to backticks for template literals
+      const res = await authFetch(`${API}/attendance/all`);
       if (res.ok) setAttendanceData(await res.json());
     } catch (error) {
       console.error("Failed to fetch attendance:", error);
@@ -62,7 +66,8 @@ export default function AttendanceLog() {
 
   const fetchAllCourses = async () => {
     try {
-      const res = await authFetch("http://localhost:5000/courses");
+      // FIX: Changed double quotes to backticks
+      const res = await authFetch(`${API}/courses`);
       if (res.ok) setAllCourses(await res.json());
     } catch (error) {
       console.error("Failed to fetch courses");
@@ -76,7 +81,7 @@ export default function AttendanceLog() {
     setEditCourseId(record.course_id); 
     setFetchingCourses(true);
     try {
-      const res = await authFetch(`http://localhost:5000/student/${record.studentId}/courses`);
+      const res = await authFetch(`${API}/student/${record.studentId}/courses`);
       setStudentCourses(await res.json());
     } catch (error) {
       showAlert("error", "Failed to load student courses");
@@ -89,7 +94,7 @@ export default function AttendanceLog() {
   const submitUpdate = async () => {
     setIsSaving(true);
     try {
-      const res = await authFetch(`http://localhost:5000/attendance/${updateModal.record.id}`, {
+      const res = await authFetch(`${API}/attendance/${updateModal.record.id}`, {
         method: "PUT",
         body: JSON.stringify({ course_id: editCourseId })
       });
@@ -114,7 +119,7 @@ export default function AttendanceLog() {
   const submitDelete = async () => {
     setIsDeleting(true);
     try {
-      const res = await authFetch(`http://localhost:5000/attendance/${deleteModal.record.id}`, { 
+      const res = await authFetch(`${API}/attendance/${deleteModal.record.id}`, { 
         method: "DELETE" 
       });
       
@@ -137,7 +142,7 @@ export default function AttendanceLog() {
     if (!absentModal.courseId) return showAlert("error", "Please select a course first.");
     setIsMarkingAbsents(true);
     try {
-      const res = await authFetch("http://localhost:5000/attendance/mark-absents", {
+      const res = await authFetch(`${API}/attendance/mark-absents`, {
         method: "POST",
         body: JSON.stringify({ course_id: absentModal.courseId, date: absentModal.date })
       });
@@ -156,16 +161,18 @@ export default function AttendanceLog() {
     }
   };
 
-  // ==================== FILTER & STATISTICS LOGIC ====================
-  const filteredData = attendanceData.filter(item => {
-    const d = new Date(item.date);
-    const recordDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const matchesDate = !filterDate || recordDate === filterDate;
-    const matchesCourse = filterCourse === "ALL" || item.course === filterCourse;
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = item.name.toLowerCase().includes(searchLower) || item.studentId.toLowerCase().includes(searchLower);
-    return matchesDate && matchesCourse && matchesSearch;
-  });
+  // FIX: Memoized filteredData so reportData's useMemo doesn't trigger on every render
+  const filteredData = useMemo(() => {
+    return attendanceData.filter(item => {
+      const d = new Date(item.date);
+      const recordDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const matchesDate = !filterDate || recordDate === filterDate;
+      const matchesCourse = filterCourse === "ALL" || item.course === filterCourse;
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = item.name.toLowerCase().includes(searchLower) || item.studentId.toLowerCase().includes(searchLower);
+      return matchesDate && matchesCourse && matchesSearch;
+    });
+  }, [attendanceData, filterDate, filterCourse, searchTerm]);
 
   const totalClasses = filteredData.length;
   const attendedClasses = filteredData.filter(r => r.status === "PRESENT" || r.status === "LATE").length;
@@ -266,7 +273,6 @@ export default function AttendanceLog() {
     showAlert("success", "CSV Report downloaded successfully!");
   };
 
-  // --- UPDATED PDF EXPORT FOR REPORT MODAL ---
   const downloadReportPDF = async () => {
     if (reportData.length === 0) return showAlert("error", "No data to download.");
 
@@ -674,9 +680,10 @@ export default function AttendanceLog() {
 
       {/* --- MODALS --- */}
 
-      {/* DETAILED REPORT MODAL - FIXED COLUMN ALIGNMENTS */}
+      {/* DETAILED REPORT MODAL */}
+      {/* FIX: Removed typo class "mar" from the modal backdrop wrapper */}
       {reportModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 mar">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
