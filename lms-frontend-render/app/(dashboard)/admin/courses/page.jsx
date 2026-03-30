@@ -174,9 +174,13 @@ export default function AdminCoursesPage() {
 
   // ── save ──────────────────────────────────────────────────────────────────
   function validate() {
+    if (!form.thumbnail_url) return "Course photo is required.";
     if (!form.title.trim()) return "Course title is required.";
+    if (!form.duration.trim()) return "Duration is required.";
     if (form.fee === "" || isNaN(form.fee) || parseFloat(form.fee) < 0)
       return "Please enter a valid price (0 or more).";
+    if (!form.teacher_id) return "Please assign a teacher.";
+    if (!form.description.trim()) return "Description is required.";
     return null;
   }
 
@@ -193,9 +197,9 @@ export default function AdminCoursesPage() {
           title:         form.title.trim(),
           description:   form.description.trim(),
           duration:      form.duration.trim(),
-          teacher_id:    form.teacher_id || null,
+          teacher_id:    form.teacher_id,
           fee:           parseFloat(form.fee),
-          thumbnail_url: form.thumbnail_url || null,
+          thumbnail_url: form.thumbnail_url,
         }),
       });
       const data = await res.json();
@@ -387,8 +391,16 @@ export default function AdminCoursesPage() {
             {/* Body */}
             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
+              {/* Validation error alert */}
+              {formErr && (
+                <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium">
+                  <X size={16} className="flex-shrink-0 text-red-500" />
+                  {formErr}
+                </div>
+              )}
+
               {/* Thumbnail upload */}
-              <FormLabel label="Course Photo" hint="optional · max 2 MB">
+              <FormLabel label="Course Photo" required hint="max 2 MB">
                 <div
                   onClick={() => fileRef.current?.click()}
                   className={`relative border-2 border-dashed rounded-xl cursor-pointer transition-all
@@ -438,7 +450,7 @@ export default function AdminCoursesPage() {
               </FormLabel>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormLabel label="Duration" hint="optional">
+                <FormLabel label="Duration" required>
                   <div className="relative">
                     <Clock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input value={form.duration} onChange={e => setF("duration", e.target.value)}
@@ -456,8 +468,7 @@ export default function AdminCoursesPage() {
                   </div>
                 </FormLabel>
               </div>
-
-              <FormLabel label="Assign Teacher" hint="optional">
+              <FormLabel label="Assign Teacher" required>
                 <div className="relative">
                   <GraduationCap size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <select value={form.teacher_id} onChange={e => setF("teacher_id", e.target.value)}
@@ -473,7 +484,7 @@ export default function AdminCoursesPage() {
                 </div>
               </FormLabel>
 
-              <FormLabel label="Description" hint="optional">
+              <FormLabel label="Description" required>
                 <textarea value={form.description} onChange={e => setF("description", e.target.value)}
                   placeholder="Describe what students will learn in this course…"
                   rows={3}
