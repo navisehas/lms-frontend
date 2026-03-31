@@ -14,11 +14,14 @@ const REPORT_API_PATH = `${API}/admin/course-report`;
 
 const EMPTY = { title: "", description: "", duration: "", teacher_id: "", fee: "", thumbnail_url: "" };
 
-// ── Generates a unique course ID: CRS-<timestamp>-<4 random hex chars> ──
-function generateCourseId() {
-  const ts  = Date.now().toString(36).toUpperCase();          // base-36 timestamp
-  const rnd = Math.random().toString(36).slice(2, 6).toUpperCase(); // 4 random chars
-  return `CRS-${ts}-${rnd}`;
+// ── Generates next sequential course ID matching the DB format: CRS-0001, CRS-0002 ──
+//    Finds the highest existing numeric suffix and increments by 1.
+function generateCourseId(existingCourses) {
+  const nums = (existingCourses || [])
+    .map(c => { const m = c.course_id?.match(/^CRS-(\d+)$/i); return m ? parseInt(m[1], 10) : null; })
+    .filter(n => n !== null);
+  if (nums.length > 0) return "CRS-" + String(Math.max(...nums) + 1).padStart(4, "0");
+  return "CRS-" + Date.now().toString().slice(-6); // fallback if no sequential IDs exist
 }
 
 // ── Label wrapper ──────────────────────────────────────────────────────────
@@ -214,7 +217,7 @@ export default function AdminCoursesPage() {
         thumbnail_url: form.thumbnail_url,
       };
       if (!isEdit) {
-        body.course_id = generateCourseId();
+        body.course_id = generateCourseId(courses);
       }
 
       const res  = await authFetch(url, {
