@@ -14,16 +14,6 @@ const REPORT_API_PATH = `${API}/admin/course-report`;
 
 const EMPTY = { title: "", description: "", duration: "", teacher_id: "", fee: "", thumbnail_url: "" };
 
-// ── Generates next sequential course ID matching the DB format: CRS-0001, CRS-0002 ──
-//    Finds the highest existing numeric suffix and increments by 1.
-function generateCourseId(existingCourses) {
-  const nums = (existingCourses || [])
-    .map(c => { const m = c.course_id?.match(/^CRS-(\d+)$/i); return m ? parseInt(m[1], 10) : null; })
-    .filter(n => n !== null);
-  if (nums.length > 0) return "CRS-" + String(Math.max(...nums) + 1).padStart(4, "0");
-  return "CRS-" + Date.now().toString().slice(-6); // fallback if no sequential IDs exist
-}
-
 // ── Label wrapper ──────────────────────────────────────────────────────────
 const FormLabel = ({ label, required, hint, children }) => (
   <div>
@@ -204,10 +194,6 @@ export default function AdminCoursesPage() {
       const isEdit = modal?.type === "edit";
       const url    = isEdit ? `${API}/courses/${modal.course_id}` : `${API}/courses`;
 
-      // ── FIX: Generate a guaranteed-unique course_id on the client for new courses.
-      //    The backend was producing duplicate keys (e.g. always "CRS001").
-      //    By generating the ID here with timestamp + random suffix, collisions are
-      //    effectively impossible even under rapid concurrent creates.
       const body = {
         title:         form.title.trim(),
         description:   form.description.trim(),
@@ -216,9 +202,7 @@ export default function AdminCoursesPage() {
         fee:           parseFloat(form.fee),
         thumbnail_url: form.thumbnail_url,
       };
-      if (!isEdit) {
-        body.course_id = generateCourseId(courses);
-      }
+
 
       const res  = await authFetch(url, {
         method: isEdit ? "PUT" : "POST",
