@@ -134,7 +134,7 @@ export default function AdminCoursesPage() {
   }
 
   // ── modal helpers ─────────────────────────────────────────────────────────
-  function openAdd() { setForm(EMPTY); setFormErr(""); setModal("add"); }
+  function openAdd() { setModal(null); setForm(EMPTY); setFormErr(""); setModal("add"); }
 
   function openEdit(c) {
     setForm({
@@ -185,22 +185,27 @@ export default function AdminCoursesPage() {
   }
 
   async function handleSave() {
+    if (saving) return;                            // prevent double-submission
     const e = validate();
     if (e) { setFormErr(e); return; }
     setSaving(true); setFormErr("");
     try {
-      const isEdit = modal?.type === "edit";
-      const url    = isEdit ? `${API}/courses/${modal.course_id}` : `${API}/courses`;
-      const res    = await authFetch(url, {
+      // Snapshot modal immediately — avoids stale closure if state changes mid-flight
+      const currentModal = modal;
+      const isEdit = currentModal?.type === "edit";
+      const url    = isEdit ? `${API}/courses/${currentModal.course_id}` : `${API}/courses`;
+      // IMPORTANT: Never send course_id in the POST body — let the DB generate it
+      const body = {
+        title:         form.title.trim(),
+        description:   form.description.trim(),
+        duration:      form.duration.trim(),
+        teacher_id:    form.teacher_id,
+        fee:           parseFloat(form.fee),
+        thumbnail_url: form.thumbnail_url,
+      };
+      const res = await authFetch(url, {
         method: isEdit ? "PUT" : "POST",
-        body: JSON.stringify({
-          title:         form.title.trim(),
-          description:   form.description.trim(),
-          duration:      form.duration.trim(),
-          teacher_id:    form.teacher_id,
-          fee:           parseFloat(form.fee),
-          thumbnail_url: form.thumbnail_url,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
