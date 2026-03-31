@@ -12,10 +12,16 @@ import { guardRoute, authFetch } from "@/lib/auth";
 const API = process.env.NEXT_PUBLIC_API_URL;
 const REPORT_API_PATH = `${API}/admin/course-report`;
 
-
 const EMPTY = { title: "", description: "", duration: "", teacher_id: "", fee: "", thumbnail_url: "" };
 
-// ── FIXED: Moved the Label Wrapper outside the component to prevent cursor jumping ──
+// ── Generates a unique course ID: CRS-<timestamp>-<4 random hex chars> ──
+function generateCourseId() {
+  const ts  = Date.now().toString(36).toUpperCase();          // base-36 timestamp
+  const rnd = Math.random().toString(36).slice(2, 6).toUpperCase(); // 4 random chars
+  return `CRS-${ts}-${rnd}`;
+}
+
+// ── Label wrapper ──────────────────────────────────────────────────────────
 const FormLabel = ({ label, required, hint, children }) => (
   <div>
     <label className="block text-sm font-semibold text-gray-700 mb-1.5">
@@ -98,12 +104,14 @@ export default function AdminCoursesPage() {
         return;
       }
 
-      const url = window.URL.createObjectURL(blob);
+      const url  = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      const disposition = res.headers.get("content-disposition") || "";
+      link.href  = url;
+      const disposition   = res.headers.get("content-disposition") || "";
       const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";\n]+)/i);
-      link.download = fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/\"/g, "")) : "course-report.pdf";
+      link.download = fileNameMatch
+        ? decodeURIComponent(fileNameMatch[1].replace(/\"/g, ""))
+        : "course-report.pdf";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -172,18 +180,19 @@ export default function AdminCoursesPage() {
     reader.readAsDataURL(file);
   }
 
-  // ── save ──────────────────────────────────────────────────────────────────
+  // ── validate ──────────────────────────────────────────────────────────────
   function validate() {
-    if (!form.thumbnail_url) return "Course photo is required.";
-    if (!form.title.trim()) return "Course title is required.";
-    if (!form.duration.trim()) return "Duration is required.";
+    if (!form.thumbnail_url)                                   return "Course photo is required.";
+    if (!form.title.trim())                                    return "Course title is required.";
+    if (!form.duration.trim())                                 return "Duration is required.";
     if (form.fee === "" || isNaN(form.fee) || parseFloat(form.fee) < 0)
-      return "Please enter a valid price (0 or more).";
-    if (!form.teacher_id) return "Please assign a teacher.";
-    if (!form.description.trim()) return "Description is required.";
+                                                               return "Please enter a valid price (0 or more).";
+    if (!form.teacher_id)                                      return "Please assign a teacher.";
+    if (!form.description.trim())                              return "Description is required.";
     return null;
   }
 
+  // ── save ──────────────────────────────────────────────────────────────────
   async function handleSave() {
     const e = validate();
     if (e) { setFormErr(e); return; }
@@ -191,27 +200,37 @@ export default function AdminCoursesPage() {
     try {
       const isEdit = modal?.type === "edit";
       const url    = isEdit ? `${API}/courses/${modal.course_id}` : `${API}/courses`;
-      const res    = await authFetch(url, {
+
+      // ── FIX: Generate a guaranteed-unique course_id on the client for new courses.
+      //    The backend was producing duplicate keys (e.g. always "CRS001").
+      //    By generating the ID here with timestamp + random suffix, collisions are
+      //    effectively impossible even under rapid concurrent creates.
+      const body = {
+        title:         form.title.trim(),
+        description:   form.description.trim(),
+        duration:      form.duration.trim(),
+        teacher_id:    form.teacher_id,
+        fee:           parseFloat(form.fee),
+        thumbnail_url: form.thumbnail_url,
+      };
+      if (!isEdit) {
+        body.course_id = generateCourseId();
+      }
+
+      const res  = await authFetch(url, {
         method: isEdit ? "PUT" : "POST",
-        body: JSON.stringify({
-          title:         form.title.trim(),
-          description:   form.description.trim(),
-          duration:      form.duration.trim(),
-          teacher_id:    form.teacher_id,
-          fee:           parseFloat(form.fee),
-          thumbnail_url: form.thumbnail_url,
-        }),
+        body:   JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
         closeModal();
-        flash(isEdit ? "Course updated!" : `Course created! (${data.course_id})`);
+        flash(isEdit ? "Course updated!" : `Course created! (${data.course_id || body.course_id})`);
         load();
       } else {
         setFormErr(data.error || "Failed to save.");
       }
     } catch { setFormErr("Network error. Please try again."); }
-    finally { setSaving(false); }
+    finally  { setSaving(false); }
   }
 
   // ── delete ────────────────────────────────────────────────────────────────
@@ -264,7 +283,8 @@ export default function AdminCoursesPage() {
           </button>
           <button onClick={handleGenerateReport} disabled={reporting}
             className="flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-60">
-            {reporting ? <Loader size={14} className="animate-spin" /> : <BookOpen size={14} />} {reporting ? "Generating..." : "Generate Report"}
+            {reporting ? <Loader size={14} className="animate-spin" /> : <BookOpen size={14} />}
+            {reporting ? "Generating..." : "Generate Report"}
           </button>
           <button onClick={openAdd}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition-all">
@@ -274,14 +294,23 @@ export default function AdminCoursesPage() {
       </div>
 
       {/* ── Alerts ── */}
-      {success && <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg px-4 py-3 mb-4 text-sm"><CheckCircle size={16} />{success}</div>}
+      {error   && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">
+          <X size={16} className="flex-shrink-0" />{error}
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg px-4 py-3 mb-4 text-sm">
+          <CheckCircle size={16} />{success}
+        </div>
+      )}
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
-          { label: "Total Courses",  val: stats.total,                               color: "text-blue-600",   bg: "bg-blue-50",   icon: <BookOpen size={18} /> },
-          { label: "Total Enrolled", val: stats.enrolled,                            color: "text-indigo-600", bg: "bg-indigo-50", icon: <Users size={18} /> },
-          { label: "Total Revenue",  val: `Rs. ${stats.revenue.toLocaleString()}`,   color: "text-blue-700",   bg: "bg-blue-100",  icon: <DollarSign size={18} /> },
+          { label: "Total Courses",  val: stats.total,                             color: "text-blue-600",   bg: "bg-blue-50",   icon: <BookOpen size={18} /> },
+          { label: "Total Enrolled", val: stats.enrolled,                          color: "text-indigo-600", bg: "bg-indigo-50", icon: <Users size={18} /> },
+          { label: "Total Revenue",  val: `Rs. ${stats.revenue.toLocaleString()}`, color: "text-blue-700",   bg: "bg-blue-100",  icon: <DollarSign size={18} /> },
         ].map((s, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
             <div className={`${s.color} ${s.bg} p-2 rounded-lg flex-shrink-0`}>{s.icon}</div>
@@ -468,12 +497,13 @@ export default function AdminCoursesPage() {
                   </div>
                 </FormLabel>
               </div>
+
               <FormLabel label="Assign Teacher" required>
                 <div className="relative">
                   <GraduationCap size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <select value={form.teacher_id} onChange={e => setF("teacher_id", e.target.value)}
                     className="w-full border border-gray-200 rounded-lg pl-8 pr-8 py-2.5 text-sm text-gray-900 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer">
-                    <option value="">— No teacher assigned —</option>
+                    <option value="">— Select a teacher —</option>
                     {teachers.map(t => (
                       <option key={t.user_id} value={t.user_id}>
                         {t.name}{t.specialization ? ` — ${t.specialization}` : ""}
