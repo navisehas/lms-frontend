@@ -10,7 +10,6 @@ import html2canvas from "html2canvas";
 import { authFetch } from "@/lib/auth";
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-
 export default function RegisterUser() {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState("STUDENT");
@@ -19,7 +18,7 @@ export default function RegisterUser() {
   const [formData, setFormData] = useState({
     name: "",
     phone_no: "",
-    gender: "", // Start empty to force user selection
+    gender: "", 
     birthday: "",
     address: "",
     profile_picture: "",
@@ -31,10 +30,10 @@ export default function RegisterUser() {
   const [errors, setErrors] = useState({});
   const cardRef = useRef(null);
 
-  // Get today's date in YYYY-MM-DD format based on local timezone
+  // Calculate the maximum allowed date (user must be at least 3 years old)
   const todayObj = new Date();
-  const maxDate = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
-
+  const minAgeDateObj = new Date(todayObj.getFullYear() - 3, todayObj.getMonth(), todayObj.getDate());
+  const maxDate = `${minAgeDateObj.getFullYear()}-${String(minAgeDateObj.getMonth() + 1).padStart(2, '0')}-${String(minAgeDateObj.getDate()).padStart(2, '0')}`;
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -67,11 +66,11 @@ export default function RegisterUser() {
     if (formData.phone_no.length !== 10) newErrors.phone_no = "Phone number must be exactly 10 digits";
     if (!formData.gender) newErrors.gender = "Gender is required";
     
-    // --- FIXED: Birthday Validation ---
+    // --- UPDATED: Birthday Validation for 3+ years old ---
     if (!formData.birthday) {
       newErrors.birthday = "Date of Birth is required";
-    } else if (formData.birthday >= maxDate) {
-      newErrors.birthday = "Date of Birth must be a date in the past";
+    } else if (formData.birthday > maxDate) {
+      newErrors.birthday = "User must be at least 3 years old to register";
     }
 
     if (!formData.address.trim()) newErrors.address = "Address is required";
