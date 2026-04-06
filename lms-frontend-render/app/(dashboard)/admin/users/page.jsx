@@ -35,9 +35,10 @@ export default function UserManagement() {
   const [deletingUser, setDeletingUser] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Get today's date in YYYY-MM-DD format based on local timezone
+  // Calculate the maximum allowed date (user must be at least 3 years old)
   const todayObj = new Date();
-  const maxDate = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+  const minAgeDateObj = new Date(todayObj.getFullYear() - 3, todayObj.getMonth(), todayObj.getDate());
+  const maxDate = `${minAgeDateObj.getFullYear()}-${String(minAgeDateObj.getMonth() + 1).padStart(2, '0')}-${String(minAgeDateObj.getDate()).padStart(2, '0')}`;
 
   useEffect(() => {
     fetchUsers();
@@ -80,8 +81,9 @@ export default function UserManagement() {
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     
-    if (editingUser.birthday && editingUser.birthday >= maxDate) {
-      alert("❌ Date of Birth must be a date in the past.");
+    // Validation for 3+ years old
+    if (editingUser.birthday && editingUser.birthday > maxDate) {
+      alert("❌ User must be at least 3 years old.");
       return;
     }
 
@@ -407,31 +409,28 @@ export default function UserManagement() {
 
       {/* --- EDIT MODAL --- */}
       {editingUser && (
-  <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-100 flex items-center justify-center p-4 ani">
-    
-    <form
-      onSubmit={handleUpdateUser}
-      className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200"
-    >
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-100 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleUpdateUser}
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200"
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <Edit size={20} className="text-blue-600" />
+                Edit User Profile
+              </h2>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="p-2 rounded-lg hover:bg-gray-200 transition"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
 
-      {/* Header */}
-      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-        <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-          <Edit size={20} className="text-blue-600" />
-          Edit User Profile
-        </h2>
-
-        <button
-          type="button"
-          onClick={() => setEditingUser(null)}
-          className="p-2 rounded-lg hover:bg-gray-200 transition"
-        >
-          <X size={20} className="text-gray-600" />
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="p-6 space-y-6 overflow-y-auto">
+            {/* Body */}
+            <div className="p-6 space-y-6 overflow-y-auto">
               
               {/* Profile Picture Upload */}
               <div className="flex flex-col items-center justify-center p-2 text-gray-700">
@@ -472,7 +471,6 @@ export default function UserManagement() {
                     value={toInputDate(editingUser.birthday)} 
                     onChange={(e) => setEditingUser({...editingUser, birthday: e.target.value})} 
                     className="w-full p-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-600" 
-                    
                   />
                 </div>
 
@@ -527,17 +525,14 @@ export default function UserManagement() {
 
               </div>
               <div className="flex flex-col sm:flex-row gap-3 p-5 border-t border-gray-100 bg-gray-50 shrink-0">
-              <button type="button" onClick={() => setEditingUser(null)} className="w-full sm:w-1/2 px-3 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 font-bold transition">
-                Cancel
-              </button>
-              <button type="submit" disabled={updating} className="w-full sm:w-1/2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold disabled:bg-blue-400 transition flex justify-center items-center">
-                {updating ? <><Loader size={16} className="animate-spin mr-2"/> Saving...</> : "Save Changes"}
-              </button>
+                <button type="button" onClick={() => setEditingUser(null)} className="w-full sm:w-1/2 px-3 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 font-bold transition">
+                  Cancel
+                </button>
+                <button type="submit" disabled={updating} className="w-full sm:w-1/2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold disabled:bg-blue-400 transition flex justify-center items-center">
+                  {updating ? <><Loader size={16} className="animate-spin mr-2"/> Saving...</> : "Save Changes"}
+                </button>
+              </div>
             </div>
-            </div>
-
-            
-
           </form>
         </div>
       )}
