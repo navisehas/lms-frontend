@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2, TrendingUp, TrendingDown, Users, Download, Loader2,
@@ -41,7 +41,6 @@ function LineChart({ months }) {
 
   const area = (key, color) => {
     if (n < 2) return null;
-    const p = sorted.map((m, i) => `${xOf(i)},${yOf(m[key])}`).join(" ");
     return (
       <path
         d={`M${xOf(0)},${PAD.top + iH} ${sorted.map((m, i) => `L${xOf(i)},${yOf(m[key])}`).join(" ")} L${xOf(n - 1)},${PAD.top + iH} Z`}
@@ -55,7 +54,6 @@ function LineChart({ months }) {
   return (
     <div className="relative w-full" style={{ paddingBottom: `${(H / W) * 100}%` }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" onMouseLeave={() => setHovered(null)}>
-        {/* Grid */}
         {yTicks.map((v, i) => (
           <g key={i}>
             <line x1={PAD.left} y1={yOf(v)} x2={W - PAD.right} y2={yOf(v)} stroke="#f3f4f6" strokeWidth="1" />
@@ -65,11 +63,9 @@ function LineChart({ months }) {
           </g>
         ))}
 
-        {/* Area fills */}
         {area("gross_total",     "#3b82f6")}
         {area("institute_income","#6366f1")}
 
-        {/* Lines */}
         {[
           { key: "gross_total",      color: "#3b82f6", dash: false },
           { key: "institute_income", color: "#6366f1", dash: false },
@@ -80,7 +76,6 @@ function LineChart({ months }) {
             strokeDasharray={dash ? "6,4" : undefined} />
         ))}
 
-        {/* X labels + hover zones + dots */}
         {sorted.map((m, i) => {
           const hov  = hovered === i;
           const tipX = Math.min(xOf(i) + 10, W - PAD.right - 158);
@@ -132,35 +127,7 @@ export default function AdminInstituteincomePage() {
   const [tab, setTab]             = useState("overview");
   const [expandedTeacher, setExpandedTeacher] = useState(null);
 
-  useEffect(() => {
-    const auth = guardRoute("ADMIN", router);
-    if (auth) fetchData();
-  }, [router]);
-
-  /* Auto-refresh on the 8th of every month */
-  useEffect(() => {
-    const now   = new Date();
-    const next8 = new Date(
-      now.getDate() >= 8 ? now.getFullYear() : now.getFullYear(),
-      now.getDate() >= 8 ? now.getMonth() + 1 : now.getMonth(),
-      8, 0, 0, 0
-    );
-    const t = setTimeout(() => fetchData(), next8.getTime() - now.getTime());
-    return () => clearTimeout(t);
-  }, [data]);
-
-  async function fetchData() {
-    setLoading(true); setError("");
-    try {
-      const res  = await authFetch(`${API}/income/admin/institute`);
-      const json = await res.json();
-      if (json.success) setData(json);
-      else setError(json.error || "Failed to load institute income.");
-    } catch { setError("Network error. Please try again."); }
-    finally  { setLoading(false); }
-  }
-
-  /* Derived state */
+  // ── Stable derived values (memoized so they never flicker) ──────────────
   const dataReady    = !loading && data !== null;
   const totals       = data?.totals   || {};
   const monthly      = data?.monthly  || [];
@@ -168,27 +135,37 @@ export default function AdminInstituteincomePage() {
   const institutePct = data?.institute_share_pct || 20;
   const teacherPct   = data?.teacher_share_pct   || 80;
 
-  const currentMonthKey = (() => {
+  // FIX 1: currentMonthKey computed once, stable — not recalculated on every render
+  const currentMonthKey = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  })();
-  const currentMonth = monthly.find(m => m.month_key === currentMonthKey) || null;
-  const currentLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+  }, []);
 
-  const bestMonth = monthly.length > 0
-    ? monthly.reduce((b, m) => m.institute_income > (b?.institute_income || 0) ? m : b, null)
-    : null;
+  const currentLabel = useMemo(() =>
+    new Date().toLocaleString("en-US", { month: "long", year: "numeric" })
+  , []);
 
-  /* Monthly History list: current month pinned first, then newest→oldest */
-  const monthlyForHistory = (() => {
+  // FIX 2: All derived data memoized — no recompute on unrelated state changes
+  const currentMonth = useMemo(
+    () => monthly.find(m => m.month_key === currentMonthKey) || null,
+    [monthly, currentMonthKey]
+  );
+
+  const bestMonth = useMemo(() =>
+    monthly.length > 0
+      ? monthly.reduce((b, m) => m.institute_income > (b?.institute_income || 0) ? m : b, null)
+      : null
+  , [monthly]);
+
+  const monthlyForHistory = useMemo(() => {
     const cur  = monthly.find(m => m.month_key === currentMonthKey);
     const rest = monthly
       .filter(m => m.month_key !== currentMonthKey)
       .sort((a, b) => b.month_key.localeCompare(a.month_key));
     return cur ? [cur, ...rest] : rest;
-  })();
+  }, [monthly, currentMonthKey]);
 
-  const nextRefreshLabel = (() => {
+  const nextRefreshLabel = useMemo(() => {
     const now  = new Date();
     const next = new Date(
       now.getDate() >= 8 ? now.getFullYear() : now.getFullYear(),
@@ -196,9 +173,43 @@ export default function AdminInstituteincomePage() {
       8
     );
     return next.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  })();
+  }, []);
 
-  /* Trend vs previous month */
+  // FIX 3: fetchData wrapped in useCallback so it's stable
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res  = await authFetch(`${API}/income/admin/institute`);
+      const json = await res.json();
+      if (json.success) setData(json);
+      else setError(json.error || "Failed to load institute income.");
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const auth = guardRoute("ADMIN", router);
+    if (auth) fetchData();
+  }, [router, fetchData]);
+
+  // FIX 4: Auto-refresh timer — depends only on fetchData (stable), NOT on data.
+  // Previously depending on [data] caused this effect to re-run every load → extra renders.
+  useEffect(() => {
+    const now   = new Date();
+    const next8 = new Date(
+      now.getDate() >= 8 ? now.getFullYear() : now.getFullYear(),
+      now.getDate() >= 8 ? now.getMonth() + 1 : now.getMonth(),
+      8, 0, 0, 0
+    );
+    const t = setTimeout(fetchData, next8.getTime() - now.getTime());
+    return () => clearTimeout(t);
+  }, [fetchData]); // ← was [data], caused re-run on every fetch
+
+  // ── Trend vs previous month ────────────────────────────────────────────
   function trendVs(key) {
     if (!currentMonth) return null;
     const prev = monthly
@@ -210,7 +221,7 @@ export default function AdminInstituteincomePage() {
     return { pct, up: diff >= 0 };
   }
 
-  /* Exports */
+  // ── Exports ───────────────────────────────────────────────────────────
   function exportMonthly() {
     setExporting(true);
     try {
@@ -284,7 +295,7 @@ export default function AdminInstituteincomePage() {
         </span>
       </div>
 
-      {/* Single loader — no partial renders */}
+      {/* Single loader */}
       {loading && (
         <div className="flex items-center justify-center py-32 text-gray-400 gap-3">
           <Loader2 size={24} className="animate-spin" />
@@ -292,7 +303,7 @@ export default function AdminInstituteincomePage() {
         </div>
       )}
 
-      {/* Tab bar — only when data ready */}
+      {/* Tab bar */}
       {dataReady && (
         <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
           {[
@@ -312,11 +323,12 @@ export default function AdminInstituteincomePage() {
 
       {/* ════════════════════════════════════════
           TAB: THIS MONTH
+          Shows current month data. If April has no payments yet,
+          cards show Rs. 0.00 stably (no blink) with a notice below.
       ════════════════════════════════════════ */}
       {dataReady && tab === "overview" && (
         <div className="space-y-6">
 
-          {/* Month header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <CalendarDays size={16} className="text-blue-700" />
@@ -328,20 +340,26 @@ export default function AdminInstituteincomePage() {
             </span>
           </div>
 
-          {/* Stat cards — always shown; dimmed + Rs 0.00 when no data */}
+          {/* FIX 5: Stat cards — values read from memoized currentMonth, no intermediate 0 flash */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { label: "Gross Revenue",                  valKey: "gross_total",      tKey: "gross_total",      fallback: "Rs. 0.00", iconBg: "bg-blue-50",   iconColor: "text-blue-700",   icon: <Receipt   size={22} /> },
-              { label: `Institute Income (${institutePct}%)`, valKey: "institute_income", tKey: "institute_income", fallback: "Rs. 0.00", iconBg: "bg-indigo-50", iconColor: "text-indigo-700", icon: <Building2 size={22} /> },
-              { label: `Teacher Payouts (${teacherPct}%)`,   valKey: "teacher_payouts",  tKey: "teacher_payouts",  fallback: "Rs. 0.00", iconBg: "bg-amber-50",  iconColor: "text-amber-700",  icon: <Wallet    size={22} /> },
-              { label: "Best Month Ever",                 valKey: null,              tKey: null,               fallback: "—",        iconBg: "bg-green-50",  iconColor: "text-green-700",  icon: <TrendingUp size={22} /> },
+              { label: "Gross Revenue",                  valKey: "gross_total",      tKey: "gross_total",      iconBg: "bg-blue-50",   iconColor: "text-blue-700",   icon: <Receipt   size={22} /> },
+              { label: `Institute Income (${institutePct}%)`, valKey: "institute_income", tKey: "institute_income", iconBg: "bg-indigo-50", iconColor: "text-indigo-700", icon: <Building2 size={22} /> },
+              { label: `Teacher Payouts (${teacherPct}%)`,   valKey: "teacher_payouts",  tKey: "teacher_payouts",  iconBg: "bg-amber-50",  iconColor: "text-amber-700",  icon: <Wallet    size={22} /> },
+              { label: "Best Month Ever",                 valKey: null,              tKey: null,               iconBg: "bg-green-50",  iconColor: "text-green-700",  icon: <TrendingUp size={22} /> },
             ].map((s, i) => {
-              const val   = s.valKey && currentMonth ? `Rs. ${fmt(currentMonth[s.valKey])}` : s.valKey ? s.fallback : (bestMonth ? `Rs. ${fmt(bestMonth.institute_income)}` : "—");
-              const sub   = i === 0 ? `${currentMonth?.payment_count || 0} payments this month`
-                          : i === 1 ? `${institutePct}% of gross revenue`
-                          : i === 2 ? `Across ${teachers.length} teacher(s)`
-                          : (bestMonth?.month_label || "No data yet");
+              // Read from memoized currentMonth — stable, no flicker
+              const val = s.valKey
+                ? (currentMonth ? `Rs. ${fmt(currentMonth[s.valKey])}` : "Rs. 0.00")
+                : (bestMonth ? `Rs. ${fmt(bestMonth.institute_income)}` : "—");
+
+              const sub = i === 0 ? `${currentMonth?.payment_count ?? 0} payments this month`
+                        : i === 1 ? `${institutePct}% of gross revenue`
+                        : i === 2 ? `Across ${teachers.length} teacher(s)`
+                        : (bestMonth?.month_label || "No data yet");
+
               const trend = s.tKey ? trendVs(s.tKey) : null;
+
               return (
                 <div key={i} className={`bg-white p-6 rounded-xl shadow-sm border flex items-center justify-between ${
                   !currentMonth && i < 3 ? "border-gray-100 opacity-70" : "border-gray-200"
@@ -365,7 +383,7 @@ export default function AdminInstituteincomePage() {
             })}
           </div>
 
-          {/* Split bar — only when current month has payments */}
+          {/* Split bar */}
           {currentMonth && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <p className="text-sm font-bold text-gray-900 mb-3">Revenue Split — {currentLabel}</p>
@@ -380,7 +398,7 @@ export default function AdminInstituteincomePage() {
             </div>
           )}
 
-          {/* Empty state notice */}
+          {/* Empty state — shown only after data is fully loaded (no blink) */}
           {!currentMonth && (
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
               <Info size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
@@ -405,7 +423,6 @@ export default function AdminInstituteincomePage() {
             </div>
           ) : (
             <>
-              {/* Line Chart */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <p className="text-sm font-bold text-gray-900">Income Trend</p>
@@ -418,7 +435,7 @@ export default function AdminInstituteincomePage() {
                 <LineChart months={monthly} />
               </div>
 
-              {/* Month cards: current pinned top */}
+              {/* FIX 6: monthlyForHistory is memoized — no re-sort on unrelated state changes */}
               <div className="space-y-3">
                 {monthlyForHistory.map((m, idx) => {
                   const isCurrent = m.month_key === currentMonthKey;
