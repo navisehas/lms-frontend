@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Building2, TrendingUp, Users, Download, Loader2,
+  Building2, TrendingUp, TrendingDown, Users, Download, Loader2,
   AlertCircle, RefreshCw, BarChart2, Receipt,
   Wallet, Info, CalendarDays, History, LayoutDashboard
 } from "lucide-react";
@@ -16,13 +16,120 @@ const fmt = (n) =>
     maximumFractionDigits: 2,
   });
 
+/* ────────────────────────────────────────────────────────────────
+   Inline SVG Line Chart (no extra dependencies)
+──────────────────────────────────────────────────────────────── */
+function LineChart({ months }) {
+  const [hovered, setHovered] = useState(null);
+  if (!months || months.length === 0) return null;
+
+  const W = 900, H = 200;
+  const PAD = { top: 20, right: 20, bottom: 44, left: 70 };
+  const iW  = W - PAD.left - PAD.right;
+  const iH  = H - PAD.top  - PAD.bottom;
+
+  const sorted = [...months].sort((a, b) => a.month_key.localeCompare(b.month_key));
+  const n      = sorted.length;
+
+  const allVals = sorted.flatMap(m => [m.gross_total, m.institute_income, m.teacher_payouts]);
+  const maxV    = Math.max(...allVals, 1);
+
+  const xOf = i => PAD.left + (n === 1 ? iW / 2 : (i / (n - 1)) * iW);
+  const yOf = v => PAD.top  + iH - (v / maxV) * iH;
+
+  const pts = (key) => sorted.map((m, i) => `${xOf(i)},${yOf(m[key])}`).join(" ");
+
+  const area = (key, color) => {
+    if (n < 2) return null;
+    const p = sorted.map((m, i) => `${xOf(i)},${yOf(m[key])}`).join(" ");
+    return (
+      <path
+        d={`M${xOf(0)},${PAD.top + iH} ${sorted.map((m, i) => `L${xOf(i)},${yOf(m[key])}`).join(" ")} L${xOf(n - 1)},${PAD.top + iH} Z`}
+        fill={color} fillOpacity="0.07"
+      />
+    );
+  };
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => maxV * f);
+
+  return (
+    <div className="relative w-full" style={{ paddingBottom: `${(H / W) * 100}%` }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" onMouseLeave={() => setHovered(null)}>
+        {/* Grid */}
+        {yTicks.map((v, i) => (
+          <g key={i}>
+            <line x1={PAD.left} y1={yOf(v)} x2={W - PAD.right} y2={yOf(v)} stroke="#f3f4f6" strokeWidth="1" />
+            <text x={PAD.left - 6} y={yOf(v) + 4} textAnchor="end" fontSize="9.5" fill="#9ca3af">
+              {v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}K` : v.toFixed(0)}
+            </text>
+          </g>
+        ))}
+
+        {/* Area fills */}
+        {area("gross_total",     "#3b82f6")}
+        {area("institute_income","#6366f1")}
+
+        {/* Lines */}
+        {[
+          { key: "gross_total",      color: "#3b82f6", dash: false },
+          { key: "institute_income", color: "#6366f1", dash: false },
+          { key: "teacher_payouts",  color: "#f59e0b", dash: true  },
+        ].map(({ key, color, dash }) => (
+          <polyline key={key} points={pts(key)} fill="none" stroke={color} strokeWidth="2.5"
+            strokeLinejoin="round" strokeLinecap="round"
+            strokeDasharray={dash ? "6,4" : undefined} />
+        ))}
+
+        {/* X labels + hover zones + dots */}
+        {sorted.map((m, i) => {
+          const hov  = hovered === i;
+          const tipX = Math.min(xOf(i) + 10, W - PAD.right - 158);
+          return (
+            <g key={m.month_key}>
+              <text x={xOf(i)} y={H - 6} textAnchor="middle" fontSize="9.5" fill="#9ca3af">
+                {m.month_label.slice(0, 3)} {m.month_label.slice(-4)}
+              </text>
+              <rect
+                x={xOf(i) - iW / n / 2} y={PAD.top} width={iW / n} height={iH}
+                fill="transparent" onMouseEnter={() => setHovered(i)}
+              />
+              {hov && <line x1={xOf(i)} y1={PAD.top} x2={xOf(i)} y2={PAD.top + iH} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="3,2" />}
+              {[
+                { key: "gross_total",      c: "#3b82f6" },
+                { key: "institute_income", c: "#6366f1" },
+                { key: "teacher_payouts",  c: "#f59e0b" },
+              ].map(({ key, c }) => (
+                <circle key={key} cx={xOf(i)} cy={yOf(m[key])} r={hov ? 5 : 3} fill={c} />
+              ))}
+              {hov && (
+                <g>
+                  <rect x={tipX} y={PAD.top + 2} width={156} height={70} rx="6"
+                    fill="white" stroke="#e5e7eb" strokeWidth="1"
+                    style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.09))" }} />
+                  <text x={tipX + 10} y={PAD.top + 17} fontSize="10" fontWeight="600" fill="#374151">{m.month_label}</text>
+                  <text x={tipX + 10} y={PAD.top + 31} fontSize="9.5" fill="#3b82f6">Gross: Rs. {fmt(m.gross_total)}</text>
+                  <text x={tipX + 10} y={PAD.top + 45} fontSize="9.5" fill="#6366f1">Institute: Rs. {fmt(m.institute_income)}</text>
+                  <text x={tipX + 10} y={PAD.top + 59} fontSize="9.5" fill="#f59e0b">Teachers: Rs. {fmt(m.teacher_payouts)}</text>
+                </g>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Main Page
+════════════════════════════════════════════════════════════════ */
 export default function AdminInstituteincomePage() {
   const router = useRouter();
   const [data, setData]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   const [exporting, setExporting] = useState(false);
-  const [tab, setTab]             = useState("overview"); // overview | monthly | teachers
+  const [tab, setTab]             = useState("overview");
   const [expandedTeacher, setExpandedTeacher] = useState(null);
 
   useEffect(() => {
@@ -30,22 +137,20 @@ export default function AdminInstituteincomePage() {
     if (auth) fetchData();
   }, [router]);
 
-  /* ── Auto-refresh on the 8th of every month ── */
+  /* Auto-refresh on the 8th of every month */
   useEffect(() => {
-    const now      = new Date();
-    const next8    = new Date(
+    const now   = new Date();
+    const next8 = new Date(
       now.getDate() >= 8 ? now.getFullYear() : now.getFullYear(),
       now.getDate() >= 8 ? now.getMonth() + 1 : now.getMonth(),
       8, 0, 0, 0
     );
-    const msUntil8 = next8.getTime() - now.getTime();
-    const timeout  = setTimeout(() => fetchData(), msUntil8);
-    return () => clearTimeout(timeout);
+    const t = setTimeout(() => fetchData(), next8.getTime() - now.getTime());
+    return () => clearTimeout(t);
   }, [data]);
 
   async function fetchData() {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const res  = await authFetch(`${API}/income/admin/institute`);
       const json = await res.json();
@@ -55,26 +160,34 @@ export default function AdminInstituteincomePage() {
     finally  { setLoading(false); }
   }
 
+  /* Derived state */
+  const dataReady    = !loading && data !== null;
   const totals       = data?.totals   || {};
   const monthly      = data?.monthly  || [];
   const teachers     = data?.teachers || [];
   const institutePct = data?.institute_share_pct || 20;
   const teacherPct   = data?.teacher_share_pct   || 80;
 
-  /* ── Current month ── */
   const currentMonthKey = (() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   })();
   const currentMonth = monthly.find(m => m.month_key === currentMonthKey) || null;
   const currentLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
-  // Last month with actual data (excluding current month)
-  const lastMonth    = monthly.find(m => m.month_key !== currentMonthKey) || null;
-  const bestMonth    = monthly.length > 0
-    ? monthly.reduce((best, m) => m.institute_income > (best?.institute_income || 0) ? m : best, null)
+
+  const bestMonth = monthly.length > 0
+    ? monthly.reduce((b, m) => m.institute_income > (b?.institute_income || 0) ? m : b, null)
     : null;
 
-  /* ── Next auto-refresh label ── */
+  /* Monthly History list: current month pinned first, then newest→oldest */
+  const monthlyForHistory = (() => {
+    const cur  = monthly.find(m => m.month_key === currentMonthKey);
+    const rest = monthly
+      .filter(m => m.month_key !== currentMonthKey)
+      .sort((a, b) => b.month_key.localeCompare(a.month_key));
+    return cur ? [cur, ...rest] : rest;
+  })();
+
   const nextRefreshLabel = (() => {
     const now  = new Date();
     const next = new Date(
@@ -85,37 +198,47 @@ export default function AdminInstituteincomePage() {
     return next.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
   })();
 
-  /* ── Exports ── */
+  /* Trend vs previous month */
+  function trendVs(key) {
+    if (!currentMonth) return null;
+    const prev = monthly
+      .filter(m => m.month_key < currentMonthKey)
+      .sort((a, b) => b.month_key.localeCompare(a.month_key))[0];
+    if (!prev) return null;
+    const diff = currentMonth[key] - prev[key];
+    const pct  = prev[key] > 0 ? (diff / prev[key]) * 100 : 0;
+    return { pct, up: diff >= 0 };
+  }
+
+  /* Exports */
   function exportMonthly() {
     setExporting(true);
     try {
-      const headers = ["Month", "Payments", "Gross Total (Rs.)", `Institute Income ${institutePct}% (Rs.)`, `Teacher Payouts ${teacherPct}% (Rs.)`];
+      const headers = ["Month","Payments","Gross Total (Rs.)",`Institute Income ${institutePct}% (Rs.)`,`Teacher Payouts ${teacherPct}% (Rs.)`];
       const rows    = monthly.map(m => [m.month_label, m.payment_count, m.gross_total.toFixed(2), m.institute_income.toFixed(2), m.teacher_payouts.toFixed(2)]);
-      const summary = [[], ["--- TOTALS ---"], ["All Time", totals.payment_count, totals.gross_total?.toFixed(2), totals.institute_income?.toFixed(2), totals.teacher_payouts?.toFixed(2)]];
-      const escape  = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-      const csv     = [...[headers, ...rows, ...summary].map(r => r.map(escape).join(","))].join("\n");
-      const blob    = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-      const url     = URL.createObjectURL(blob);
-      const a       = document.createElement("a");
-      a.href = url; a.download = `institute-income-${new Date().toISOString().slice(0, 10)}.csv`;
+      const summary = [[],["--- TOTALS ---"],["All Time", totals.payment_count, totals.gross_total?.toFixed(2), totals.institute_income?.toFixed(2), totals.teacher_payouts?.toFixed(2)]];
+      const esc = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+      const csv = [...[headers, ...rows, ...summary].map(r => r.map(esc).join(","))].join("\n");
+      const a   = Object.assign(document.createElement("a"), {
+        href: URL.createObjectURL(new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" })),
+        download: `institute-income-${new Date().toISOString().slice(0,10)}.csv`,
+      });
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     } finally { setTimeout(() => setExporting(false), 800); }
   }
 
   function exportTeachers() {
     setExporting(true);
     try {
-      const headers = ["Teacher", "Gross Total (Rs.)", `Teacher Payout ${teacherPct}% (Rs.)`, `Institute Share ${institutePct}% (Rs.)`, "Payments"];
+      const headers = ["Teacher",`Gross Total (Rs.)`,`Teacher Payout ${teacherPct}% (Rs.)`,`Institute Share ${institutePct}% (Rs.)`,"Payments"];
       const rows    = teachers.map(t => [t.teacher_name, t.gross_total.toFixed(2), t.teacher_payout.toFixed(2), t.institute_share.toFixed(2), t.payment_count]);
-      const escape  = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-      const csv     = [...[headers, ...rows].map(r => r.map(escape).join(","))].join("\n");
-      const blob    = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-      const url     = URL.createObjectURL(blob);
-      const a       = document.createElement("a");
-      a.href = url; a.download = `teacher-payouts-${new Date().toISOString().slice(0, 10)}.csv`;
+      const esc = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+      const csv = [...[headers, ...rows].map(r => r.map(esc).join(","))].join("\n");
+      const a   = Object.assign(document.createElement("a"), {
+        href: URL.createObjectURL(new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" })),
+        download: `teacher-payouts-${new Date().toISOString().slice(0,10)}.csv`,
+      });
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     } finally { setTimeout(() => setExporting(false), 800); }
   }
 
@@ -123,7 +246,7 @@ export default function AdminInstituteincomePage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -134,31 +257,24 @@ export default function AdminInstituteincomePage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition"
-          >
+          <button onClick={fetchData} className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition">
             <RefreshCw size={14} /> Refresh
           </button>
-          <button
-            onClick={tab === "teachers" ? exportTeachers : exportMonthly}
-            disabled={exporting || !data}
-            className="flex items-center gap-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 px-4 py-2 rounded-lg transition shadow-sm"
-          >
-            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            Export CSV
+          <button onClick={tab === "teachers" ? exportTeachers : exportMonthly} disabled={exporting || !data}
+            className="flex items-center gap-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 px-4 py-2 rounded-lg transition shadow-sm">
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Export CSV
           </button>
         </div>
       </div>
 
-      {/* ── Error ── */}
+      {/* Error */}
       {error && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
           <AlertCircle size={16} /> {error}
         </div>
       )}
 
-      {/* ── Policy banner ── */}
+      {/* Policy banner */}
       <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm">
         <Info size={16} className="text-blue-700 mt-0.5 flex-shrink-0" />
         <span className="text-blue-800">
@@ -168,32 +284,39 @@ export default function AdminInstituteincomePage() {
         </span>
       </div>
 
-      {/* ── Tab bar ── */}
-      <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
-        {[
-          { key: "overview", label: "This Month",      icon: <LayoutDashboard size={14} /> },
-          { key: "monthly",  label: "Monthly History", icon: <BarChart2 size={14} /> },
-          { key: "teachers", label: "Per-Teacher",     icon: <Users size={14} /> },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key ? "bg-blue-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
+      {/* Single loader — no partial renders */}
+      {loading && (
+        <div className="flex items-center justify-center py-32 text-gray-400 gap-3">
+          <Loader2 size={24} className="animate-spin" />
+          <span className="text-sm font-medium">Loading income data…</span>
+        </div>
+      )}
+
+      {/* Tab bar — only when data ready */}
+      {dataReady && (
+        <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
+          {[
+            { key: "overview", label: "This Month",      icon: <LayoutDashboard size={14} /> },
+            { key: "monthly",  label: "Monthly History", icon: <BarChart2 size={14} /> },
+            { key: "teachers", label: "Per-Teacher",     icon: <Users size={14} /> },
+          ].map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === t.key ? "bg-blue-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ════════════════════════════════════════
           TAB: THIS MONTH
       ════════════════════════════════════════ */}
-      {tab === "overview" && (
+      {dataReady && tab === "overview" && (
         <div className="space-y-6">
 
-          {/* ── Current month header ── */}
+          {/* Month header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <CalendarDays size={16} className="text-blue-700" />
@@ -205,66 +328,50 @@ export default function AdminInstituteincomePage() {
             </span>
           </div>
 
-          {/* ── Current month stat cards (always show — 0.00 if no data) ── */}
+          {/* Stat cards — always shown; dimmed + Rs 0.00 when no data */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              {
-                label: "Gross Revenue",
-                val:   currentMonth ? `Rs. ${fmt(currentMonth.gross_total)}` : "Rs. 0.00",
-                sub:   `${currentMonth?.payment_count || 0} payments this month`,
-                iconBg: "bg-blue-50", iconColor: "text-blue-700", icon: <Receipt size={22} />,
-              },
-              {
-                label: `Institute Income (${institutePct}%)`,
-                val:   currentMonth ? `Rs. ${fmt(currentMonth.institute_income)}` : "Rs. 0.00",
-                sub:   `${institutePct}% of gross revenue`,
-                iconBg: "bg-indigo-50", iconColor: "text-indigo-700", icon: <Building2 size={22} />,
-              },
-              {
-                label: `Teacher Payouts (${teacherPct}%)`,
-                val:   currentMonth ? `Rs. ${fmt(currentMonth.teacher_payouts)}` : "Rs. 0.00",
-                sub:   `Across ${teachers.length} teacher(s)`,
-                iconBg: "bg-amber-50", iconColor: "text-amber-700", icon: <Wallet size={22} />,
-              },
-              {
-                label: "Best Month Ever",
-                val:   bestMonth ? `Rs. ${fmt(bestMonth.institute_income)}` : "—",
-                sub:   bestMonth?.month_label || "No data yet",
-                iconBg: "bg-green-50", iconColor: "text-green-700", icon: <TrendingUp size={22} />,
-              },
-            ].map((s, i) => (
-              <div key={i} className={`bg-white p-6 rounded-xl shadow-sm border flex items-center justify-between ${
-                !loading && !currentMonth && i < 3 ? "border-gray-100 opacity-60" : "border-gray-200"
-              }`}>
-                <div className="min-w-0 mr-3">
-                  <p className="text-sm font-medium text-gray-500">{s.label}</p>
-                  <h3 className={`font-bold text-gray-900 mt-1 leading-tight break-all ${
-                    !loading && typeof s.val === "string" && s.val.length > 14 ? "text-lg" : "text-2xl"
-                  }`}>
-                    {loading
-                      ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" />
-                      : s.val}
-                  </h3>
-                  <span className="text-xs text-gray-400 mt-1 block">{s.sub}</span>
+              { label: "Gross Revenue",                  valKey: "gross_total",      tKey: "gross_total",      fallback: "Rs. 0.00", iconBg: "bg-blue-50",   iconColor: "text-blue-700",   icon: <Receipt   size={22} /> },
+              { label: `Institute Income (${institutePct}%)`, valKey: "institute_income", tKey: "institute_income", fallback: "Rs. 0.00", iconBg: "bg-indigo-50", iconColor: "text-indigo-700", icon: <Building2 size={22} /> },
+              { label: `Teacher Payouts (${teacherPct}%)`,   valKey: "teacher_payouts",  tKey: "teacher_payouts",  fallback: "Rs. 0.00", iconBg: "bg-amber-50",  iconColor: "text-amber-700",  icon: <Wallet    size={22} /> },
+              { label: "Best Month Ever",                 valKey: null,              tKey: null,               fallback: "—",        iconBg: "bg-green-50",  iconColor: "text-green-700",  icon: <TrendingUp size={22} /> },
+            ].map((s, i) => {
+              const val   = s.valKey && currentMonth ? `Rs. ${fmt(currentMonth[s.valKey])}` : s.valKey ? s.fallback : (bestMonth ? `Rs. ${fmt(bestMonth.institute_income)}` : "—");
+              const sub   = i === 0 ? `${currentMonth?.payment_count || 0} payments this month`
+                          : i === 1 ? `${institutePct}% of gross revenue`
+                          : i === 2 ? `Across ${teachers.length} teacher(s)`
+                          : (bestMonth?.month_label || "No data yet");
+              const trend = s.tKey ? trendVs(s.tKey) : null;
+              return (
+                <div key={i} className={`bg-white p-6 rounded-xl shadow-sm border flex items-center justify-between ${
+                  !currentMonth && i < 3 ? "border-gray-100 opacity-70" : "border-gray-200"
+                }`}>
+                  <div className="min-w-0 mr-3">
+                    <p className="text-sm font-medium text-gray-500">{s.label}</p>
+                    <h3 className={`font-bold text-gray-900 mt-1 leading-tight break-all ${val.length > 14 ? "text-lg" : "text-2xl"}`}>
+                      {val}
+                    </h3>
+                    <span className="text-xs text-gray-400 mt-0.5 block">{sub}</span>
+                    {trend && (
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold mt-1 ${trend.up ? "text-green-600" : "text-red-500"}`}>
+                        {trend.up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                        {trend.up ? "+" : ""}{trend.pct.toFixed(1)}% vs last month
+                      </span>
+                    )}
+                  </div>
+                  <div className={`p-3 ${s.iconBg} ${s.iconColor} rounded-full flex-shrink-0`}>{s.icon}</div>
                 </div>
-                <div className={`p-3 ${s.iconBg} ${s.iconColor} rounded-full flex-shrink-0`}>
-                  {s.icon}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* ── No payments notice + split bar ── */}
-          {!loading && currentMonth && (
+          {/* Split bar — only when current month has payments */}
+          {currentMonth && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <p className="text-sm font-bold text-gray-900 mb-3">Revenue Split — {currentLabel}</p>
               <div className="flex rounded-full overflow-hidden h-4 mb-2">
-                <div className="bg-blue-700 flex items-center justify-center text-[10px] font-bold text-white transition-all" style={{ width: `${institutePct}%` }}>
-                  {institutePct}%
-                </div>
-                <div className="bg-amber-400 flex items-center justify-center text-[10px] font-bold text-white transition-all" style={{ width: `${teacherPct}%` }}>
-                  {teacherPct}%
-                </div>
+                <div className="bg-blue-700 flex items-center justify-center text-[10px] font-bold text-white" style={{ width: `${institutePct}%` }}>{institutePct}%</div>
+                <div className="bg-amber-400 flex items-center justify-center text-[10px] font-bold text-white" style={{ width: `${teacherPct}%` }}>{teacherPct}%</div>
               </div>
               <div className="flex justify-between text-xs mt-1">
                 <span className="text-blue-700 font-semibold">Institute — Rs. {fmt(currentMonth.institute_income)}</span>
@@ -273,7 +380,8 @@ export default function AdminInstituteincomePage() {
             </div>
           )}
 
-          {!loading && !currentMonth && (
+          {/* Empty state notice */}
+          {!currentMonth && (
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
               <Info size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
               <span className="text-amber-800">
@@ -282,122 +390,116 @@ export default function AdminInstituteincomePage() {
               </span>
             </div>
           )}
-
-          {/* ── Last month summary (only when current month has no data) ── */}
-          {!loading && !currentMonth && lastMonth && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <History size={15} className="text-gray-400" />
-                <span className="text-sm font-bold text-gray-700">Last Month Summary</span>
-                <span className="text-xs font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{lastMonth.month_label}</span>
-              </div>
-
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-                {/* 3 summary stats */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400 mb-1">Gross Revenue</p>
-                    <p className="text-lg font-bold text-gray-800">Rs. {fmt(lastMonth.gross_total)}</p>
-                    <p className="text-xs text-gray-400">{lastMonth.payment_count} payment{lastMonth.payment_count !== 1 ? "s" : ""}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-blue-500 mb-1">Institute ({institutePct}%)</p>
-                    <p className="text-lg font-bold text-blue-700">Rs. {fmt(lastMonth.institute_income)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-amber-500 mb-1">Teacher Payouts ({teacherPct}%)</p>
-                    <p className="text-lg font-bold text-amber-700">Rs. {fmt(lastMonth.teacher_payouts)}</p>
-                  </div>
-                </div>
-
-                {/* Split bar */}
-                <div>
-                  <div className="flex rounded-full overflow-hidden h-3 mb-1">
-                    <div className="bg-blue-700 transition-all" style={{ width: `${institutePct}%` }} />
-                    <div className="bg-amber-400 transition-all" style={{ width: `${teacherPct}%` }} />
-                  </div>
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className="text-blue-700">Institute {institutePct}%</span>
-                    <span className="text-amber-600">Teachers {teacherPct}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       {/* ════════════════════════════════════════
           TAB: MONTHLY HISTORY
       ════════════════════════════════════════ */}
-      {tab === "monthly" && (
-        <div className="space-y-3">
-          {loading ? (
-            <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-              <Loader2 size={20} className="animate-spin" /> Loading monthly history…
-            </div>
-          ) : monthly.length === 0 ? (
+      {dataReady && tab === "monthly" && (
+        <div className="space-y-6">
+          {monthly.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <History size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">No history yet.</p>
             </div>
-          ) : monthly.map((m, idx) => {
-            const pct = (bestMonth && bestMonth.institute_income > 0) ? (m.institute_income / bestMonth.institute_income) * 100 : 0;
-            return (
-              <div key={m.month_key} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-gray-900 text-base">{m.month_label}</span>
-                      {idx === 0 && <span className="text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">Latest</span>}
-                      {bestMonth && m.month_key === bestMonth.month_key && (
-                        <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">Best Month</span>
+          ) : (
+            <>
+              {/* Line Chart */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <p className="text-sm font-bold text-gray-900">Income Trend</p>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-blue-500 rounded" />Gross</span>
+                    <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-indigo-500 rounded" />Institute</span>
+                    <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-amber-400 rounded" style={{ borderBottom: "2px dashed #f59e0b", background: "none", height: 0, width: 16 }} />Teachers</span>
+                  </div>
+                </div>
+                <LineChart months={monthly} />
+              </div>
+
+              {/* Month cards: current pinned top */}
+              <div className="space-y-3">
+                {monthlyForHistory.map((m, idx) => {
+                  const isCurrent = m.month_key === currentMonthKey;
+                  const pct = (bestMonth && bestMonth.institute_income > 0)
+                    ? Math.min((m.institute_income / bestMonth.institute_income) * 100, 100) : 0;
+                  const isLastMonth = !isCurrent && monthlyForHistory[0]?.month_key === currentMonthKey && idx === 1;
+
+                  return (
+                    <div key={m.month_key} className={`bg-white rounded-xl border shadow-sm p-5 ${
+                      isCurrent ? "border-blue-200 ring-1 ring-blue-100" : "border-gray-200"
+                    }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-gray-900 text-base">{m.month_label}</span>
+                            {isCurrent && <span className="text-xs font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full">Current Month</span>}
+                            {isLastMonth && <span className="text-xs font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Last Month</span>}
+                            {bestMonth && m.month_key === bestMonth.month_key && !isCurrent && (
+                              <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">Best Month</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {isCurrent && m.payment_count === 0
+                              ? "No payments yet this month"
+                              : `${m.payment_count} payment${m.payment_count !== 1 ? "s" : ""}`}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-4">
+                          <div className="text-center">
+                            <p className="text-xs text-gray-400">Gross Total</p>
+                            <p className="text-base font-bold text-gray-700">Rs. {fmt(m.gross_total)}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-blue-500">Institute ({institutePct}%)</p>
+                            <p className="text-base font-bold text-blue-700">Rs. {fmt(m.institute_income)}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-amber-500">Teacher Payouts ({teacherPct}%)</p>
+                            <p className="text-base font-bold text-amber-700">Rs. {fmt(m.teacher_payouts)}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex rounded-full overflow-hidden h-3 mb-1">
+                        <div className="bg-blue-700" style={{ width: `${institutePct}%` }} />
+                        <div className="bg-amber-400" style={{ width: `${teacherPct}%` }} />
+                      </div>
+                      <div className="flex justify-between text-xs mb-3">
+                        <span className="text-blue-700">Institute {institutePct}%</span>
+                        <span className="text-amber-600">Teachers {teacherPct}%</span>
+                      </div>
+
+                      {isCurrent && m.payment_count === 0 ? (
+                        <div className="pt-2 border-t border-gray-100">
+                          <p className="text-xs text-amber-500 flex items-center gap-1">
+                            <Info size={11} /> Waiting for first payment this month
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="pt-2 border-t border-gray-100">
+                          <div className="w-full bg-gray-100 rounded-full h-1.5">
+                            <div className="bg-blue-700 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">{pct.toFixed(0)}% of best month</p>
+                        </div>
                       )}
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">{m.payment_count} payment{m.payment_count !== 1 ? "s" : ""}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-4">
-                    <div className="text-center">
-                      <p className="text-xs text-gray-400">Gross Total</p>
-                      <p className="text-base font-bold text-gray-700">Rs. {fmt(m.gross_total)}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-blue-500">Institute ({institutePct}%)</p>
-                      <p className="text-base font-bold text-blue-700">Rs. {fmt(m.institute_income)}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-amber-500">Teacher Payouts ({teacherPct}%)</p>
-                      <p className="text-base font-bold text-amber-700">Rs. {fmt(m.teacher_payouts)}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex rounded-full overflow-hidden h-3 mb-1">
-                  <div className="bg-blue-700 transition-all" style={{ width: `${institutePct}%` }} />
-                  <div className="bg-amber-400 transition-all" style={{ width: `${teacherPct}%` }} />
-                </div>
-                <div className="flex justify-between text-xs mb-3">
-                  <span className="text-blue-700">Institute {institutePct}%</span>
-                  <span className="text-amber-600">Teachers {teacherPct}%</span>
-                </div>
-                <div className="pt-2 border-t border-gray-100">
-                  <div className="w-full bg-gray-100 rounded-full h-1.5">
-                    <div className="bg-blue-700 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">{pct.toFixed(0)}% of best month</p>
-                </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </>
+          )}
         </div>
       )}
 
       {/* ════════════════════════════════════════
           TAB: PER-TEACHER
       ════════════════════════════════════════ */}
-      {tab === "teachers" && (
+      {dataReady && tab === "teachers" && (
         <div className="space-y-4">
 
-          {/* Current month label */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <CalendarDays size={15} className="text-blue-700" />
@@ -409,32 +511,21 @@ export default function AdminInstituteincomePage() {
             </span>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-              <Loader2 size={20} className="animate-spin" /> Loading teacher data…
-            </div>
-          ) : teachers.length === 0 ? (
+          {teachers.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <Users size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">No teacher payout data yet.</p>
             </div>
           ) : teachers.map(t => {
-            const isExpanded = expandedTeacher === t.teacher_id;
-
-            // Current month data for this teacher
+            const isExpanded       = expandedTeacher === t.teacher_id;
             const currentMonthData = t.monthly?.find(m => m.month_key === currentMonthKey) || null;
-
-            // Past months only (exclude current month from history)
-            const historyMonths = t.monthly?.filter(m => m.month_key !== currentMonthKey) || [];
-
-            const topMonth = t.monthly?.length > 0
-              ? t.monthly.reduce((best, m) => m.teacher_payout > (best?.teacher_payout || 0) ? m : best, null)
+            const historyMonths    = (t.monthly || []).filter(m => m.month_key !== currentMonthKey);
+            const topMonth         = t.monthly?.length > 0
+              ? t.monthly.reduce((b, m) => m.teacher_payout > (b?.teacher_payout || 0) ? m : b, null)
               : null;
 
             return (
               <div key={t.teacher_id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-
-                {/* ── Teacher name + current month stats ── */}
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -454,7 +545,6 @@ export default function AdminInstituteincomePage() {
                     )}
                   </div>
 
-                  {/* Current month 3 stat mini-cards */}
                   {currentMonthData ? (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
@@ -477,7 +567,6 @@ export default function AdminInstituteincomePage() {
                   )}
                 </div>
 
-                {/* ── Show history toggle button ── */}
                 {historyMonths.length > 0 && (
                   <div
                     className="flex items-center justify-between px-5 py-3 border-t border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
@@ -495,40 +584,37 @@ export default function AdminInstituteincomePage() {
                   </div>
                 )}
 
-                {/* ── Expandable monthly history table ── */}
                 {isExpanded && historyMonths.length > 0 && (
-                  <div className="border-t border-gray-100 px-5 pb-5 pt-3">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-100">
-                            {["Month", "Payments", "Gross", "Teacher Payout", "Institute Share"].map(h => (
-                              <th key={h} className="text-left text-xs font-semibold text-gray-400 py-2 pr-6 whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {historyMonths.map(m => (
-                            <tr key={m.month_key} className="hover:bg-gray-50">
-                              <td className="py-2.5 pr-6 font-medium text-gray-700 whitespace-nowrap">{m.month_label}</td>
-                              <td className="py-2.5 pr-6 text-gray-500">{m.payment_count}</td>
-                              <td className="py-2.5 pr-6 text-gray-600">Rs. {fmt(m.gross_total)}</td>
-                              <td className="py-2.5 pr-6 font-bold text-amber-700">Rs. {fmt(m.teacher_payout)}</td>
-                              <td className="py-2.5 pr-6 font-bold text-blue-700">Rs. {fmt(m.institute_share)}</td>
-                            </tr>
+                  <div className="border-t border-gray-100 px-5 pb-5 pt-3 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          {["Month","Payments","Gross","Teacher Payout","Institute Share"].map(h => (
+                            <th key={h} className="text-left text-xs font-semibold text-gray-400 py-2 pr-6 whitespace-nowrap">{h}</th>
                           ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 border-gray-200 font-bold bg-gray-50">
-                            <td className="py-2.5 pr-6 text-gray-700">All Time Total</td>
-                            <td className="py-2.5 pr-6 text-gray-600">{t.payment_count}</td>
-                            <td className="py-2.5 pr-6 text-gray-700">Rs. {fmt(t.gross_total)}</td>
-                            <td className="py-2.5 pr-6 text-amber-700">Rs. {fmt(t.teacher_payout)}</td>
-                            <td className="py-2.5 pr-6 text-blue-700">Rs. {fmt(t.institute_share)}</td>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {historyMonths.map(m => (
+                          <tr key={m.month_key} className="hover:bg-gray-50">
+                            <td className="py-2.5 pr-6 font-medium text-gray-700 whitespace-nowrap">{m.month_label}</td>
+                            <td className="py-2.5 pr-6 text-gray-500">{m.payment_count}</td>
+                            <td className="py-2.5 pr-6 text-gray-600">Rs. {fmt(m.gross_total)}</td>
+                            <td className="py-2.5 pr-6 font-bold text-amber-700">Rs. {fmt(m.teacher_payout)}</td>
+                            <td className="py-2.5 pr-6 font-bold text-blue-700">Rs. {fmt(m.institute_share)}</td>
                           </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-200 font-bold bg-gray-50">
+                          <td className="py-2.5 pr-6 text-gray-700">All Time Total</td>
+                          <td className="py-2.5 pr-6 text-gray-600">{t.payment_count}</td>
+                          <td className="py-2.5 pr-6 text-gray-700">Rs. {fmt(t.gross_total)}</td>
+                          <td className="py-2.5 pr-6 text-amber-700">Rs. {fmt(t.teacher_payout)}</td>
+                          <td className="py-2.5 pr-6 text-blue-700">Rs. {fmt(t.institute_share)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 )}
               </div>
