@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   TrendingUp, DollarSign, Loader2, AlertCircle,
@@ -10,14 +10,12 @@ import { guardRoute, authFetch } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-/* Full formatted number */
 const fmt = (n) =>
   parseFloat(n || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
-/* Abbreviated — only when >= 1,000,000 */
 const fmtShort = (n) => {
   const v = parseFloat(n || 0);
   if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(2).replace(/\.?0+$/, "") + "B";
@@ -25,7 +23,6 @@ const fmtShort = (n) => {
   return fmt(v);
 };
 
-/* True only when value needs abbreviation (>= 1,000,000) */
 const needsAbbrev = (n) => parseFloat(n || 0) >= 1_000_000;
 
 function currentMonthKey() {
@@ -33,12 +30,7 @@ function currentMonthKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-/* ─── AmountDisplay ───────────────────────────────────────────────────────────
-   Used in stat cards and teacher payout summary.
-   - < 1M  : full number shown, no toggle, no below line
-   - >= 1M : abbreviated shown, full number below always visible,
-             clicking abbreviated also toggles to full inline
-*/
+/* ─── AmountDisplay ─────────────────────────────────────────────────────── */
 function AmountDisplay({
   value,
   prefix = "Rs. ",
@@ -51,71 +43,45 @@ function AmountDisplay({
   const bigText  = `${prefix}${fmtShort(num)}`;
   const fullText = `${prefix}${fmt(num)}`;
 
-  if (!abbrev) {
-    return <p className={bigClass}>{fullText}</p>;
-  }
+  if (!abbrev) return <p className={bigClass}>{fullText}</p>;
 
   return (
     <div>
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        title="Click to toggle full number"
-        className="text-left focus:outline-none group"
-      >
+      <button onClick={() => setExpanded((e) => !e)} title="Click to toggle full number" className="text-left focus:outline-none group">
         <p className={`${bigClass} group-hover:opacity-80 transition-opacity`}>
           {expanded ? fullText : bigText}
-          <span className="ml-1 text-xs font-normal opacity-50">
-            {expanded ? "▲" : "▼"}
-          </span>
+          <span className="ml-1 text-xs font-normal opacity-50">{expanded ? "▲" : "▼"}</span>
         </p>
       </button>
-      {/* Always-visible full number below when not expanded */}
-      {!expanded && (
-        <p className={fullClass}>{fullText}</p>
-      )}
+      {!expanded && <p className={fullClass}>{fullText}</p>}
     </div>
   );
 }
 
-/* ─── HighlightAmount ─────────────────────────────────────────────────────────
-   Same logic but styled for the blue highlight section (white text)
-*/
+/* ─── HighlightAmount ────────────────────────────────────────────────────── */
 function HighlightAmount({ value }) {
   const [expanded, setExpanded] = useState(false);
   const num = parseFloat(value || 0);
   const abbrev = needsAbbrev(num);
-  const fullText = `Rs. ${fmt(num)}`;
+  const fullText  = `Rs. ${fmt(num)}`;
   const shortText = `Rs. ${fmtShort(num)}`;
 
-  if (!abbrev) {
-    return <p className="text-xl font-bold leading-tight">{fullText}</p>;
-  }
+  if (!abbrev) return <p className="text-xl font-bold leading-tight">{fullText}</p>;
 
   return (
     <div>
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        title="Click to toggle full number"
-        className="text-left focus:outline-none group"
-      >
+      <button onClick={() => setExpanded((e) => !e)} title="Click to toggle full number" className="text-left focus:outline-none group">
         <p className="text-xl font-bold leading-tight group-hover:text-blue-200 transition-colors">
           {expanded ? fullText : shortText}
-          <span className="ml-1 text-xs font-normal text-blue-300 opacity-70">
-            {expanded ? "▲" : "▼"}
-          </span>
+          <span className="ml-1 text-xs font-normal text-blue-300 opacity-70">{expanded ? "▲" : "▼"}</span>
         </p>
       </button>
-      {!expanded && (
-        <p className="text-xs text-blue-300 mt-0.5">{fullText}</p>
-      )}
+      {!expanded && <p className="text-xs text-blue-300 mt-0.5">{fullText}</p>}
     </div>
   );
 }
 
-/* ─── TableAmount ─────────────────────────────────────────────────────────────
-   Used inside tables and teacher rows.
-   Same toggle behaviour, smaller text sizes.
-*/
+/* ─── TableAmount ────────────────────────────────────────────────────────── */
 function TableAmount({ value, colorClass = "text-gray-700", dimClass = "text-gray-400" }) {
   const [expanded, setExpanded] = useState(false);
   const num = parseFloat(value || 0);
@@ -123,89 +89,125 @@ function TableAmount({ value, colorClass = "text-gray-700", dimClass = "text-gra
   const fullText  = `Rs. ${fmt(num)}`;
   const shortText = `Rs. ${fmtShort(num)}`;
 
-  if (!abbrev) {
-    return <span className={colorClass}>{fullText}</span>;
-  }
+  if (!abbrev) return <span className={colorClass}>{fullText}</span>;
 
   return (
     <span>
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        title="Click to toggle full number"
-        className="text-right focus:outline-none"
-      >
+      <button onClick={() => setExpanded((e) => !e)} title="Click to toggle full number" className="text-right focus:outline-none">
         <span className={`${colorClass} hover:underline cursor-pointer`}>
           {expanded ? fullText : shortText}
-          <span className={`ml-0.5 text-xs opacity-50 ${dimClass}`}>
-            {expanded ? "▲" : "▼"}
-          </span>
+          <span className={`ml-0.5 text-xs opacity-50 ${dimClass}`}>{expanded ? "▲" : "▼"}</span>
         </span>
       </button>
-      {!expanded && (
-        <span className={`block text-xs font-normal ${dimClass}`}>{fullText}</span>
-      )}
+      {!expanded && <span className={`block text-xs font-normal ${dimClass}`}>{fullText}</span>}
     </span>
   );
 }
 
-/* ─── Sparkline chart ─────────────────────────────────────────────────────── */
-function MiniLineChart({ data, color }) {
-  if (!data || data.length < 2)
+/* ─── Chart.js Line Chart ────────────────────────────────────────────────── */
+function LineChart({ datasets, labels }) {
+  const canvasRef = useRef(null);
+  const chartRef  = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const init = () => {
+      if (!canvasRef.current) return;
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+      const Chart = window.Chart;
+      if (!Chart) return;
+
+      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const gridColor  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+      const tickColor  = isDark ? "#9ca3af" : "#6b7280";
+
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "line",
+        data: {
+          labels,
+          datasets: datasets.map((ds) => ({
+            label:           ds.label,
+            data:            ds.data,
+            borderColor:     ds.color,
+            backgroundColor: ds.color + "18",
+            borderWidth:     2,
+            pointRadius:     4,
+            pointHoverRadius:6,
+            pointBackgroundColor: ds.color,
+            pointBorderColor:     "#fff",
+            pointBorderWidth:     1.5,
+            fill:            true,
+            tension:         0.35,
+          })),
+        },
+        options: {
+          responsive:          true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: isDark ? "#1f2937" : "#fff",
+              borderColor:     isDark ? "#374151" : "#e5e7eb",
+              borderWidth:     1,
+              titleColor:      isDark ? "#f9fafb" : "#111827",
+              bodyColor:       isDark ? "#d1d5db" : "#374151",
+              padding:         10,
+              callbacks: {
+                label: (ctx) =>
+                  ` ${ctx.dataset.label}: Rs. ${fmt(ctx.parsed.y)}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid:  { color: gridColor },
+              ticks: { color: tickColor, font: { size: 11 }, autoSkip: false, maxRotation: 45 },
+            },
+            y: {
+              grid:  { color: gridColor },
+              ticks: {
+                color: tickColor,
+                font:  { size: 11 },
+                callback: (v) => "Rs. " + fmtShort(v),
+              },
+              beginAtZero: true,
+            },
+          },
+        },
+      });
+    };
+
+    /* Load Chart.js once */
+    if (window.Chart) {
+      init();
+    } else {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
+      s.onload = init;
+      document.head.appendChild(s);
+    }
+
+    return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
+  }, [datasets, labels]);
+
+  if (!labels || labels.length < 2)
     return (
-      <div className="flex items-center justify-center h-16 text-xs text-gray-300">
+      <div className="flex items-center justify-center h-48 text-xs text-gray-300">
         Not enough data
       </div>
     );
 
-  const W = 300, H = 70, PX = 4, PY = 6;
-  const iW = W - PX * 2, iH = H - PY * 2 - 12;
-  const vals = data.map((d) => d.value);
-  const maxV = Math.max(...vals, 1);
-
-  const pts = data.map((d, i) => ({
-    x: PX + (i / (data.length - 1)) * iW,
-    y: PY + iH - (d.value / maxV) * iH,
-    label: d.label,
-  }));
-
-  const linePath = pts
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-    .join(" ");
-  const areaPath =
-    linePath +
-    ` L${pts[pts.length - 1].x.toFixed(1)},${(PY + iH).toFixed(1)} L${pts[0].x.toFixed(1)},${(PY + iH).toFixed(1)} Z`;
-  const gradId = `g${color.replace("#", "")}`;
-
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 70 }}>
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#${gradId})`} />
-      <path
-        d={linePath}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {pts.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r="3" fill={color} stroke="white" strokeWidth="1.5" />
-          <text x={p.x} y={H - 1} textAnchor="middle" fontSize="8" fill="#9ca3af">
-            {p.label}
-          </text>
-        </g>
-      ))}
-    </svg>
+    <div style={{ position: "relative", height: 220 }}>
+      <canvas ref={canvasRef} role="img" aria-label="Monthly revenue line chart" />
+    </div>
   );
 }
 
-/* ─── Stat card ───────────────────────────────────────────────────────────── */
+/* ─── Stat card ──────────────────────────────────────────────────────────── */
 function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, iconBg, iconColor, loading }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between gap-3">
@@ -234,7 +236,7 @@ function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, ic
   );
 }
 
-/* ─── Teacher row ─────────────────────────────────────────────────────────── */
+/* ─── Teacher row ────────────────────────────────────────────────────────── */
 function TeacherRow({ t, allMonthKeys }) {
   const [open, setOpen] = useState(false);
 
@@ -259,21 +261,11 @@ function TeacherRow({ t, allMonthKeys }) {
           <p className="text-sm font-semibold text-gray-900 truncate">{t.teacher_name}</p>
           <p className="text-xs text-gray-400">{t.payment_count} payments</p>
         </div>
-        <div
-          className="text-right flex-shrink-0 mr-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <TableAmount
-            value={t.teacher_payout}
-            colorClass="text-amber-600 text-sm font-bold"
-            dimClass="text-amber-400"
-          />
+        <div className="text-right flex-shrink-0 mr-2" onClick={(e) => e.stopPropagation()}>
+          <TableAmount value={t.teacher_payout} colorClass="text-amber-600 text-sm font-bold" dimClass="text-amber-400" />
           <p className="text-xs text-gray-400 mt-0.5">Total payout</p>
         </div>
-        {open
-          ? <ChevronUp size={14} className="text-gray-400 flex-shrink-0" />
-          : <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
-        }
+        {open ? <ChevronUp size={14} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />}
       </button>
 
       {open && (
@@ -293,33 +285,22 @@ function TeacherRow({ t, allMonthKeys }) {
                   const m = monthlyMap[mk];
                   const isCurrent = mk === curKey;
                   return (
-                    <tr
-                      key={mk}
-                      className={`border-b border-gray-50 last:border-0 ${isCurrent ? "bg-blue-50" : ""}`}
-                    >
+                    <tr key={mk} className={`border-b border-gray-50 last:border-0 ${isCurrent ? "bg-blue-50" : ""}`}>
                       <td className="px-3 py-2">
                         <span className={`font-medium ${isCurrent ? "text-blue-700" : "text-gray-700"}`}>
                           {m?.month_label || mk}
                           {isCurrent && (
-                            <span className="ml-1 text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full">
-                              Now
-                            </span>
+                            <span className="ml-1 text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full">Now</span>
                           )}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {m
-                          ? <TableAmount value={m.gross_total} colorClass="text-gray-600" dimClass="text-gray-400" />
-                          : "—"}
+                        {m ? <TableAmount value={m.gross_total} colorClass="text-gray-600" dimClass="text-gray-400" /> : "—"}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {m
-                          ? <TableAmount value={m.teacher_payout} colorClass="text-amber-600 font-semibold" dimClass="text-amber-400" />
-                          : "—"}
+                        {m ? <TableAmount value={m.teacher_payout} colorClass="text-amber-600 font-semibold" dimClass="text-amber-400" /> : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right text-gray-500">
-                        {m ? m.payment_count : "—"}
-                      </td>
+                      <td className="px-3 py-2 text-right text-gray-500">{m ? m.payment_count : "—"}</td>
                     </tr>
                   );
                 })}
@@ -332,7 +313,7 @@ function TeacherRow({ t, allMonthKeys }) {
   );
 }
 
-/* ─── Page ────────────────────────────────────────────────────────────────── */
+/* ─── Page ───────────────────────────────────────────────────────────────── */
 export default function AdminIncomePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -398,9 +379,29 @@ export default function AdminIncomePage() {
     [data]
   );
 
-  const grossChart = sortedAsc.map((m) => ({ label: m.month_key.slice(5), value: parseFloat(m.gross_total || 0) }));
-  const instChart  = sortedAsc.map((m) => ({ label: m.month_key.slice(5), value: parseFloat(m.institute_income || 0) }));
-  const tchrChart  = sortedAsc.map((m) => ({ label: m.month_key.slice(5), value: parseFloat(m.teacher_payouts || 0) }));
+  /* Chart.js data */
+  const chartLabels   = sortedAsc.map((m) => m.month_key.slice(5));
+  const combinedChartDatasets = [
+    {
+      label: "Gross Revenue",
+      data:  sortedAsc.map((m) => parseFloat(m.gross_total   || 0)),
+      color: "#16a34a",
+    },
+    {
+      label: "Institute Income",
+      data:  sortedAsc.map((m) => parseFloat(m.institute_income || 0)),
+      color: "#1d4ed8",
+    },
+    {
+      label: "Teacher Payouts",
+      data:  sortedAsc.map((m) => parseFloat(m.teacher_payouts  || 0)),
+      color: "#d97706",
+    },
+  ];
+
+  const grossDatasets = [{ label: "Gross Revenue",   data: sortedAsc.map((m) => parseFloat(m.gross_total      || 0)), color: "#16a34a" }];
+  const instDatasets  = [{ label: "Institute Income", data: sortedAsc.map((m) => parseFloat(m.institute_income || 0)), color: "#1d4ed8" }];
+  const tchrDatasets  = [{ label: "Teacher Payouts",  data: sortedAsc.map((m) => parseFloat(m.teacher_payouts  || 0)), color: "#d97706" }];
 
   const now = new Date();
   const currentMonthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
@@ -436,12 +437,9 @@ export default function AdminIncomePage() {
       <div className="bg-blue-700 rounded-2xl p-5 text-white">
         <div className="flex items-center gap-2 mb-4">
           <Calendar size={15} className="text-blue-200" />
-          <p className="text-sm font-semibold text-blue-100">
-            {currentMonthLabel} — Current Month
-          </p>
+          <p className="text-sm font-semibold text-blue-100">{currentMonthLabel} — Current Month</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Gross Revenue</p>
             {loading
@@ -452,7 +450,6 @@ export default function AdminIncomePage() {
               {growth !== null ? `${growth > 0 ? "+" : ""}${growth}% vs last month` : "—"}
             </p>
           </div>
-
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Institute Income</p>
             {loading
@@ -461,7 +458,6 @@ export default function AdminIncomePage() {
             }
             <p className="text-xs text-blue-300 mt-1">20% share</p>
           </div>
-
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Teacher Payouts</p>
             {loading
@@ -470,7 +466,6 @@ export default function AdminIncomePage() {
             }
             <p className="text-xs text-blue-300 mt-1">80% share</p>
           </div>
-
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Payments</p>
             {loading
@@ -479,52 +474,15 @@ export default function AdminIncomePage() {
             }
             <p className="text-xs text-blue-300 mt-1">this month</p>
           </div>
-
         </div>
       </div>
 
       {/* All-time Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Revenue"
-          rawValue={data?.totals?.gross_total}
-          prefix="Rs. "
-          sub="All time"
-          icon={<DollarSign size={18} />}
-          iconBg="bg-green-50"
-          iconColor="text-green-600"
-          loading={loading}
-        />
-        <StatCard
-          label="Institute Income"
-          rawValue={data?.totals?.institute_income}
-          prefix="Rs. "
-          sub="20% of revenue"
-          icon={<Building2 size={18} />}
-          iconBg="bg-blue-50"
-          iconColor="text-blue-700"
-          loading={loading}
-        />
-        <StatCard
-          label="Teacher Payouts"
-          rawValue={data?.totals?.teacher_payouts}
-          prefix="Rs. "
-          sub="80% to teachers"
-          icon={<GraduationCap size={18} />}
-          iconBg="bg-amber-50"
-          iconColor="text-amber-600"
-          loading={loading}
-        />
-        <StatCard
-          label="Total Payments"
-          rawValue={data?.totals?.payment_count ?? 0}
-          isCount
-          sub="All enrollments"
-          icon={<Users size={18} />}
-          iconBg="bg-purple-50"
-          iconColor="text-purple-600"
-          loading={loading}
-        />
+        <StatCard label="Total Revenue"    rawValue={data?.totals?.gross_total}      prefix="Rs. " sub="All time"         icon={<DollarSign size={18} />}    iconBg="bg-green-50"  iconColor="text-green-600"  loading={loading} />
+        <StatCard label="Institute Income" rawValue={data?.totals?.institute_income}  prefix="Rs. " sub="20% of revenue"   icon={<Building2 size={18} />}     iconBg="bg-blue-50"   iconColor="text-blue-700"   loading={loading} />
+        <StatCard label="Teacher Payouts"  rawValue={data?.totals?.teacher_payouts}   prefix="Rs. " sub="80% to teachers"  icon={<GraduationCap size={18} />} iconBg="bg-amber-50"  iconColor="text-amber-600"  loading={loading} />
+        <StatCard label="Total Payments"   rawValue={data?.totals?.payment_count ?? 0} isCount      sub="All enrollments"  icon={<Users size={18} />}         iconBg="bg-purple-50" iconColor="text-purple-600" loading={loading} />
       </div>
 
       {/* Tabs */}
@@ -537,9 +495,7 @@ export default function AdminIncomePage() {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-              tab === t.key
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+              tab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
           >
             {t.label}
@@ -557,17 +513,37 @@ export default function AdminIncomePage() {
 
         <div className="space-y-6">
 
-          {/* Charts */}
+          {/* Combined Chart */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-bold text-gray-900">Revenue Overview</p>
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                {combinedChartDatasets.map((ds) => (
+                  <span key={ds.label} className="flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: ds.color }} />
+                    {ds.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">All three revenue streams per month</p>
+            <LineChart datasets={combinedChartDatasets} labels={chartLabels} />
+          </div>
+
+          {/* Individual Charts */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { title: "Gross Revenue",         sub: "All payments collected monthly", data: grossChart, color: "#16a34a" },
-              { title: "Institute Income (20%)", sub: "Institute's monthly net share",  data: instChart,  color: "#1d4ed8" },
-              { title: "Teacher Payouts (80%)",  sub: "Monthly teacher disbursements",  data: tchrChart,  color: "#d97706" },
+              { title: "Gross Revenue",         sub: "All payments monthly",         datasets: grossDatasets, color: "#16a34a" },
+              { title: "Institute Income (20%)", sub: "Institute's monthly net share", datasets: instDatasets,  color: "#1d4ed8" },
+              { title: "Teacher Payouts (80%)",  sub: "Monthly teacher disbursements", datasets: tchrDatasets,  color: "#d97706" },
             ].map((c) => (
               <div key={c.title} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p className="text-sm font-bold text-gray-900">{c.title}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ background: c.color }} />
+                  <p className="text-sm font-bold text-gray-900">{c.title}</p>
+                </div>
                 <p className="text-xs text-gray-400 mb-3">{c.sub}</p>
-                <MiniLineChart data={c.data} color={c.color} />
+                <LineChart datasets={c.datasets} labels={chartLabels} />
               </div>
             ))}
           </div>
@@ -603,28 +579,18 @@ export default function AdminIncomePage() {
                 return (
                   <div
                     key={mk}
-                    className={`grid gap-2 px-5 py-3.5 border-b border-gray-100 last:border-0 items-center text-sm ${
-                      isCur ? "bg-blue-50" : "hover:bg-gray-50"
-                    }`}
+                    className={`grid gap-2 px-5 py-3.5 border-b border-gray-100 last:border-0 items-center text-sm ${isCur ? "bg-blue-50" : "hover:bg-gray-50"}`}
                     style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr 60px" }}
                   >
                     <span className={`font-semibold flex items-center gap-2 ${isCur ? "text-blue-700" : "text-gray-900"}`}>
                       {m.month_label}
                       {isCur && (
-                        <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
-                          Now
-                        </span>
+                        <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">Now</span>
                       )}
                     </span>
-                    <span>
-                      <TableAmount value={m.gross_total}      colorClass="text-green-700 font-semibold" dimClass="text-green-400" />
-                    </span>
-                    <span>
-                      <TableAmount value={m.institute_income} colorClass="text-blue-700 font-medium"    dimClass="text-blue-300"  />
-                    </span>
-                    <span>
-                      <TableAmount value={m.teacher_payouts}  colorClass="text-amber-600 font-medium"   dimClass="text-amber-400" />
-                    </span>
+                    <span><TableAmount value={m.gross_total}      colorClass="text-green-700 font-semibold" dimClass="text-green-400" /></span>
+                    <span><TableAmount value={m.institute_income} colorClass="text-blue-700 font-medium"    dimClass="text-blue-300"  /></span>
+                    <span><TableAmount value={m.teacher_payouts}  colorClass="text-amber-600 font-medium"   dimClass="text-amber-400" /></span>
                     <span className="text-right text-gray-500">{m.payment_count}</span>
                   </div>
                 );
@@ -635,8 +601,10 @@ export default function AdminIncomePage() {
 
       ) : (
 
-        /* Teacher Payouts Tab */
+        /* ─── Teacher Payouts Tab ────────────────────────────────────────── */
         <div className="space-y-4">
+
+          {/* Summary — 3 cards: Teachers count | Total Paid Out | This Month */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex flex-wrap gap-6">
             <div>
               <p className="text-xs text-amber-600 font-semibold">Total Teachers</p>
@@ -650,6 +618,7 @@ export default function AdminIncomePage() {
                 bigClass="text-xl font-bold text-amber-700 leading-tight"
                 fullClass="text-xs text-amber-500 mt-0.5"
               />
+              <p className="text-xs text-amber-500 mt-0.5">All time</p>
             </div>
             <div>
               <p className="text-xs text-amber-600 font-semibold">This Month</p>
@@ -659,6 +628,7 @@ export default function AdminIncomePage() {
                 bigClass="text-xl font-bold text-gray-900 leading-tight"
                 fullClass="text-xs text-gray-400 mt-0.5"
               />
+              <p className="text-xs text-gray-400 mt-0.5">{currentMonthLabel}</p>
             </div>
           </div>
 
@@ -672,9 +642,7 @@ export default function AdminIncomePage() {
               <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
                 <GraduationCap size={15} className="text-amber-600" />
                 <p className="font-bold text-gray-900 text-sm">All Teachers</p>
-                <span className="text-xs text-gray-400 ml-auto">
-                  Click a teacher to see monthly history
-                </span>
+                <span className="text-xs text-gray-400 ml-auto">Click a teacher to see monthly history</span>
               </div>
               {data.teachers.map((t) => (
                 <TeacherRow key={t.teacher_id} t={t} allMonthKeys={allMonthKeys} />
