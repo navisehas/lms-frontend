@@ -55,7 +55,6 @@ export default function AdminInstituteincomePage() {
     finally  { setLoading(false); }
   }
 
-  const dataReady    = !loading && data !== null;
   const totals       = data?.totals   || {};
   const monthly      = data?.monthly  || [];
   const teachers     = data?.teachers || [];
@@ -69,9 +68,11 @@ export default function AdminInstituteincomePage() {
   })();
   const currentMonth = monthly.find(m => m.month_key === currentMonthKey) || null;
   const currentLabel = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
-  const bestMonth    = monthly.reduce(
-    (best, m) => m.institute_income > (best?.institute_income || 0) ? m : best, null
-  );
+  // Last month with actual data (excluding current month)
+  const lastMonth    = monthly.find(m => m.month_key !== currentMonthKey) || null;
+  const bestMonth    = monthly.length > 0
+    ? monthly.reduce((best, m) => m.institute_income > (best?.institute_income || 0) ? m : best, null)
+    : null;
 
   /* ── Next auto-refresh label ── */
   const nextRefreshLabel = (() => {
@@ -167,42 +168,32 @@ export default function AdminInstituteincomePage() {
         </span>
       </div>
 
-      {/* ── Tab bar — only show when data is ready ── */}
-      {dataReady && (
-        <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
-          {[
-            { key: "overview", label: "This Month",      icon: <LayoutDashboard size={14} /> },
-            { key: "monthly",  label: "Monthly History", icon: <BarChart2 size={14} /> },
-            { key: "teachers", label: "Per-Teacher",     icon: <Users size={14} /> },
-          ].map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t.key ? "bg-blue-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {t.icon}{t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* ── Single central loader — no partial renders ── */}
-      {loading && (
-        <div className="flex items-center justify-center py-32 text-gray-400 gap-3">
-          <Loader2 size={24} className="animate-spin" />
-          <span className="text-sm font-medium">Loading income data…</span>
-        </div>
-      )}
+      {/* ── Tab bar ── */}
+      <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
+        {[
+          { key: "overview", label: "This Month",      icon: <LayoutDashboard size={14} /> },
+          { key: "monthly",  label: "Monthly History", icon: <BarChart2 size={14} /> },
+          { key: "teachers", label: "Per-Teacher",     icon: <Users size={14} /> },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === t.key ? "bg-blue-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t.icon}{t.label}
+          </button>
+        ))}
+      </div>
 
       {/* ════════════════════════════════════════
           TAB: THIS MONTH
       ════════════════════════════════════════ */}
-      {dataReady && tab === "overview" && (
+      {tab === "overview" && (
         <div className="space-y-6">
 
-          {/* Month label + next refresh */}
+          {/* ── Current month header ── */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <CalendarDays size={16} className="text-blue-700" />
@@ -214,7 +205,7 @@ export default function AdminInstituteincomePage() {
             </span>
           </div>
 
-          {/* Stat cards */}
+          {/* ── Current month stat cards (always show — 0.00 if no data) ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
@@ -242,13 +233,17 @@ export default function AdminInstituteincomePage() {
                 iconBg: "bg-green-50", iconColor: "text-green-700", icon: <TrendingUp size={22} />,
               },
             ].map((s, i) => (
-              <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+              <div key={i} className={`bg-white p-6 rounded-xl shadow-sm border flex items-center justify-between ${
+                !loading && !currentMonth && i < 3 ? "border-gray-100 opacity-60" : "border-gray-200"
+              }`}>
                 <div className="min-w-0 mr-3">
                   <p className="text-sm font-medium text-gray-500">{s.label}</p>
                   <h3 className={`font-bold text-gray-900 mt-1 leading-tight break-all ${
-                    typeof s.val === "string" && s.val.length > 14 ? "text-lg" : "text-2xl"
+                    !loading && typeof s.val === "string" && s.val.length > 14 ? "text-lg" : "text-2xl"
                   }`}>
-                    {s.val}
+                    {loading
+                      ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" />
+                      : s.val}
                   </h3>
                   <span className="text-xs text-gray-400 mt-1 block">{s.sub}</span>
                 </div>
@@ -259,21 +254,15 @@ export default function AdminInstituteincomePage() {
             ))}
           </div>
 
-          {/* Split bar */}
-          {currentMonth && (
+          {/* ── No payments notice + split bar ── */}
+          {!loading && currentMonth && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <p className="text-sm font-bold text-gray-900 mb-3">Revenue Split — {currentLabel}</p>
               <div className="flex rounded-full overflow-hidden h-4 mb-2">
-                <div
-                  className="bg-blue-700 flex items-center justify-center text-[10px] font-bold text-white transition-all"
-                  style={{ width: `${institutePct}%` }}
-                >
+                <div className="bg-blue-700 flex items-center justify-center text-[10px] font-bold text-white transition-all" style={{ width: `${institutePct}%` }}>
                   {institutePct}%
                 </div>
-                <div
-                  className="bg-amber-400 flex items-center justify-center text-[10px] font-bold text-white transition-all"
-                  style={{ width: `${teacherPct}%` }}
-                >
+                <div className="bg-amber-400 flex items-center justify-center text-[10px] font-bold text-white transition-all" style={{ width: `${teacherPct}%` }}>
                   {teacherPct}%
                 </div>
               </div>
@@ -284,11 +273,55 @@ export default function AdminInstituteincomePage() {
             </div>
           )}
 
-          {!currentMonth && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-              <CalendarDays size={48} className="mx-auto mb-3 text-gray-200" />
-              <p className="font-bold text-gray-500">No payments yet this month.</p>
-              <p className="text-sm text-gray-400 mt-1">Check Monthly History tab for past records.</p>
+          {!loading && !currentMonth && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
+              <Info size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+              <span className="text-amber-800">
+                <span className="font-bold">No payments recorded yet for {currentLabel}.</span>{" "}
+                Payments will appear above once students enroll this month.
+              </span>
+            </div>
+          )}
+
+          {/* ── Last month summary (only when current month has no data) ── */}
+          {!loading && !currentMonth && lastMonth && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <History size={15} className="text-gray-400" />
+                <span className="text-sm font-bold text-gray-700">Last Month Summary</span>
+                <span className="text-xs font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{lastMonth.month_label}</span>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+                {/* 3 summary stats */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-1">Gross Revenue</p>
+                    <p className="text-lg font-bold text-gray-800">Rs. {fmt(lastMonth.gross_total)}</p>
+                    <p className="text-xs text-gray-400">{lastMonth.payment_count} payment{lastMonth.payment_count !== 1 ? "s" : ""}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-blue-500 mb-1">Institute ({institutePct}%)</p>
+                    <p className="text-lg font-bold text-blue-700">Rs. {fmt(lastMonth.institute_income)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-amber-500 mb-1">Teacher Payouts ({teacherPct}%)</p>
+                    <p className="text-lg font-bold text-amber-700">Rs. {fmt(lastMonth.teacher_payouts)}</p>
+                  </div>
+                </div>
+
+                {/* Split bar */}
+                <div>
+                  <div className="flex rounded-full overflow-hidden h-3 mb-1">
+                    <div className="bg-blue-700 transition-all" style={{ width: `${institutePct}%` }} />
+                    <div className="bg-amber-400 transition-all" style={{ width: `${teacherPct}%` }} />
+                  </div>
+                  <div className="flex justify-between text-xs mt-1">
+                    <span className="text-blue-700">Institute {institutePct}%</span>
+                    <span className="text-amber-600">Teachers {teacherPct}%</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -297,15 +330,19 @@ export default function AdminInstituteincomePage() {
       {/* ════════════════════════════════════════
           TAB: MONTHLY HISTORY
       ════════════════════════════════════════ */}
-      {dataReady && tab === "monthly" && (
+      {tab === "monthly" && (
         <div className="space-y-3">
-          {monthly.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
+              <Loader2 size={20} className="animate-spin" /> Loading monthly history…
+            </div>
+          ) : monthly.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <History size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">No history yet.</p>
             </div>
           ) : monthly.map((m, idx) => {
-            const pct = bestMonth ? (m.institute_income / bestMonth.institute_income) * 100 : 0;
+            const pct = (bestMonth && bestMonth.institute_income > 0) ? (m.institute_income / bestMonth.institute_income) * 100 : 0;
             return (
               <div key={m.month_key} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -357,7 +394,7 @@ export default function AdminInstituteincomePage() {
       {/* ════════════════════════════════════════
           TAB: PER-TEACHER
       ════════════════════════════════════════ */}
-      {dataReady && tab === "teachers" && (
+      {tab === "teachers" && (
         <div className="space-y-4">
 
           {/* Current month label */}
@@ -372,7 +409,11 @@ export default function AdminInstituteincomePage() {
             </span>
           </div>
 
-          {teachers.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
+              <Loader2 size={20} className="animate-spin" /> Loading teacher data…
+            </div>
+          ) : teachers.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <Users size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">No teacher payout data yet.</p>
@@ -386,9 +427,9 @@ export default function AdminInstituteincomePage() {
             // Past months only (exclude current month from history)
             const historyMonths = t.monthly?.filter(m => m.month_key !== currentMonthKey) || [];
 
-            const topMonth = t.monthly?.reduce(
-              (best, m) => m.teacher_payout > (best?.teacher_payout || 0) ? m : best, null
-            );
+            const topMonth = t.monthly?.length > 0
+              ? t.monthly.reduce((best, m) => m.teacher_payout > (best?.teacher_payout || 0) ? m : best, null)
+              : null;
 
             return (
               <div key={t.teacher_id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
