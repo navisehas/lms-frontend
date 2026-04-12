@@ -2,9 +2,9 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  TrendingUp, DollarSign, Loader2, AlertCircle,
+  TrendingUp, TrendingDown, DollarSign, Loader2, AlertCircle,
   RefreshCw, Users, Building2, GraduationCap,
-  ChevronDown, ChevronUp, Calendar,
+  ChevronDown, ChevronUp, Calendar, Minus,
 } from "lucide-react";
 import { guardRoute, authFetch } from "@/lib/auth";
 
@@ -20,6 +20,7 @@ const fmtShort = (n) => {
   const v = parseFloat(n || 0);
   if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(2).replace(/\.?0+$/, "") + "B";
   if (v >= 1_000_000)     return (v / 1_000_000).toFixed(2).replace(/\.?0+$/, "") + "M";
+  if (v >= 1_000)         return (v / 1_000).toFixed(1).replace(/\.?0+$/, "") + "K";
   return fmt(v);
 };
 
@@ -30,30 +31,32 @@ function currentMonthKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function prevMonthKeyFn() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /* ─── AmountDisplay ─────────────────────────────────────────────────────── */
-function AmountDisplay({
-  value,
-  prefix = "Rs. ",
-  bigClass = "text-2xl font-bold text-gray-900 leading-tight",
-  fullClass = "text-xs text-gray-400 mt-0.5",
-}) {
+function AmountDisplay({ value, prefix = "Rs. ", bigClass, fullClass }) {
   const [expanded, setExpanded] = useState(false);
-  const num = parseFloat(value || 0);
-  const abbrev = needsAbbrev(num);
+  const num      = parseFloat(value || 0);
+  const abbrev   = needsAbbrev(num);
   const bigText  = `${prefix}${fmtShort(num)}`;
   const fullText = `${prefix}${fmt(num)}`;
+  const bc = bigClass  || "text-2xl font-bold text-gray-900 leading-tight";
+  const fc = fullClass || "text-xs text-gray-400 mt-0.5";
 
-  if (!abbrev) return <p className={bigClass}>{fullText}</p>;
-
+  if (!abbrev) return <p className={bc}>{fullText}</p>;
   return (
     <div>
-      <button onClick={() => setExpanded((e) => !e)} title="Click to toggle full number" className="text-left focus:outline-none group">
-        <p className={`${bigClass} group-hover:opacity-80 transition-opacity`}>
+      <button onClick={() => setExpanded((e) => !e)} title="Toggle full amount" className="text-left focus:outline-none group">
+        <p className={`${bc} group-hover:opacity-80 transition-opacity`}>
           {expanded ? fullText : bigText}
           <span className="ml-1 text-xs font-normal opacity-50">{expanded ? "▲" : "▼"}</span>
         </p>
       </button>
-      {!expanded && <p className={fullClass}>{fullText}</p>}
+      {!expanded && <p className={fc}>{fullText}</p>}
     </div>
   );
 }
@@ -61,16 +64,14 @@ function AmountDisplay({
 /* ─── HighlightAmount ────────────────────────────────────────────────────── */
 function HighlightAmount({ value }) {
   const [expanded, setExpanded] = useState(false);
-  const num = parseFloat(value || 0);
-  const abbrev = needsAbbrev(num);
+  const num       = parseFloat(value || 0);
+  const abbrev    = needsAbbrev(num);
   const fullText  = `Rs. ${fmt(num)}`;
   const shortText = `Rs. ${fmtShort(num)}`;
-
   if (!abbrev) return <p className="text-xl font-bold leading-tight">{fullText}</p>;
-
   return (
     <div>
-      <button onClick={() => setExpanded((e) => !e)} title="Click to toggle full number" className="text-left focus:outline-none group">
+      <button onClick={() => setExpanded((e) => !e)} className="text-left focus:outline-none group">
         <p className="text-xl font-bold leading-tight group-hover:text-blue-200 transition-colors">
           {expanded ? fullText : shortText}
           <span className="ml-1 text-xs font-normal text-blue-300 opacity-70">{expanded ? "▲" : "▼"}</span>
@@ -84,16 +85,14 @@ function HighlightAmount({ value }) {
 /* ─── TableAmount ────────────────────────────────────────────────────────── */
 function TableAmount({ value, colorClass = "text-gray-700", dimClass = "text-gray-400" }) {
   const [expanded, setExpanded] = useState(false);
-  const num = parseFloat(value || 0);
-  const abbrev = needsAbbrev(num);
+  const num       = parseFloat(value || 0);
+  const abbrev    = needsAbbrev(num);
   const fullText  = `Rs. ${fmt(num)}`;
   const shortText = `Rs. ${fmtShort(num)}`;
-
   if (!abbrev) return <span className={colorClass}>{fullText}</span>;
-
   return (
     <span>
-      <button onClick={() => setExpanded((e) => !e)} title="Click to toggle full number" className="text-right focus:outline-none">
+      <button onClick={() => setExpanded((e) => !e)} className="text-right focus:outline-none">
         <span className={`${colorClass} hover:underline cursor-pointer`}>
           {expanded ? fullText : shortText}
           <span className={`ml-0.5 text-xs opacity-50 ${dimClass}`}>{expanded ? "▲" : "▼"}</span>
@@ -104,10 +103,38 @@ function TableAmount({ value, colorClass = "text-gray-700", dimClass = "text-gra
   );
 }
 
-/* ─── Chart.js Line Chart ────────────────────────────────────────────────── */
-function LineChart({ datasets, labels }) {
+/* ─── Delta badge ────────────────────────────────────────────────────────── */
+function DeltaBadge({ current, previous, label = "" }) {
+  if (previous === undefined || previous === null) return null;
+  const cur  = parseFloat(current  || 0);
+  const prev = parseFloat(previous || 0);
+  if (!prev) return null;
+  const diff = cur - prev;
+  const pct  = ((diff / prev) * 100).toFixed(1);
+  const up   = diff >= 0;
+  const zero = diff === 0;
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+      zero ? "text-gray-500 bg-gray-100" : up ? "text-green-700 bg-green-100" : "text-red-700 bg-red-100"
+    }`}>
+      {zero ? <Minus size={10} /> : up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+      {zero ? "0%" : `${up ? "+" : ""}${pct}%`}{label}
+    </span>
+  );
+}
+
+/* ─── Revenue Overview Chart ─────────────────────────────────────────────── */
+function RevenueOverviewChart({ sortedAsc, currentMonthKey: curKey, prevMonthKey: prevKey }) {
   const canvasRef = useRef(null);
   const chartRef  = useRef(null);
+
+  const labels    = sortedAsc.map((m) => m.month_key.slice(5));
+  const grossData = sortedAsc.map((m) => parseFloat(m.gross_total      || 0));
+  const instData  = sortedAsc.map((m) => parseFloat(m.institute_income || 0));
+  const tchrData  = sortedAsc.map((m) => parseFloat(m.teacher_payouts  || 0));
+  const curIdx    = sortedAsc.findIndex((m) => m.month_key === curKey);
+  const prevIdx   = sortedAsc.findIndex((m) => m.month_key === prevKey);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -115,49 +142,133 @@ function LineChart({ datasets, labels }) {
     const init = () => {
       if (!canvasRef.current) return;
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
-
       const Chart = window.Chart;
       if (!Chart) return;
 
-      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const gridColor  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+      const isDark     = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const gridColor  = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
       const tickColor  = isDark ? "#9ca3af" : "#6b7280";
+      const bgColor    = isDark ? "#1f2937" : "#ffffff";
+      const textColor  = isDark ? "#f9fafb" : "#111827";
+      const mutedColor = isDark ? "#d1d5db" : "#374151";
+
+      const bandPlugin = {
+        id: "monthBands",
+        beforeDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          if (!chartArea) return;
+          const xScale = scales.x;
+          const bw = xScale.getPixelForValue(1) - xScale.getPixelForValue(0);
+
+          const drawBand = (idx, color, alpha) => {
+            if (idx < 0) return;
+            const x = xScale.getPixelForValue(idx);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle   = color;
+            ctx.fillRect(x - bw / 2, chartArea.top, bw, chartArea.bottom - chartArea.top);
+            ctx.restore();
+          };
+
+          drawBand(prevIdx, "#f59e0b", 0.12);
+          drawBand(curIdx,  "#1d4ed8", 0.13);
+        },
+      };
+
+      const makePointColors = (baseColor, data) =>
+        data.map((_, i) => (i === curIdx || i === prevIdx) ? "#f59e0b" : baseColor);
+      const makePointSizes = (data) =>
+        data.map((_, i) => (i === curIdx || i === prevIdx) ? 7 : 3);
 
       chartRef.current = new Chart(canvasRef.current, {
         type: "line",
+        plugins: [bandPlugin],
         data: {
           labels,
-          datasets: datasets.map((ds) => ({
-            label:           ds.label,
-            data:            ds.data,
-            borderColor:     ds.color,
-            backgroundColor: ds.color + "18",
-            borderWidth:     2,
-            pointRadius:     4,
-            pointHoverRadius:6,
-            pointBackgroundColor: ds.color,
-            pointBorderColor:     "#fff",
-            pointBorderWidth:     1.5,
-            fill:            true,
-            tension:         0.35,
-          })),
+          datasets: [
+            {
+              label: "Gross Revenue",
+              data: grossData,
+              borderColor: "#16a34a",
+              backgroundColor: "#16a34a14",
+              pointBackgroundColor: grossData.map((_, i) => i === curIdx ? "#16a34a" : i === prevIdx ? "#f59e0b" : "#16a34a"),
+              pointRadius:      makePointSizes(grossData),
+              pointHoverRadius: 8,
+              pointBorderColor: "#fff",
+              pointBorderWidth: 2,
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.38,
+              borderDash: [],
+            },
+            {
+              label: "Institute Income",
+              data: instData,
+              borderColor: "#1d4ed8",
+              backgroundColor: "transparent",
+              pointBackgroundColor: instData.map((_, i) => i === curIdx ? "#1d4ed8" : i === prevIdx ? "#f59e0b" : "#1d4ed8"),
+              pointRadius:      makePointSizes(instData),
+              pointHoverRadius: 8,
+              pointBorderColor: "#fff",
+              pointBorderWidth: 2,
+              borderWidth: 2,
+              fill: false,
+              tension: 0.38,
+              borderDash: [6, 3],
+            },
+            {
+              label: "Teacher Payouts",
+              data: tchrData,
+              borderColor: "#d97706",
+              backgroundColor: "transparent",
+              pointBackgroundColor: tchrData.map((_, i) => i === curIdx ? "#d97706" : i === prevIdx ? "#f59e0b" : "#d97706"),
+              pointRadius:      makePointSizes(tchrData),
+              pointHoverRadius: 8,
+              pointBorderColor: "#fff",
+              pointBorderWidth: 2,
+              borderWidth: 2,
+              fill: false,
+              tension: 0.38,
+              borderDash: [2, 3],
+            },
+          ],
         },
         options: {
-          responsive:          true,
+          responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: isDark ? "#1f2937" : "#fff",
-              borderColor:     isDark ? "#374151" : "#e5e7eb",
-              borderWidth:     1,
-              titleColor:      isDark ? "#f9fafb" : "#111827",
-              bodyColor:       isDark ? "#d1d5db" : "#374151",
-              padding:         10,
+              backgroundColor: bgColor,
+              borderColor: isDark ? "#374151" : "#e5e7eb",
+              borderWidth: 1,
+              titleColor: textColor,
+              bodyColor: mutedColor,
+              padding: 12,
               callbacks: {
-                label: (ctx) =>
-                  ` ${ctx.dataset.label}: Rs. ${fmt(ctx.parsed.y)}`,
+                title: (items) => {
+                  const idx = items[0]?.dataIndex;
+                  const m   = sortedAsc[idx];
+                  const tag = idx === curIdx ? " — Current Month" : idx === prevIdx ? " — Previous Month" : "";
+                  return (m?.month_label || labels[idx]) + tag;
+                },
+                label: (ctx) => ` ${ctx.dataset.label}: Rs. ${fmt(ctx.parsed.y)}`,
+                afterBody: (items) => {
+                  const idx = items[0]?.dataIndex;
+                  if (idx !== curIdx || prevIdx < 0) return [];
+                  const fields = ["gross_total", "institute_income", "teacher_payouts"];
+                  const lines  = ["", "vs " + (sortedAsc[prevIdx]?.month_label || "Previous Month") + ":"];
+                  items.forEach((item, i) => {
+                    const cur  = parseFloat(item.parsed.y);
+                    const prev = parseFloat(sortedAsc[prevIdx]?.[fields[i]] || 0);
+                    if (!prev) return;
+                    const pct   = ((cur - prev) / prev * 100).toFixed(1);
+                    const arrow = cur >= prev ? "▲" : "▼";
+                    lines.push(` ${arrow} ${item.dataset.label.split(" ")[0]}: ${cur >= prev ? "+" : ""}${pct}%`);
+                  });
+                  return lines;
+                },
               },
             },
           },
@@ -168,11 +279,7 @@ function LineChart({ datasets, labels }) {
             },
             y: {
               grid:  { color: gridColor },
-              ticks: {
-                color: tickColor,
-                font:  { size: 11 },
-                callback: (v) => "Rs. " + fmtShort(v),
-              },
+              ticks: { color: tickColor, font: { size: 11 }, callback: (v) => "Rs. " + fmtShort(v) },
               beginAtZero: true,
             },
           },
@@ -180,38 +287,125 @@ function LineChart({ datasets, labels }) {
       });
     };
 
-    /* Load Chart.js once */
-    if (window.Chart) {
-      init();
-    } else {
+    if (window.Chart) { init(); }
+    else {
       const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
+      s.src   = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
       s.onload = init;
       document.head.appendChild(s);
     }
-
     return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
-  }, [datasets, labels]);
+  }, [sortedAsc, curIdx, prevIdx]);
 
-  if (!labels || labels.length < 2)
-    return (
-      <div className="flex items-center justify-center h-48 text-xs text-gray-300">
-        Not enough data
-      </div>
-    );
+  const curM  = sortedAsc[curIdx];
+  const prevM = sortedAsc[prevIdx];
+
+  const compRows = [
+    { label: "Gross Revenue",    field: "gross_total",      color: "text-green-700",  borderColor: "border-green-200",  bg: "bg-green-50"  },
+    { label: "Institute Income", field: "institute_income",  color: "text-blue-700",   borderColor: "border-blue-200",   bg: "bg-blue-50"   },
+    { label: "Teacher Payouts",  field: "teacher_payouts",   color: "text-amber-600",  borderColor: "border-amber-200",  bg: "bg-amber-50"  },
+    { label: "Payments",         field: "payment_count",     color: "text-purple-700", borderColor: "border-purple-200", bg: "bg-purple-50", isCount: true },
+  ];
+
+  if (!sortedAsc.length || sortedAsc.length < 2) return (
+    <div className="flex items-center justify-center h-48 text-xs text-gray-300">Not enough data</div>
+  );
 
   return (
-    <div style={{ position: "relative", height: 220 }}>
-      <canvas ref={canvasRef} role="img" aria-label="Monthly revenue line chart" />
+    <div className="space-y-5">
+
+      {/* Legend row */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-500">
+        <span className="flex items-center gap-2">
+          <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#16a34a" strokeWidth="2.5" /></svg>
+          Gross Revenue
+        </span>
+        <span className="flex items-center gap-2">
+          <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1d4ed8" strokeWidth="2" strokeDasharray="6 3" /></svg>
+          Institute Income
+        </span>
+        <span className="flex items-center gap-2">
+          <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#d97706" strokeWidth="2" strokeDasharray="2 3" /></svg>
+          Teacher Payouts
+        </span>
+        <span className="flex items-center gap-2 ml-auto">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#1d4ed820" }} />
+          Current month
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#f59e0b20" }} />
+          Previous month
+        </span>
+      </div>
+
+      {/* Chart canvas */}
+      <div style={{ position: "relative", height: 260 }}>
+        <canvas
+          ref={canvasRef}
+          role="img"
+          aria-label="Monthly revenue overview — gross revenue, institute income, and teacher payouts across all months"
+        />
+      </div>
+
+      {/* Current vs Previous comparison mini-cards */}
+      {curM && prevM && (
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2.5">
+            {curM.month_label} vs {prevM.month_label} — Comparison
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {compRows.map((row) => {
+              const curNum  = parseFloat(curM[row.field]  || 0);
+              const prevNum = parseFloat(prevM[row.field] || 0);
+              const diff    = curNum - prevNum;
+              const pct     = prevNum ? ((diff / prevNum) * 100).toFixed(1) : null;
+              const up      = diff > 0;
+              const zero    = diff === 0;
+              return (
+                <div key={row.label} className={`rounded-xl border ${row.borderColor} ${row.bg} p-3`}>
+                  <p className="text-xs text-gray-500 font-medium mb-2">{row.label}</p>
+
+                  {/* Current */}
+                  <p className={`text-sm font-bold ${row.color} leading-tight`}>
+                    {row.isCount ? curNum.toLocaleString("en-US") : `Rs. ${fmtShort(curNum)}`}
+                  </p>
+                  {!row.isCount && needsAbbrev(curNum) && (
+                    <p className="text-xs text-gray-400 leading-tight">Rs. {fmt(curNum)}</p>
+                  )}
+
+                  <div className="my-2 border-t border-white/60" />
+
+                  {/* Previous */}
+                  <p className="text-xs text-gray-400 mb-1.5">
+                    Prev: <span className="font-medium text-gray-600">
+                      {row.isCount ? prevNum.toLocaleString("en-US") : `Rs. ${fmtShort(prevNum)}`}
+                    </span>
+                  </p>
+
+                  {/* Delta pill */}
+                  {pct !== null && (
+                    <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                      zero ? "bg-white/70 text-gray-500" : up ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                    }`}>
+                      {zero ? <Minus size={9} /> : up ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+                      {zero ? "No change" : `${up ? "+" : ""}${pct}%`}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ─── Stat card ──────────────────────────────────────────────────────────── */
-function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, iconBg, iconColor, loading }) {
+function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, iconBg, iconColor, loading, prevValue }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{label}</p>
         {loading ? (
           <Loader2 className="w-5 h-5 animate-spin text-gray-300 mt-1" />
@@ -220,14 +414,14 @@ function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, ic
             {parseFloat(rawValue || 0).toLocaleString("en-US")}
           </p>
         ) : (
-          <AmountDisplay
-            value={rawValue}
-            prefix={prefix}
-            bigClass="text-2xl font-bold text-gray-900 leading-tight"
-            fullClass="text-xs text-gray-400 mt-0.5"
-          />
+          <AmountDisplay value={rawValue} prefix={prefix} />
         )}
-        {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          {sub && <p className="text-xs text-gray-400">{sub}</p>}
+          {!loading && prevValue !== undefined && (
+            <DeltaBadge current={rawValue} previous={prevValue} />
+          )}
+        </div>
       </div>
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg} ${iconColor}`}>
         {icon}
@@ -239,13 +433,11 @@ function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, ic
 /* ─── Teacher row ────────────────────────────────────────────────────────── */
 function TeacherRow({ t, allMonthKeys }) {
   const [open, setOpen] = useState(false);
-
   const monthlyMap = useMemo(() => {
     const map = {};
     for (const m of t.monthly || []) map[m.month_key] = m;
     return map;
   }, [t.monthly]);
-
   const curKey = currentMonthKey();
 
   return (
@@ -289,9 +481,7 @@ function TeacherRow({ t, allMonthKeys }) {
                       <td className="px-3 py-2">
                         <span className={`font-medium ${isCurrent ? "text-blue-700" : "text-gray-700"}`}>
                           {m?.month_label || mk}
-                          {isCurrent && (
-                            <span className="ml-1 text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full">Now</span>
-                          )}
+                          {isCurrent && <span className="ml-1 text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full">Now</span>}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -341,29 +531,15 @@ export default function AdminIncomePage() {
     }
   }
 
-  const curKey = currentMonthKey();
+  const curKey  = currentMonthKey();
+  const prevKey = prevMonthKeyFn();
 
-  const currentMonth = useMemo(
-    () => data?.monthly?.find((m) => m.month_key === curKey) || null,
-    [data, curKey]
-  );
-
-  const prevMonthKey = useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  }, []);
-
-  const prevMonth = useMemo(
-    () => data?.monthly?.find((m) => m.month_key === prevMonthKey) || null,
-    [data, prevMonthKey]
-  );
+  const currentMonth = useMemo(() => data?.monthly?.find((m) => m.month_key === curKey)  || null, [data, curKey]);
+  const prevMonth    = useMemo(() => data?.monthly?.find((m) => m.month_key === prevKey) || null, [data, prevKey]);
 
   const growth = useMemo(() => {
     if (!currentMonth || !prevMonth || !prevMonth.gross_total) return null;
-    return (
-      ((currentMonth.gross_total - prevMonth.gross_total) / prevMonth.gross_total) * 100
-    ).toFixed(1);
+    return (((currentMonth.gross_total - prevMonth.gross_total) / prevMonth.gross_total) * 100).toFixed(1);
   }, [currentMonth, prevMonth]);
 
   const sortedAsc = useMemo(
@@ -372,36 +548,9 @@ export default function AdminIncomePage() {
   );
 
   const allMonthKeys = useMemo(
-    () =>
-      [...(data?.monthly || [])]
-        .sort((a, b) => b.month_key.localeCompare(a.month_key))
-        .map((m) => m.month_key),
+    () => [...(data?.monthly || [])].sort((a, b) => b.month_key.localeCompare(a.month_key)).map((m) => m.month_key),
     [data]
   );
-
-  /* Chart.js data */
-  const chartLabels   = sortedAsc.map((m) => m.month_key.slice(5));
-  const combinedChartDatasets = [
-    {
-      label: "Gross Revenue",
-      data:  sortedAsc.map((m) => parseFloat(m.gross_total   || 0)),
-      color: "#16a34a",
-    },
-    {
-      label: "Institute Income",
-      data:  sortedAsc.map((m) => parseFloat(m.institute_income || 0)),
-      color: "#1d4ed8",
-    },
-    {
-      label: "Teacher Payouts",
-      data:  sortedAsc.map((m) => parseFloat(m.teacher_payouts  || 0)),
-      color: "#d97706",
-    },
-  ];
-
-  const grossDatasets = [{ label: "Gross Revenue",   data: sortedAsc.map((m) => parseFloat(m.gross_total      || 0)), color: "#16a34a" }];
-  const instDatasets  = [{ label: "Institute Income", data: sortedAsc.map((m) => parseFloat(m.institute_income || 0)), color: "#1d4ed8" }];
-  const tchrDatasets  = [{ label: "Teacher Payouts",  data: sortedAsc.map((m) => parseFloat(m.teacher_payouts  || 0)), color: "#d97706" }];
 
   const now = new Date();
   const currentMonthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
@@ -435,43 +584,36 @@ export default function AdminIncomePage() {
 
       {/* Current Month Highlight */}
       <div className="bg-blue-700 rounded-2xl p-5 text-white">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <Calendar size={15} className="text-blue-200" />
           <p className="text-sm font-semibold text-blue-100">{currentMonthLabel} — Current Month</p>
+          {growth !== null && (
+            <span className={`ml-auto text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${
+              parseFloat(growth) >= 0 ? "bg-green-500/30 text-green-200" : "bg-red-500/30 text-red-200"
+            }`}>
+              {parseFloat(growth) >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+              {parseFloat(growth) >= 0 ? "+" : ""}{growth}% vs last month
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Gross Revenue</p>
-            {loading
-              ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" />
-              : <HighlightAmount value={currentMonth?.gross_total || 0} />
-            }
-            <p className="text-xs text-blue-300 mt-1">
-              {growth !== null ? `${growth > 0 ? "+" : ""}${growth}% vs last month` : "—"}
-            </p>
+            {loading ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" /> : <HighlightAmount value={currentMonth?.gross_total || 0} />}
           </div>
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Institute Income</p>
-            {loading
-              ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" />
-              : <HighlightAmount value={currentMonth?.institute_income || 0} />
-            }
+            {loading ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" /> : <HighlightAmount value={currentMonth?.institute_income || 0} />}
             <p className="text-xs text-blue-300 mt-1">20% share</p>
           </div>
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Teacher Payouts</p>
-            {loading
-              ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" />
-              : <HighlightAmount value={currentMonth?.teacher_payouts || 0} />
-            }
+            {loading ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" /> : <HighlightAmount value={currentMonth?.teacher_payouts || 0} />}
             <p className="text-xs text-blue-300 mt-1">80% share</p>
           </div>
           <div>
             <p className="text-xs text-blue-200 font-medium mb-1">Payments</p>
-            {loading
-              ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" />
-              : <p className="text-xl font-bold leading-tight">{currentMonth?.payment_count || 0}</p>
-            }
+            {loading ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" /> : <p className="text-xl font-bold leading-tight">{currentMonth?.payment_count || 0}</p>}
             <p className="text-xs text-blue-300 mt-1">this month</p>
           </div>
         </div>
@@ -479,10 +621,10 @@ export default function AdminIncomePage() {
 
       {/* All-time Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Revenue"    rawValue={data?.totals?.gross_total}      prefix="Rs. " sub="All time"         icon={<DollarSign size={18} />}    iconBg="bg-green-50"  iconColor="text-green-600"  loading={loading} />
-        <StatCard label="Institute Income" rawValue={data?.totals?.institute_income}  prefix="Rs. " sub="20% of revenue"   icon={<Building2 size={18} />}     iconBg="bg-blue-50"   iconColor="text-blue-700"   loading={loading} />
-        <StatCard label="Teacher Payouts"  rawValue={data?.totals?.teacher_payouts}   prefix="Rs. " sub="80% to teachers"  icon={<GraduationCap size={18} />} iconBg="bg-amber-50"  iconColor="text-amber-600"  loading={loading} />
-        <StatCard label="Total Payments"   rawValue={data?.totals?.payment_count ?? 0} isCount      sub="All enrollments"  icon={<Users size={18} />}         iconBg="bg-purple-50" iconColor="text-purple-600" loading={loading} />
+        <StatCard label="Total Revenue"    rawValue={data?.totals?.gross_total}       prefix="Rs. " sub="All time"        prevValue={prevMonth?.gross_total}      icon={<DollarSign size={18} />}    iconBg="bg-green-50"  iconColor="text-green-600"  loading={loading} />
+        <StatCard label="Institute Income" rawValue={data?.totals?.institute_income}   prefix="Rs. " sub="20% of revenue"  prevValue={prevMonth?.institute_income}  icon={<Building2 size={18} />}     iconBg="bg-blue-50"   iconColor="text-blue-700"   loading={loading} />
+        <StatCard label="Teacher Payouts"  rawValue={data?.totals?.teacher_payouts}    prefix="Rs. " sub="80% to teachers" prevValue={prevMonth?.teacher_payouts}   icon={<GraduationCap size={18} />} iconBg="bg-amber-50"  iconColor="text-amber-600"  loading={loading} />
+        <StatCard label="Total Payments"   rawValue={data?.totals?.payment_count ?? 0} isCount       sub="All enrollments" prevValue={prevMonth?.payment_count}     icon={<Users size={18} />}         iconBg="bg-purple-50" iconColor="text-purple-600" loading={loading} />
       </div>
 
       {/* Tabs */}
@@ -513,39 +655,20 @@ export default function AdminIncomePage() {
 
         <div className="space-y-6">
 
-          {/* Combined Chart */}
+          {/* Revenue Overview Chart — single chart with comparison */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-bold text-gray-900">Revenue Overview</p>
-              <div className="flex items-center gap-4 text-xs text-gray-500">
-                {combinedChartDatasets.map((ds) => (
-                  <span key={ds.label} className="flex items-center gap-1.5">
-                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: ds.color }} />
-                    {ds.label}
-                  </span>
-                ))}
+            <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
+              <div>
+                <p className="text-sm font-bold text-gray-900">Revenue Overview</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Hover any month to see values · Highlighted bands show current &amp; previous month
+                </p>
               </div>
+              {currentMonth && prevMonth && (
+                <DeltaBadge current={currentMonth.gross_total} previous={prevMonth.gross_total} label=" gross" />
+              )}
             </div>
-            <p className="text-xs text-gray-400 mb-4">All three revenue streams per month</p>
-            <LineChart datasets={combinedChartDatasets} labels={chartLabels} />
-          </div>
-
-          {/* Individual Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { title: "Gross Revenue",         sub: "All payments monthly",         datasets: grossDatasets, color: "#16a34a" },
-              { title: "Institute Income (20%)", sub: "Institute's monthly net share", datasets: instDatasets,  color: "#1d4ed8" },
-              { title: "Teacher Payouts (80%)",  sub: "Monthly teacher disbursements", datasets: tchrDatasets,  color: "#d97706" },
-            ].map((c) => (
-              <div key={c.title} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-block w-2 h-2 rounded-full" style={{ background: c.color }} />
-                  <p className="text-sm font-bold text-gray-900">{c.title}</p>
-                </div>
-                <p className="text-xs text-gray-400 mb-3">{c.sub}</p>
-                <LineChart datasets={c.datasets} labels={chartLabels} />
-              </div>
-            ))}
+            <RevenueOverviewChart sortedAsc={sortedAsc} currentMonthKey={curKey} prevMonthKey={prevKey} />
           </div>
 
           {/* Monthly breakdown table */}
@@ -559,10 +682,7 @@ export default function AdminIncomePage() {
               className="grid gap-2 px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide"
               style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr 60px" }}
             >
-              <span>Month</span>
-              <span>Gross</span>
-              <span>Institute</span>
-              <span>Teachers</span>
+              <span>Month</span><span>Gross</span><span>Institute</span><span>Teachers</span>
               <span className="text-right">Count</span>
             </div>
 
@@ -573,20 +693,22 @@ export default function AdminIncomePage() {
               </div>
             ) : (
               allMonthKeys.map((mk) => {
-                const m = data.monthly.find((x) => x.month_key === mk);
+                const m    = data.monthly.find((x) => x.month_key === mk);
                 if (!m) return null;
-                const isCur = mk === curKey;
+                const isCur  = mk === curKey;
+                const isPrev = mk === prevKey;
                 return (
                   <div
                     key={mk}
-                    className={`grid gap-2 px-5 py-3.5 border-b border-gray-100 last:border-0 items-center text-sm ${isCur ? "bg-blue-50" : "hover:bg-gray-50"}`}
+                    className={`grid gap-2 px-5 py-3.5 border-b border-gray-100 last:border-0 items-center text-sm ${
+                      isCur ? "bg-blue-50" : isPrev ? "bg-amber-50" : "hover:bg-gray-50"
+                    }`}
                     style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr 60px" }}
                   >
-                    <span className={`font-semibold flex items-center gap-2 ${isCur ? "text-blue-700" : "text-gray-900"}`}>
+                    <span className={`font-semibold flex items-center gap-2 ${isCur ? "text-blue-700" : isPrev ? "text-amber-700" : "text-gray-900"}`}>
                       {m.month_label}
-                      {isCur && (
-                        <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">Now</span>
-                      )}
+                      {isCur  && <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">Now</span>}
+                      {isPrev && <span className="text-xs bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">Prev</span>}
                     </span>
                     <span><TableAmount value={m.gross_total}      colorClass="text-green-700 font-semibold" dimClass="text-green-400" /></span>
                     <span><TableAmount value={m.institute_income} colorClass="text-blue-700 font-medium"    dimClass="text-blue-300"  /></span>
@@ -601,10 +723,8 @@ export default function AdminIncomePage() {
 
       ) : (
 
-        /* ─── Teacher Payouts Tab ────────────────────────────────────────── */
+        /* ─── Teacher Payouts Tab ─────────────────────────────────────────── */
         <div className="space-y-4">
-
-          {/* Summary — 3 cards: Teachers count | Total Paid Out | This Month */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex flex-wrap gap-6">
             <div>
               <p className="text-xs text-amber-600 font-semibold">Total Teachers</p>
