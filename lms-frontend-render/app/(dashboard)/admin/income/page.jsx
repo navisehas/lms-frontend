@@ -10,22 +10,27 @@ import { guardRoute, authFetch } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-/* Full formatted number */
+/* ─── Formatting helpers ──────────────────────────────────────────────────── */
+
+/** Full number: 1,234,567.00 */
 const fmt = (n) =>
   parseFloat(n || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
-/* Abbreviated — only when >= 1,000,000 */
+/** Short form — only used when value >= 1,000,000 */
 const fmtShort = (n) => {
   const v = parseFloat(n || 0);
-  if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(2).replace(/\.?0+$/, "") + "B";
-  if (v >= 1_000_000)     return (v / 1_000_000).toFixed(2).replace(/\.?0+$/, "") + "M";
+  if (v >= 1_000_000_000)
+    return (v / 1_000_000_000).toFixed(2).replace(/\.?0+$/, "") + "B";
+  if (v >= 1_000_000)
+    return (v / 1_000_000).toFixed(2).replace(/\.?0+$/, "") + "M";
+  // Should never reach here — callers check needsAbbrev first
   return fmt(v);
 };
 
-/* True only when value needs abbreviation (>= 1,000,000) */
+/** Returns true only when value is >= 1,000,000 */
 const needsAbbrev = (n) => parseFloat(n || 0) >= 1_000_000;
 
 function currentMonthKey() {
@@ -34,10 +39,13 @@ function currentMonthKey() {
 }
 
 /* ─── AmountDisplay ───────────────────────────────────────────────────────────
-   Used in stat cards and teacher payout summary.
-   - < 1M  : full number shown, no toggle, no below line
-   - >= 1M : abbreviated shown, full number below always visible,
-             clicking abbreviated also toggles to full inline
+   For stat cards & teacher-tab summary.
+
+   value < 1,000,000  →  shows full number, no click, no below line
+   value >= 1,000,000 →  big  = abbreviated (e.g. Rs. 2.50M)   clickable ▼
+                         below = full number always visible
+                         click → big shows full number ▲, below disappears
+                         click again → back to abbreviated
 */
 function AmountDisplay({
   value,
@@ -48,28 +56,32 @@ function AmountDisplay({
   const [expanded, setExpanded] = useState(false);
   const num = parseFloat(value || 0);
   const abbrev = needsAbbrev(num);
-  const bigText  = `${prefix}${fmtShort(num)}`;
-  const fullText = `${prefix}${fmt(num)}`;
+  const shortText = `${prefix}${fmtShort(num)}`;
+  const fullText  = `${prefix}${fmt(num)}`;
 
+  /* No abbreviation needed — plain display */
   if (!abbrev) {
     return <p className={bigClass}>{fullText}</p>;
   }
 
   return (
     <div>
+      {/* Clickable abbreviated/full toggle */}
       <button
+        type="button"
         onClick={() => setExpanded((e) => !e)}
-        title="Click to toggle full number"
+        title={expanded ? "Click to collapse" : "Click to see full number"}
         className="text-left focus:outline-none group"
       >
-        <p className={`${bigClass} group-hover:opacity-80 transition-opacity`}>
-          {expanded ? fullText : bigText}
+        <p className={`${bigClass} group-hover:opacity-75 transition-opacity`}>
+          {expanded ? fullText : shortText}
           <span className="ml-1 text-xs font-normal opacity-50">
             {expanded ? "▲" : "▼"}
           </span>
         </p>
       </button>
-      {/* Always-visible full number below when not expanded */}
+
+      {/* Full number always visible below — only when collapsed */}
       {!expanded && (
         <p className={fullClass}>{fullText}</p>
       )}
@@ -78,14 +90,14 @@ function AmountDisplay({
 }
 
 /* ─── HighlightAmount ─────────────────────────────────────────────────────────
-   Same logic but styled for the blue highlight section (white text)
+   Same logic, styled for the blue section (white text).
 */
 function HighlightAmount({ value }) {
   const [expanded, setExpanded] = useState(false);
   const num = parseFloat(value || 0);
   const abbrev = needsAbbrev(num);
-  const fullText = `Rs. ${fmt(num)}`;
   const shortText = `Rs. ${fmtShort(num)}`;
+  const fullText  = `Rs. ${fmt(num)}`;
 
   if (!abbrev) {
     return <p className="text-xl font-bold leading-tight">{fullText}</p>;
@@ -94,8 +106,9 @@ function HighlightAmount({ value }) {
   return (
     <div>
       <button
+        type="button"
         onClick={() => setExpanded((e) => !e)}
-        title="Click to toggle full number"
+        title={expanded ? "Click to collapse" : "Click to see full number"}
         className="text-left focus:outline-none group"
       >
         <p className="text-xl font-bold leading-tight group-hover:text-blue-200 transition-colors">
@@ -113,15 +126,15 @@ function HighlightAmount({ value }) {
 }
 
 /* ─── TableAmount ─────────────────────────────────────────────────────────────
-   Used inside tables and teacher rows.
-   Same toggle behaviour, smaller text sizes.
+   For table cells and teacher row totals.
+   Same toggle logic, compact inline layout.
 */
 function TableAmount({ value, colorClass = "text-gray-700", dimClass = "text-gray-400" }) {
   const [expanded, setExpanded] = useState(false);
   const num = parseFloat(value || 0);
   const abbrev = needsAbbrev(num);
-  const fullText  = `Rs. ${fmt(num)}`;
   const shortText = `Rs. ${fmtShort(num)}`;
+  const fullText  = `Rs. ${fmt(num)}`;
 
   if (!abbrev) {
     return <span className={colorClass}>{fullText}</span>;
@@ -130,9 +143,10 @@ function TableAmount({ value, colorClass = "text-gray-700", dimClass = "text-gra
   return (
     <span>
       <button
+        type="button"
         onClick={() => setExpanded((e) => !e)}
-        title="Click to toggle full number"
-        className="text-right focus:outline-none"
+        title={expanded ? "Click to collapse" : "Click to see full number"}
+        className="focus:outline-none text-left"
       >
         <span className={`${colorClass} hover:underline cursor-pointer`}>
           {expanded ? fullText : shortText}
@@ -173,7 +187,8 @@ function MiniLineChart({ data, color }) {
     .join(" ");
   const areaPath =
     linePath +
-    ` L${pts[pts.length - 1].x.toFixed(1)},${(PY + iH).toFixed(1)} L${pts[0].x.toFixed(1)},${(PY + iH).toFixed(1)} Z`;
+    ` L${pts[pts.length - 1].x.toFixed(1)},${(PY + iH).toFixed(1)}` +
+    ` L${pts[0].x.toFixed(1)},${(PY + iH).toFixed(1)} Z`;
   const gradId = `g${color.replace("#", "")}`;
 
   return (
@@ -206,11 +221,16 @@ function MiniLineChart({ data, color }) {
 }
 
 /* ─── Stat card ───────────────────────────────────────────────────────────── */
-function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, iconBg, iconColor, loading }) {
+function StatCard({
+  label, rawValue, prefix = "", isCount = false,
+  sub, icon, iconBg, iconColor, loading,
+}) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+          {label}
+        </p>
         {loading ? (
           <Loader2 className="w-5 h-5 animate-spin text-gray-300 mt-1" />
         ) : isCount ? (
@@ -227,7 +247,9 @@ function StatCard({ label, rawValue, prefix = "", isCount = false, sub, icon, ic
         )}
         {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
       </div>
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg} ${iconColor}`}>
+      <div
+        className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg} ${iconColor}`}
+      >
         {icon}
       </div>
     </div>
@@ -248,17 +270,24 @@ function TeacherRow({ t, allMonthKeys }) {
 
   return (
     <div className="border-b border-gray-100 last:border-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-      >
-        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-          <GraduationCap size={14} className="text-blue-700" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate">{t.teacher_name}</p>
-          <p className="text-xs text-gray-400">{t.payment_count} payments</p>
-        </div>
+      {/* Row header */}
+      <div className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+        {/* Expand button covers most of the row */}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-3 flex-1 min-w-0 text-left focus:outline-none"
+        >
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <GraduationCap size={14} className="text-blue-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate">{t.teacher_name}</p>
+            <p className="text-xs text-gray-400">{t.payment_count} payments</p>
+          </div>
+        </button>
+
+        {/* Amount — stopPropagation so inner toggle click doesn't open/close row */}
         <div
           className="text-right flex-shrink-0 mr-2"
           onClick={(e) => e.stopPropagation()}
@@ -270,12 +299,20 @@ function TeacherRow({ t, allMonthKeys }) {
           />
           <p className="text-xs text-gray-400 mt-0.5">Total payout</p>
         </div>
-        {open
-          ? <ChevronUp size={14} className="text-gray-400 flex-shrink-0" />
-          : <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
-        }
-      </button>
 
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="focus:outline-none flex-shrink-0"
+        >
+          {open
+            ? <ChevronUp size={14} className="text-gray-400" />
+            : <ChevronDown size={14} className="text-gray-400" />
+          }
+        </button>
+      </div>
+
+      {/* Expanded monthly table */}
       {open && (
         <div className="px-4 pb-4 bg-gray-50">
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
@@ -418,6 +455,7 @@ export default function AdminIncomePage() {
           <p className="text-sm text-gray-500 mt-0.5">Revenue overview &amp; teacher payouts</p>
         </div>
         <button
+          type="button"
           onClick={fetchIncome}
           className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition w-fit"
         >
@@ -475,7 +513,9 @@ export default function AdminIncomePage() {
             <p className="text-xs text-blue-200 font-medium mb-1">Payments</p>
             {loading
               ? <Loader2 size={16} className="animate-spin text-blue-300 mt-1" />
-              : <p className="text-xl font-bold leading-tight">{currentMonth?.payment_count || 0}</p>
+              : <p className="text-xl font-bold leading-tight">
+                  {currentMonth?.payment_count || 0}
+                </p>
             }
             <p className="text-xs text-blue-300 mt-1">this month</p>
           </div>
@@ -535,6 +575,7 @@ export default function AdminIncomePage() {
         ].map((t) => (
           <button
             key={t.key}
+            type="button"
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
               tab === t.key
@@ -577,7 +618,9 @@ export default function AdminIncomePage() {
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
               <TrendingUp size={15} className="text-blue-700" />
               <p className="font-bold text-gray-900 text-sm">Monthly Breakdown</p>
-              <span className="ml-auto text-xs text-gray-400">{data.monthly?.length || 0} months</span>
+              <span className="ml-auto text-xs text-gray-400">
+                {data.monthly?.length || 0} months
+              </span>
             </div>
             <div
               className="grid gap-2 px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide"
@@ -617,13 +660,25 @@ export default function AdminIncomePage() {
                       )}
                     </span>
                     <span>
-                      <TableAmount value={m.gross_total}      colorClass="text-green-700 font-semibold" dimClass="text-green-400" />
+                      <TableAmount
+                        value={m.gross_total}
+                        colorClass="text-green-700 font-semibold"
+                        dimClass="text-green-400"
+                      />
                     </span>
                     <span>
-                      <TableAmount value={m.institute_income} colorClass="text-blue-700 font-medium"    dimClass="text-blue-300"  />
+                      <TableAmount
+                        value={m.institute_income}
+                        colorClass="text-blue-700 font-medium"
+                        dimClass="text-blue-300"
+                      />
                     </span>
                     <span>
-                      <TableAmount value={m.teacher_payouts}  colorClass="text-amber-600 font-medium"   dimClass="text-amber-400" />
+                      <TableAmount
+                        value={m.teacher_payouts}
+                        colorClass="text-amber-600 font-medium"
+                        dimClass="text-amber-400"
+                      />
                     </span>
                     <span className="text-right text-gray-500">{m.payment_count}</span>
                   </div>
@@ -635,7 +690,7 @@ export default function AdminIncomePage() {
 
       ) : (
 
-        /* Teacher Payouts Tab */
+        /* ── Teacher Payouts Tab ── */
         <div className="space-y-4">
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex flex-wrap gap-6">
             <div>
