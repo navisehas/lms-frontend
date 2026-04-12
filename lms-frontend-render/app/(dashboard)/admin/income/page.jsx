@@ -55,6 +55,7 @@ export default function AdminInstituteincomePage() {
     finally  { setLoading(false); }
   }
 
+  const dataReady    = !loading && data !== null;
   const totals       = data?.totals   || {};
   const monthly      = data?.monthly  || [];
   const teachers     = data?.teachers || [];
@@ -166,29 +167,39 @@ export default function AdminInstituteincomePage() {
         </span>
       </div>
 
-      {/* ── Tab bar ── */}
-      <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
-        {[
-          { key: "overview", label: "This Month",      icon: <LayoutDashboard size={14} /> },
-          { key: "monthly",  label: "Monthly History", icon: <BarChart2 size={14} /> },
-          { key: "teachers", label: "Per-Teacher",     icon: <Users size={14} /> },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key ? "bg-blue-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
+      {/* ── Tab bar — only show when data is ready ── */}
+      {dataReady && (
+        <div className="flex bg-white border border-gray-200 rounded-xl p-1 w-fit">
+          {[
+            { key: "overview", label: "This Month",      icon: <LayoutDashboard size={14} /> },
+            { key: "monthly",  label: "Monthly History", icon: <BarChart2 size={14} /> },
+            { key: "teachers", label: "Per-Teacher",     icon: <Users size={14} /> },
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === t.key ? "bg-blue-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Single central loader — no partial renders ── */}
+      {loading && (
+        <div className="flex items-center justify-center py-32 text-gray-400 gap-3">
+          <Loader2 size={24} className="animate-spin" />
+          <span className="text-sm font-medium">Loading income data…</span>
+        </div>
+      )}
 
       {/* ════════════════════════════════════════
           TAB: THIS MONTH
       ════════════════════════════════════════ */}
-      {tab === "overview" && (
+      {dataReady && tab === "overview" && (
         <div className="space-y-6">
 
           {/* Month label + next refresh */}
@@ -235,11 +246,9 @@ export default function AdminInstituteincomePage() {
                 <div className="min-w-0 mr-3">
                   <p className="text-sm font-medium text-gray-500">{s.label}</p>
                   <h3 className={`font-bold text-gray-900 mt-1 leading-tight break-all ${
-                    !loading && s.val.length > 14 ? "text-lg" : "text-2xl"
+                    typeof s.val === "string" && s.val.length > 14 ? "text-lg" : "text-2xl"
                   }`}>
-                    {loading
-                      ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" />
-                      : s.val}
+                    {s.val}
                   </h3>
                   <span className="text-xs text-gray-400 mt-1 block">{s.sub}</span>
                 </div>
@@ -251,7 +260,7 @@ export default function AdminInstituteincomePage() {
           </div>
 
           {/* Split bar */}
-          {!loading && currentMonth && (
+          {currentMonth && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <p className="text-sm font-bold text-gray-900 mb-3">Revenue Split — {currentLabel}</p>
               <div className="flex rounded-full overflow-hidden h-4 mb-2">
@@ -275,7 +284,7 @@ export default function AdminInstituteincomePage() {
             </div>
           )}
 
-          {!loading && !currentMonth && (
+          {!currentMonth && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <CalendarDays size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">No payments yet this month.</p>
@@ -288,13 +297,9 @@ export default function AdminInstituteincomePage() {
       {/* ════════════════════════════════════════
           TAB: MONTHLY HISTORY
       ════════════════════════════════════════ */}
-      {tab === "monthly" && (
+      {dataReady && tab === "monthly" && (
         <div className="space-y-3">
-          {loading ? (
-            <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-              <Loader2 size={20} className="animate-spin" /> Loading monthly history…
-            </div>
-          ) : monthly.length === 0 ? (
+          {monthly.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <History size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">No history yet.</p>
@@ -352,7 +357,7 @@ export default function AdminInstituteincomePage() {
       {/* ════════════════════════════════════════
           TAB: PER-TEACHER
       ════════════════════════════════════════ */}
-      {tab === "teachers" && (
+      {dataReady && tab === "teachers" && (
         <div className="space-y-4">
 
           {/* Current month label */}
@@ -367,11 +372,7 @@ export default function AdminInstituteincomePage() {
             </span>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-              <Loader2 size={20} className="animate-spin" /> Loading teacher data…
-            </div>
-          ) : teachers.length === 0 ? (
+          {teachers.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <Users size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">No teacher payout data yet.</p>
