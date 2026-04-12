@@ -175,10 +175,13 @@ function RevenueOverviewChart({ sortedAsc, currentMonthKey: curKey, prevMonthKey
         },
       };
 
-      const makePointColors = (baseColor, data) =>
-        data.map((_, i) => (i === curIdx || i === prevIdx) ? "#f59e0b" : baseColor);
       const makePointSizes = (data) =>
         data.map((_, i) => (i === curIdx || i === prevIdx) ? 7 : 3);
+
+      /* Per-point colors: highlighted months get a white-bordered ring in the dataset color,
+         NOT amber — so tooltip legend boxes stay correct (they read dataset borderColor). */
+      const makePointColors = (baseColor, data) =>
+        data.map(() => baseColor);
 
       chartRef.current = new Chart(canvasRef.current, {
         type: "line",
@@ -191,11 +194,11 @@ function RevenueOverviewChart({ sortedAsc, currentMonthKey: curKey, prevMonthKey
               data: grossData,
               borderColor: "#16a34a",
               backgroundColor: "#16a34a14",
-              pointBackgroundColor: grossData.map((_, i) => i === curIdx ? "#16a34a" : i === prevIdx ? "#f59e0b" : "#16a34a"),
+              pointBackgroundColor: makePointColors("#16a34a", grossData),
               pointRadius:      makePointSizes(grossData),
               pointHoverRadius: 8,
-              pointBorderColor: "#fff",
-              pointBorderWidth: 2,
+              pointBorderColor: grossData.map((_, i) => (i === curIdx || i === prevIdx) ? "#f59e0b" : "#fff"),
+              pointBorderWidth: grossData.map((_, i) => (i === curIdx || i === prevIdx) ? 3 : 2),
               borderWidth: 2.5,
               fill: true,
               tension: 0.38,
@@ -206,11 +209,11 @@ function RevenueOverviewChart({ sortedAsc, currentMonthKey: curKey, prevMonthKey
               data: instData,
               borderColor: "#1d4ed8",
               backgroundColor: "transparent",
-              pointBackgroundColor: instData.map((_, i) => i === curIdx ? "#1d4ed8" : i === prevIdx ? "#f59e0b" : "#1d4ed8"),
+              pointBackgroundColor: makePointColors("#1d4ed8", instData),
               pointRadius:      makePointSizes(instData),
               pointHoverRadius: 8,
-              pointBorderColor: "#fff",
-              pointBorderWidth: 2,
+              pointBorderColor: instData.map((_, i) => (i === curIdx || i === prevIdx) ? "#f59e0b" : "#fff"),
+              pointBorderWidth: instData.map((_, i) => (i === curIdx || i === prevIdx) ? 3 : 2),
               borderWidth: 2,
               fill: false,
               tension: 0.38,
@@ -221,11 +224,11 @@ function RevenueOverviewChart({ sortedAsc, currentMonthKey: curKey, prevMonthKey
               data: tchrData,
               borderColor: "#d97706",
               backgroundColor: "transparent",
-              pointBackgroundColor: tchrData.map((_, i) => i === curIdx ? "#d97706" : i === prevIdx ? "#f59e0b" : "#d97706"),
+              pointBackgroundColor: makePointColors("#d97706", tchrData),
               pointRadius:      makePointSizes(tchrData),
               pointHoverRadius: 8,
-              pointBorderColor: "#fff",
-              pointBorderWidth: 2,
+              pointBorderColor: tchrData.map((_, i) => (i === curIdx || i === prevIdx) ? "#f59e0b" : "#fff"),
+              pointBorderWidth: tchrData.map((_, i) => (i === curIdx || i === prevIdx) ? 3 : 2),
               borderWidth: 2,
               fill: false,
               tension: 0.38,
@@ -246,6 +249,9 @@ function RevenueOverviewChart({ sortedAsc, currentMonthKey: curKey, prevMonthKey
               titleColor: textColor,
               bodyColor: mutedColor,
               padding: 12,
+              usePointStyle: false,
+              boxWidth: 10,
+              boxHeight: 10,
               callbacks: {
                 title: (items) => {
                   const idx = items[0]?.dataIndex;
