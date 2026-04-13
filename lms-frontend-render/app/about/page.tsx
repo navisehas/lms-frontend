@@ -1,13 +1,12 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Target, Lightbulb, Users, Heart, Loader2 } from 'lucide-react';
+import { Target, Lightbulb, Users, Heart, Loader2, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-
 export default function About() {
-  const [lecturers, setLecturers] = useState<any[]>([]);
+  const [lecturers, setLecturers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch teachers from the database on component load
@@ -141,7 +140,7 @@ export default function About() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {lecturers.map((lec) => (
-              <div key={lec.user_id} className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300">
+              <div key={lec.user_id} className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col h-full">
                 {/* Profile Image Background */}
                 <div className="h-24 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 
@@ -155,15 +154,23 @@ export default function About() {
                 </div>
                 
                 {/* Card Content */}
-                <div className="p-6 text-center">
+                <div className="p-6 text-center flex flex-col flex-1">
                   <h3 className="text-lg font-bold text-gray-900">{lec.name}</h3>
                   <p className="text-blue-600 font-medium mb-2">{lec.specialization || "Expert Lecturer"}</p>
                   
                   <div className="h-px bg-gray-100 my-3"></div>
                   
-                  <p className="text-sm text-gray-700 font-medium">
+                  <p className="text-sm text-gray-700 font-medium flex-1 mb-6">
                     {lec.description || "A dedicated professional with a proven track record of guiding students to success."}
                   </p>
+                  
+                  {/* --- UPDATED LINK WITH QUERY PARAMETER --- */}
+                  <Link 
+                    href={`/courses?teacher=${lec.user_id}`}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold py-3.5 rounded-xl transition-colors shadow-md mt-auto"
+                  >
+                    View Courses <ArrowRight size={16} />
+                  </Link>
                 </div>
               </div>
             ))}
