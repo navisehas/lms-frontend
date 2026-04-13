@@ -15,7 +15,6 @@ export default function PublicCourses() {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedTeacher, setSelectedTeacher] = useState("All");
 
   // Fetch data from API on load
@@ -52,12 +51,6 @@ export default function PublicCourses() {
     fetchData();
   }, []);
 
-  // Extract unique categories for the filter dropdown dynamically
-  const uniqueCategories = useMemo(() => {
-    const cats = rawCourses.map(c => c.category).filter(Boolean);
-    return ["All", ...new Set(cats)];
-  }, [rawCourses]);
-
   // Extract unique teachers for the filter dropdown dynamically
   const uniqueTeachers = useMemo(() => {
     const teacherIds = [...new Set(rawCourses.map(c => c.teacher_id).filter(Boolean))];
@@ -77,26 +70,23 @@ export default function PublicCourses() {
       const searchStr = `${c.title} ${tName}`.toLowerCase();
       const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
       
-      // Category Match
-      const matchesCategory = selectedCategory === "All" || c.category === selectedCategory;
-      
       // Teacher Match
       const matchesTeacher = selectedTeacher === "All" || c.teacher_id === selectedTeacher;
 
-      return matchesSearch && matchesCategory && matchesTeacher;
+      return matchesSearch && matchesTeacher;
     }).map((c) => ({
       ...c,
       // Inject teacher details directly into the course object for the card
       teacher_name: teachersMap[c.teacher_id]?.teacher_name || "Unassigned Teacher",
       teacher_image: teachersMap[c.teacher_id]?.profile_picture_url || null
     }));
-  }, [rawCourses, teachersMap, searchTerm, selectedCategory, selectedTeacher]);
+  }, [rawCourses, teachersMap, searchTerm, selectedTeacher]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       
       {/* ── HEADER SECTION ── */}
-      <div className="bg-gray-900 text-white py-16">
+      <div className="bg-blue-800 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <h1 className="text-4xl font-bold mb-4">Explore Our Courses</h1>
           <p className="text-gray-400 max-w-2xl mx-auto mb-8">
@@ -127,17 +117,6 @@ export default function PublicCourses() {
               />
             </div>
 
-            {/* Category Filter */}
-            <select 
-              className="border border-gray-200 p-2.5 rounded-xl bg-gray-50 text-gray-700 text-sm font-medium hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px] transition"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-            >
-              {uniqueCategories.map(cat => (
-                <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
-              ))}
-            </select>
-
             {/* Teacher Filter */}
             <select 
               className="border border-gray-200 p-2.5 rounded-xl bg-gray-50 text-gray-700 text-sm font-medium hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px] transition"
@@ -164,7 +143,7 @@ export default function PublicCourses() {
             <h3 className="text-xl font-bold text-gray-800">No courses found</h3>
             <p className="text-gray-500 mt-2">Try adjusting your search or filters to find what you're looking for.</p>
             <button 
-              onClick={() => { setSearchTerm(""); setSelectedCategory("All"); setSelectedTeacher("All"); }}
+              onClick={() => { setSearchTerm(""); setSelectedTeacher("All"); }}
               className="mt-6 px-6 py-2.5 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition"
             >
               Clear All Filters
