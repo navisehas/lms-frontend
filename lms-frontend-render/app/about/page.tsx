@@ -5,8 +5,16 @@ import { Target, Lightbulb, Users, Heart, Loader2, ArrowRight } from 'lucide-rea
 import Image from 'next/image';
 const API = process.env.NEXT_PUBLIC_API_URL;
 
+interface Lecturer {
+  user_id: number;
+  name: string;
+  specialization?: string;
+  description?: string;
+  profile_picture_url?: string;
+}
+
 export default function About() {
-  const [lecturers, setLecturers] = useState([]);
+  const [lecturers, setLecturers] = useState<Lecturer[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch teachers from the database on component load

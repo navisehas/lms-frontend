@@ -18,7 +18,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 export default function Home() {
   const [showPopup, setShowPopup] = useState(false);
   const [isFadingIn, setIsFadingIn] = useState(false);
-  const [popupData, setPopupData] = useState(null);
+  const [popupData, setPopupData] = useState<{ image_url: string } | null>(null);
 
   useEffect(() => {
     // Fetch dynamic popup data from the backend
