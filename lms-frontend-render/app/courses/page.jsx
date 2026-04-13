@@ -182,7 +182,7 @@ function CourseCard({ course }) {
             <Play size={40} className="text-white opacity-20" />
           </div>
         )}
-        {/* Category Tag */}
+        {/* Category Tag (Kept for visual info on the card, even without the filter) */}
         {course.category && (
           <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-white/90 backdrop-blur text-blue-900 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
             <Tag size={12} /> {course.category}
@@ -195,8 +195,12 @@ function CourseCard({ course }) {
         
         {/* Teacher Info */}
         <div className="flex items-center gap-2 mb-2 text-gray-700">
-          <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 shrink-0">
-            <User size={16} className="text-indigo-600" />
+          <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 shrink-0 overflow-hidden">
+            {course.teacher_image ? (
+              <img src={course.teacher_image} alt={course.teacher_name} className="w-full h-full object-cover" />
+            ) : (
+              <User size={16} className="text-indigo-600" />
+            )}
           </div>
           <span className="text-sm font-bold truncate leading-tight">
             {course.teacher_name}
@@ -241,7 +245,7 @@ function CourseCard({ course }) {
 
           <Link 
             href="/login"
-            className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white text-sm font-bold py-3.5 rounded-xl transition-colors shadow-md"
+            className="w-full flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold py-3.5 rounded-xl transition-colors shadow-md"
           >
             Login to Enroll <ArrowRight size={16} />
           </Link>
