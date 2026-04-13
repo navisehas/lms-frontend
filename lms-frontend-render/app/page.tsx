@@ -13,29 +13,42 @@ import {
   X
 } from 'lucide-react';
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 export default function Home() {
   const [showPopup, setShowPopup] = useState(false);
   const [isFadingIn, setIsFadingIn] = useState(false);
+  const [popupData, setPopupData] = useState(null);
 
   useEffect(() => {
-    // ------------------------------------------------------------------
-    // 🛠️ DEVELOPMENT MODE: Session storage is disabled so you can test it!
-    // To make it show only once per session in production, uncomment the 
-    // "popupSeen" lines later.
-    // ------------------------------------------------------------------
-    
-    // const popupSeen = sessionStorage.getItem('welcomePopupSeen');
-    // if (!popupSeen) {
-      
-      // Shows popup after just 0.5 seconds (down from 1.5s)
-      const timer = setTimeout(() => {
-        setShowPopup(true);
-        setTimeout(() => setIsFadingIn(true), 50); 
-      }, 500);
+    // Fetch dynamic popup data from the backend
+    const fetchPopupData = async () => {
+      try {
+        const res = await fetch(`${API}/public/popup`);
+        if (res.ok) {
+          const data = await res.json();
+          // Only show if the admin has toggled it to 'active' AND an image exists
+          if (data && data.is_active && data.image_url) {
+            setPopupData(data);
+            
+            // 🛠️ DEVELOPMENT MODE: Session storage is disabled so you can test it!
+            // To make it show only once per session in production, uncomment the "popupSeen" lines.
+            // const popupSeen = sessionStorage.getItem('welcomePopupSeen');
+            // if (!popupSeen) {
+              const timer = setTimeout(() => {
+                setShowPopup(true);
+                setTimeout(() => setIsFadingIn(true), 50); 
+              }, 500); // Shows popup after 0.5 seconds
+              return () => clearTimeout(timer);
+            // }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load popup data:", error);
+      }
+    };
 
-      return () => clearTimeout(timer);
-      
-    // }
+    fetchPopupData();
   }, []);
 
   const closePopup = () => {
@@ -49,8 +62,8 @@ export default function Home() {
   return (
     <main className="flex flex-col min-h-screen relative">
       
-      {/* ─── WELCOME POPUP MODAL ─── */}
-      {showPopup && (
+      {/* ─── DYNAMIC WELCOME POPUP MODAL ─── */}
+      {showPopup && popupData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           {/* Backdrop */}
           <div 
@@ -60,53 +73,30 @@ export default function Home() {
             onClick={closePopup}
           />
 
-          {/* Modal Content */}
+          {/* Modal Content (Image Only) */}
           <div 
-            className={`relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden z-10 flex flex-col transform transition-all duration-300 ease-out ${
+            className={`relative max-w-2xl w-full z-10 flex flex-col items-center justify-center transform transition-all duration-300 ease-out ${
               isFadingIn ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-4"
             }`}
           >
-            {/* Close Button */}
+            {/* Close Button hovering outside/corner of image */}
             <button 
               onClick={closePopup}
-              className="absolute top-4 right-4 z-20 bg-black/50 text-white rounded-full p-1.5 hover:bg-black/80 transition-colors"
+              className="absolute -top-4 -right-4 md:-right-6 z-20 bg-black/70 text-white rounded-full p-2 hover:bg-red-600 transition-colors shadow-lg border border-white/20"
               aria-label="Close popup"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 md:w-6 md:h-6" />
             </button>
 
-            {/* Image Section */}
-            <div className="relative w-full max-h-[85vh] bg-blue-50 flex items-center justify-center">
-              <img 
-                src="0/Dashboard.png" 
-                alt="Special Welcome Offer" 
-                className="w-full h-auto max-h-[70vh] object-contain"
-                onError={(e) => {
-                  const img = e.target as HTMLImageElement;
-                  img.style.display = 'none';
-                  if (img.parentElement) img.parentElement.innerHTML = `
-                    <div class="p-12 text-center w-full">
-                      <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-                      </div>
-                      <h2 class="text-3xl font-bold text-blue-900 mb-4">Admissions Open 2026</h2>
-                      <p class="text-gray-600 mb-16">Join the most advanced hybrid learning platform in Sri Lanka.</p>
-                    </div>
-                  `;
-                }}
-              />
-              
-              {/* Call to Action Button */}
-              <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex justify-center">
-                <Link 
-                  href="/register"
-                  onClick={closePopup}
-                  className="px-8 py-3.5 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 transition shadow-lg flex items-center gap-2 transform hover:scale-105"
-                >
-                  Enroll Now for 2026 <ArrowRight className="w-5 h-5" />
-                </Link>
-              </div>
-            </div>
+            {/* Dynamic Image from DB */}
+            <img 
+              src={popupData.image_url} 
+              alt="Welcome Promotional Offer" 
+              className="w-full h-auto max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
           </div>
         </div>
       )}
