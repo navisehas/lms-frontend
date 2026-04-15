@@ -171,13 +171,13 @@ export default function ManagerPaymentsPage() {
       (s.phone_no || "").includes(search);
     const matchStatus =
       filterStatus === "ALL" ||
-      (filterStatus === "PAID"   &&  s.is_enrolled) ||
-      (filterStatus === "UNPAID" && !s.is_enrolled);
+      (filterStatus === "PAID"   &&  s.current_month_paid) ||
+      (filterStatus === "UNPAID" && !s.current_month_paid);
     return matchSearch && matchStatus;
   });
 
-  const paidCount   = students.filter(s =>  s.is_enrolled).length;
-  const unpaidCount = students.filter(s => !s.is_enrolled).length;
+  const paidCount   = students.filter(s =>  s.current_month_paid).length;
+  const unpaidCount = students.filter(s => !s.current_month_paid).length;
 
   const totalRevenue = allPayments.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
   const cashCount    = allPayments.filter(p => p.payment_type === "CASH").length;
@@ -527,13 +527,13 @@ export default function ManagerPaymentsPage() {
                     <div
                       key={student.student_id}
                       className={`flex flex-col sm:flex-row sm:items-center justify-between px-6 py-4 hover:bg-gray-50/80 transition-colors gap-4 ${
-                        student.is_enrolled ? "bg-green-50/20" : ""
+                        student.current_month_paid ? "bg-green-50/20" : ""
                       }`}
                     >
                       {/* Left: student info */}
                       <div className="flex items-center gap-3.5 min-w-0">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
-                          student.is_enrolled
+                          student.current_month_paid
                             ? "bg-green-100 text-green-700"
                             : "bg-gray-100 text-gray-600"
                         }`}>
@@ -556,14 +556,19 @@ export default function ManagerPaymentsPage() {
 
                       {/* Right: status / action */}
                       <div className="flex items-center sm:justify-end flex-shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-gray-100">
-                        {student.is_enrolled ? (
+                        {student.current_month_paid ? (
                           <div className="text-left sm:text-right">
                             <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-green-700 bg-green-100 border border-green-200 px-3 py-1.5 rounded-lg">
-                              <BadgeCheck size={14} /> Enrolled
+                              <BadgeCheck size={14} /> Paid this month
                             </span>
                             <p className="text-[11px] text-gray-400 font-medium mt-1.5">
-                              Rs. {parseFloat(student.paid_amount || 0).toLocaleString()} · {student.payment_type === "ONLINE" ? "Online" : "Cash"}
+                              Rs. {parseFloat(student.current_month_paid_amount || 0).toLocaleString()} · {student.current_month_payment_type === "ONLINE" ? "Online" : "Cash"}
                             </p>
+                            {student.access_until && (
+                              <p className="text-[11px] text-blue-500 font-medium mt-0.5">
+                                Access until {new Date(student.access_until).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <button
