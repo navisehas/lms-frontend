@@ -1,122 +1,68 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   AlertCircle, BookOpen, CheckCircle, Lock,
   Loader, RefreshCw, BadgeCheck, ChevronRight,
-  GraduationCap, Sparkles, LayoutGrid, Loader2, Wifi,
+  GraduationCap, Sparkles, LayoutGrid,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
-const API                  = process.env.NEXT_PUBLIC_API_URL;
-const PAYHERE_CHECKOUT_URL = process.env.NEXT_PUBLIC_PAYHERE_URL;
-const CURRENCY             = "LKR";
-const FRONTEND_URL         = process.env.NEXT_PUBLIC_FRONTEND_URL;
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function StudentCoursesPage() {
   const router = useRouter();
-  const [user, setUser]           = useState(null);
-  const [courses, setCourses]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
-  const [payingCourse, setPayingCourse] = useState(null);
-
-  const userRef = useRef(null);
+  const [user, setUser]       = useState(null);
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState("");
 
   useEffect(() => {
     const auth = guardRoute("STUDENT", router);
-    if (auth) {
-      setUser(auth);
-      userRef.current = auth;
-      fetchCourses(auth.user_id);
-    }
+    if (auth) { setUser(auth); fetchCourses(auth.user_id); }
   }, [router]);
 
   async function fetchCourses(studentId) {
     setLoading(true);
     setError("");
     try {
-      const res  = await authFetch(`${API}/payments/courses/${studentId}`);
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || "Failed to load your courses.");
+      // Fetch all courses + enrollment status in parallel
+      const [allRes, enrollRes] = await Promise.all([
+        authFetch(`${API}/courses`),
+        authFetch(`${API}/payments/courses/${studentId}`),
+      ]);
+
+      const allData   = await allRes.json();
+      const enrollData = enrollRes.ok ? await enrollRes.json() : { courses: [] };
+
+      if (!allRes.ok) {
+        setError("Failed to load courses.");
         setCourses([]);
         return;
       }
-      setCourses(data.courses || []);
+
+      // Build a map of enrolled course ids
+      const enrolledMap = new Map(
+        (enrollData.courses || []).map((c) => [c.course_id, c])
+      );
+
+      // Merge: all courses, mark enrolled ones
+      const merged = (allData.courses || allData || []).map((c) => {
+        const enrollInfo = enrolledMap.get(c.course_id);
+        return {
+          ...c,
+          is_enrolled:  Boolean(enrollInfo?.is_enrolled),
+          access_until: enrollInfo?.access_until || null,
+        };
+      });
+
+      setCourses(merged);
     } catch {
       setError("Network error. Please try again.");
       setCourses([]);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handlePayNow(course) {
-    if (payingCourse) return;
-    const currentUser = userRef.current;
-    if (!currentUser) return;
-
-    setPayingCourse(course.course_id);
-    setError("");
-
-    try {
-      const now       = new Date();
-      const pad       = (n) => String(n).padStart(2, "0");
-      const billMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-      const order_id  = `${course.course_id}::${currentUser.user_id}::${billMonth}`;
-      const amount    = parseFloat(course.fee).toFixed(2);
-
-      const hashRes  = await authFetch(`${API}/payments/online/hash`, {
-        method: "POST",
-        body: JSON.stringify({ order_id, amount, currency: CURRENCY }),
-      });
-      const hashData = await hashRes.json();
-
-      if (!hashData.success) {
-        setError(hashData.error || "Could not initiate payment.");
-        setPayingCourse(null);
-        return;
-      }
-
-      const form   = document.createElement("form");
-      form.method  = "POST";
-      form.action  = PAYHERE_CHECKOUT_URL;
-
-      const fields = {
-        merchant_id: hashData.merchant_id,
-        return_url:  `${FRONTEND_URL}/student/success?order_id=${encodeURIComponent(order_id)}`,
-        cancel_url:  `${FRONTEND_URL}/student/courses?cancelled=1`,
-        notify_url:  `${API}/payments/online/notify`,
-        order_id,
-        items:       course.title,
-        currency:    CURRENCY,
-        amount,
-        first_name:  currentUser.name?.split(" ")[0] || "Student",
-        last_name:   currentUser.name?.split(" ").slice(1).join(" ") || "",
-        email:       currentUser.email || `${currentUser.user_id}@lms.lk`,
-        phone:       currentUser.phone_no || "0000000000",
-        address:     currentUser.address || "Sri Lanka",
-        city:        "Colombo",
-        country:     "Sri Lanka",
-        hash:        hashData.hash,
-      };
-
-      Object.entries(fields).forEach(([k, v]) => {
-        const input  = document.createElement("input");
-        input.type   = "hidden";
-        input.name   = k;
-        input.value  = String(v ?? "");
-        form.appendChild(input);
-      });
-
-      document.body.appendChild(form);
-      form.submit();
-    } catch (err) {
-      console.error("Pay error:", err);
-      setError("Payment initiation failed. Please try again.");
-      setPayingCourse(null);
     }
   }
 
@@ -128,8 +74,10 @@ export default function StudentCoursesPage() {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <BookOpen size={24} style={{ color: "#1E40AF" }} className="flex-shrink-0 mt-1" />
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-md" style={{ backgroundColor: "#1E40AF" }}>
+            <GraduationCap size={22} className="text-white" />
+          </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">My Courses</h1>
             <p className="text-sm text-gray-400 mt-0.5">
@@ -206,13 +154,7 @@ export default function StudentCoursesPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {enrolledCourses.map((course) => (
-                  <CourseCard
-                    key={course.course_id}
-                    course={course}
-                    active={true}
-                    paying={payingCourse === course.course_id}
-                    onPay={handlePayNow}
-                  />
+                  <CourseCard key={course.course_id} course={course} active={true} />
                 ))}
               </div>
             </section>
@@ -230,13 +172,7 @@ export default function StudentCoursesPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {lockedCourses.map((course) => (
-                  <CourseCard
-                    key={course.course_id}
-                    course={course}
-                    active={false}
-                    paying={payingCourse === course.course_id}
-                    onPay={handlePayNow}
-                  />
+                  <CourseCard key={course.course_id} course={course} active={false} />
                 ))}
               </div>
             </section>
@@ -248,7 +184,7 @@ export default function StudentCoursesPage() {
   );
 }
 
-function CourseCard({ course, active, paying, onPay }) {
+function CourseCard({ course, active }) {
   return (
     <div
       className={`group relative bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md ${
@@ -297,17 +233,13 @@ function CourseCard({ course, active, paying, onPay }) {
             <ChevronRight size={14} className="ml-auto" />
           </Link>
         ) : (
-          <button
-            onClick={() => onPay(course)}
-            disabled={!!paying}
-            className="flex items-center justify-center gap-2 w-full rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-all"
+          <Link
+            href="/student/payments"
+            className="flex items-center justify-center gap-2 w-full rounded-xl bg-amber-500 hover:bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors"
           >
-            {paying ? (
-              <><Loader2 size={14} className="animate-spin" /> Redirecting…</>
-            ) : (
-              <><Wifi size={14} /> Pay to Unlock<ChevronRight size={14} className="ml-auto" /></>
-            )}
-          </button>
+            <Lock size={14} /> Pay to Unlock
+            <ChevronRight size={14} className="ml-auto" />
+          </Link>
         )}
       </div>
     </div>
