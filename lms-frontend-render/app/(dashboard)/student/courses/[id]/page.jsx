@@ -3,14 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  AlertCircle,
-  ArrowLeft,
-  Loader,
-  Download,
-  Clock,
-  User,
-  DollarSign,
-  CheckCircle,
+  AlertCircle, ArrowLeft, Loader, Download,
+  Clock, User, DollarSign, Lock,
+  BookOpen, FileText, ExternalLink, BadgeCheck,
+  ChevronDown, ChevronRight, GraduationCap, PlayCircle,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
@@ -23,78 +19,68 @@ function getMaterialHref(value) {
 }
 
 export default function CourseDetailsPage() {
-  const router = useRouter();
-  const params = useParams();
+  const router   = useRouter();
+  const params   = useParams();
   const courseId = params.id;
 
-  const [user, setUser] = useState(null);
-  const [course, setCourse] = useState(null);
-  const [materials, setMaterials] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [isEnrolled, setIsEnrolled] = useState(false);
-  const [isPaid, setIsPaid] = useState(false);
-  const [enrolling, setEnrolling] = useState(false);
+  const [user,        setUser]        = useState(null);
+  const [course,      setCourse]      = useState(null);
+  const [materials,   setMaterials]   = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState("");
+  const [isEnrolled,  setIsEnrolled]  = useState(false);
+  const [openLessons, setOpenLessons] = useState({});
 
   const materialsByLesson = useMemo(() => {
     const grouped = new Map();
-
-    materials.forEach((material) => {
-      const lessonKey = material.lesson_title || "General";
-      if (!grouped.has(lessonKey)) {
-        grouped.set(lessonKey, []);
-      }
-      grouped.get(lessonKey).push(material);
+    materials.forEach((m) => {
+      const key = m.lesson_title || "General";
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(m);
     });
-
     return Array.from(grouped.entries()).map(([lessonTitle, lessonMaterials]) => ({
-      lessonTitle,
-      lessonMaterials,
+      lessonTitle, lessonMaterials,
     }));
   }, [materials]);
 
+  // Auto-open all lessons on load
+  useEffect(() => {
+    if (materialsByLesson.length > 0) {
+      const initial = {};
+      materialsByLesson.forEach(({ lessonTitle }) => { initial[lessonTitle] = true; });
+      setOpenLessons(initial);
+    }
+  }, [materialsByLesson.length]);
+
   useEffect(() => {
     const auth = guardRoute("STUDENT", router);
-    if (auth) {
-      setUser(auth);
-      fetchCourseDetails(auth.user_id);
-    }
+    if (auth) { setUser(auth); fetchCourseDetails(auth.user_id); }
   }, [router, courseId]);
 
   async function fetchCourseDetails(studentId) {
     setLoading(true);
     setError("");
-
     try {
-      // Fetch course details
       const courseRes = await authFetch(`${API}/courses/${courseId}`);
-      if (!courseRes.ok) {
-        setError("Course not found.");
-        setCourse(null);
-        return;
-      }
+      if (!courseRes.ok) { setError("Course not found."); setCourse(null); return; }
       const courseData = await courseRes.json();
       setCourse(courseData);
 
-      // Check if enrolled
-      const enrollRes = await authFetch(`${API}/payments/courses/${studentId}`);
+      const enrollRes  = await authFetch(`${API}/payments/courses/${studentId}`);
       if (enrollRes.ok) {
-        const enrollData = await enrollRes.json();
+        const enrollData    = await enrollRes.json();
         const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
         const enrolled = Boolean(matchedCourse?.is_enrolled);
-        const paid = Boolean(matchedCourse?.payment_id);
         setIsEnrolled(enrolled);
-        setIsPaid(paid);
 
-        if (paid) {
-          const materialsRes = await authFetch(`${API}/courses/${courseId}/materials`);
-          const materialsData = await materialsRes.json();
-
-          if (!materialsRes.ok || !materialsData.success) {
-            setError(materialsData.error || "Failed to load course materials.");
+        if (enrolled) {
+          const matRes  = await authFetch(`${API}/courses/${courseId}/materials`);
+          const matData = await matRes.json();
+          if (!matRes.ok || !matData.success) {
+            setError(matData.error || "Failed to load course materials.");
             setMaterials([]);
           } else {
-            setMaterials(materialsData.materials || []);
+            setMaterials(matData.materials || []);
           }
         } else {
           setMaterials([]);
@@ -108,216 +94,193 @@ export default function CourseDetailsPage() {
     }
   }
 
-  async function handleEnroll() {
-    if (enrolling || !course) return;
-
-    setEnrolling(true);
-    setError("");
-
-    try {
-      const res = await authFetch(`${API}/courses/enrollments/enroll`, {
-        method: "POST",
-        body: JSON.stringify({ course_id: courseId }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Enrollment failed.");
-        return;
-      }
-
-      setIsEnrolled(true);
-      setIsPaid(false);
-      setError("");
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setEnrolling(false);
-    }
+  function toggleLesson(title) {
+    setOpenLessons((prev) => ({ ...prev, [title]: !prev[title] }));
   }
 
   if (!user) return null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Back Button */}
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+
+      {/* Back link */}
       <Link
-        href="/student/browse-courses"
-        className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium text-sm"
+        href="/student/courses"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 font-medium transition-colors group"
       >
-        <ArrowLeft size={16} /> Back to Courses
+        <ArrowLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
+        Back to My Courses
       </Link>
 
       {error && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-          <AlertCircle size={16} /> {error}
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3.5 text-sm">
+          <AlertCircle size={16} className="flex-shrink-0" /> {error}
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-          <Loader size={20} className="animate-spin" /> Loading course...
+        <div className="flex flex-col items-center justify-center py-32 gap-3 text-gray-400">
+          <Loader size={28} className="animate-spin text-indigo-400" />
+          <span className="text-sm font-medium">Loading course…</span>
         </div>
-      ) : !course ? (
-        <div className="text-center py-24">
-          <AlertCircle size={48} className="text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg">Course not found.</p>
-        </div>
-      ) : (
+      ) : !course ? null : (
         <>
-          {/* Course Header */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            {/* Thumbnail */}
-            {course.thumbnail_url && (
-              <div className="h-64 bg-linear-to-br from-indigo-400 to-indigo-600 flex items-center justify-center overflow-hidden">
-                <img
-                  src={course.thumbnail_url}
-                  alt={course.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            )}
+          {/* Course Hero Card */}
+          <div className={`relative bg-white rounded-3xl border shadow-sm overflow-hidden ${isEnrolled ? "border-green-200" : "border-gray-200"}`}>
+            {/* Accent bar */}
+            <div className={`h-1.5 w-full ${isEnrolled ? "bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
 
-            {/* Details */}
-            <div className="p-6 space-y-4">
-              <div>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h1 className="text-3xl font-bold text-gray-900">
-                      {course.title}
-                    </h1>
-                    <p className="text-gray-600 mt-2 text-base">
-                      {course.description || "No description"}
-                    </p>
+            <div className="p-6 sm:p-8">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${isEnrolled ? "bg-green-50" : "bg-amber-50"}`}>
+                    <GraduationCap size={24} className={isEnrolled ? "text-green-600" : "text-amber-500"} />
                   </div>
-
-                  {isEnrolled && (
-                    <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium whitespace-nowrap">
-                      <CheckCircle size={16} /> Enrolled
-                    </div>
-                  )}
+                  <div>
+                    <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">{course.title}</h1>
+                  </div>
                 </div>
+                {isEnrolled ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 text-xs font-bold flex-shrink-0 shadow-sm">
+                    <BadgeCheck size={13} /> Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 text-xs font-bold flex-shrink-0 shadow-sm">
+                    <Lock size={13} /> Locked
+                  </span>
+                )}
               </div>
 
-              {/* Metadata Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t pt-6">
-                {course.teacher_name && (
-                  <div>
-                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <User size={14} /> Instructor
-                    </p>
-                    <p className="text-sm font-semibold text-gray-800 mt-1">
-                      {course.teacher_name}
-                    </p>
-                  </div>
-                )}
-
-                {course.duration && (
-                  <div>
-                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <Clock size={14} /> Duration
-                    </p>
-                    <p className="text-sm font-semibold text-gray-800 mt-1">
-                      {course.duration}
-                    </p>
-                  </div>
-                )}
-
-                {course.enrolled_count !== undefined && (
-                  <div>
-                    <p className="text-xs text-gray-500">Students</p>
-                    <p className="text-sm font-semibold text-gray-800 mt-1">
-                      {course.enrolled_count}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    <DollarSign size={14} /> Fee
-                  </p>
-                  <p className="text-sm font-semibold text-indigo-600 mt-1">
-                    {course.fee > 0 ? `Rs. ${(course.fee || 0).toLocaleString()}` : "Free"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Enroll Button */}
-              {!isEnrolled && (
-                <div className="border-t pt-6">
-                  <button
-                    onClick={handleEnroll}
-                    disabled={enrolling}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
-                  >
-                    {enrolling ? (
-                      <>
-                        <Loader size={18} className="animate-spin" /> Enrolling...
-                      </>
-                    ) : (
-                      "Enroll in This Course"
-                    )}
-                  </button>
-                </div>
+              {course.description && (
+                <p className="text-sm text-gray-600 leading-relaxed mb-6">{course.description}</p>
               )}
+
+              {/* Meta grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {course.teacher_name && (
+                  <div className="bg-gray-50 rounded-xl p-3.5">
+                    <p className="text-xs text-gray-400 flex items-center gap-1 mb-1"><User size={11} /> Teacher</p>
+                    <p className="font-bold text-gray-800 text-sm">{course.teacher_name}</p>
+                  </div>
+                )}
+                {course.duration && (
+                  <div className="bg-gray-50 rounded-xl p-3.5">
+                    <p className="text-xs text-gray-400 flex items-center gap-1 mb-1"><Clock size={11} /> Duration</p>
+                    <p className="font-bold text-gray-800 text-sm">{course.duration}</p>
+                  </div>
+                )}
+                <div className="bg-gray-50 rounded-xl p-3.5">
+                  <p className="text-xs text-gray-400 flex items-center gap-1 mb-1"><DollarSign size={11} /> Monthly Fee</p>
+                  <p className="font-bold text-indigo-600 text-sm">
+                    {course.fee > 0 ? `Rs. ${parseFloat(course.fee).toLocaleString()}` : "Free"}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Materials Section */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-gray-900">Course Materials</h2>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <BookOpen size={18} className="text-indigo-500" /> Course Materials
+              </h2>
+              {isEnrolled && materials.length > 0 && (
+                <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
+                  {materials.length} file{materials.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
 
-            {!isPaid ? (
-              <div className="text-center py-12 bg-amber-50 rounded-xl border border-amber-200">
-                <p className="text-amber-700 font-medium">Complete payment to unlock course materials.</p>
-                <p className="text-amber-600 text-sm mt-1">After payment confirmation, materials will appear here automatically.</p>
+            {!isEnrolled ? (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-12 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                  <Lock size={28} className="text-amber-400" />
+                </div>
+                <p className="text-amber-900 font-bold text-base mb-2">Materials Locked</p>
+                <p className="text-amber-600 text-sm mb-6 max-w-xs mx-auto">
+                  Complete your payment to unlock all lessons and course materials.
+                </p>
+                <Link
+                  href="/student/payments"
+                  className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow-sm"
+                >
+                  <Lock size={14} /> Go to Payments
+                </Link>
               </div>
             ) : materials.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
-                <p className="text-gray-500">No materials available yet.</p>
+              <div className="text-center py-14 bg-gray-50 rounded-2xl border border-gray-200">
+                <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                  <BookOpen size={26} className="text-gray-300" />
+                </div>
+                <p className="text-gray-600 font-semibold">No materials yet</p>
+                <p className="text-gray-400 text-sm mt-1">Your teacher will add them soon.</p>
               </div>
             ) : (
-              <div className="space-y-5">
-                {materialsByLesson.map((lessonGroup) => (
-                  <div key={lessonGroup.lessonTitle} className="rounded-xl border border-gray-200 bg-white p-4">
-                    <h3 className="text-sm font-bold text-indigo-700 mb-3">{lessonGroup.lessonTitle}</h3>
-                    <div className="space-y-3">
-                      {lessonGroup.lessonMaterials.map((material) => (
-                        <div
-                          key={material.material_id}
-                          className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3 hover:shadow-sm transition"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-gray-900 text-sm truncate">{material.title}</h4>
-                          </div>
+              <div className="space-y-3">
+                {materialsByLesson.map(({ lessonTitle, lessonMaterials }, idx) => (
+                  <div key={lessonTitle} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                    {/* Lesson header — collapsible */}
+                    <button
+                      onClick={() => toggleLesson(lessonTitle)}
+                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-600 text-xs font-extrabold flex items-center justify-center flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="text-sm font-bold text-gray-800">{lessonTitle}</span>
+                        <span className="text-xs text-gray-400 font-medium">
+                          {lessonMaterials.length} item{lessonMaterials.length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      {openLessons[lessonTitle]
+                        ? <ChevronDown size={16} className="text-gray-400" />
+                        : <ChevronRight size={16} className="text-gray-400" />}
+                    </button>
 
-                          <div className="flex gap-2 ml-4">
-                            {material.content_url && (
-                              <a
-                                href={getMaterialHref(material.content_url)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium flex items-center gap-1 bg-indigo-50 px-3 py-2 rounded-lg"
-                              >
-                                <Download size={14} /> Document
-                              </a>
-                            )}
-
-                            {material.external_url && (
-                              <a
-                                href={material.external_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-2 rounded-lg bg-blue-50"
-                              >
-                                Link ↗
-                              </a>
-                            )}
+                    {/* Materials list */}
+                    {openLessons[lessonTitle] && (
+                      <div className="border-t border-gray-100 divide-y divide-gray-50">
+                        {lessonMaterials.map((material) => (
+                          <div
+                            key={material.material_id}
+                            className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors gap-4"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                                {material.external_url
+                                  ? <PlayCircle size={15} className="text-indigo-500" />
+                                  : <FileText size={15} className="text-indigo-400" />}
+                              </div>
+                              <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
+                            </div>
+                            <div className="flex gap-2 flex-shrink-0">
+                              {material.content_url && (
+                                <a
+                                  href={getMaterialHref(material.content_url)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  <Download size={12} /> Download
+                                </a>
+                              )}
+                              {material.external_url && (
+                                <a
+                                  href={material.external_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  <ExternalLink size={12} /> Open Link
+                                </a>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
