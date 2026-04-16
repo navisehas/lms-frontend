@@ -396,7 +396,7 @@ export default function StudentPaymentsPage() {
               placeholder="Search by course name, teacher name, or description..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 placeholder-gray-400 text-base"
             />
           </div>
           <div className="relative">
@@ -404,13 +404,13 @@ export default function StudentPaymentsPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm appearance-none bg-white cursor-pointer min-w-[180px]"
+              className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-base appearance-none bg-white cursor-pointer min-w-[200px]"
             >
-              <option value="all">All Courses</option>
-              <option value="paid">Paid This Month</option>
-              <option value="unpaid">Unpaid</option>
-              <option value="enrolled">Currently Enrolled</option>
-              <option value="expired">Expired / Renewal Due</option>
+              <option value="all">📚 All Courses</option>
+              <option value="paid">✅ Paid This Month</option>
+              <option value="unpaid">⏳ Unpaid</option>
+              <option value="enrolled">🎓 Currently Enrolled</option>
+              <option value="expired">⚠️ Expired / Renewal Due</option>
             </select>
           </div>
         </div>
@@ -421,18 +421,18 @@ export default function StudentPaymentsPage() {
             <div className="flex flex-wrap gap-2">
               {searchTerm && (
                 <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                  Search: "{searchTerm}"
-                  <button onClick={() => setSearchTerm("")} className="hover:text-blue-900">
+                  🔍 Search: "{searchTerm}"
+                  <button onClick={() => setSearchTerm("")} className="hover:text-blue-900 ml-1">
                     <X size={12} />
                   </button>
                 </span>
               )}
               {statusFilter !== "all" && (
                 <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full">
-                  Filter: {statusFilter === "paid" ? "Paid This Month" : 
+                  🏷️ Filter: {statusFilter === "paid" ? "Paid This Month" : 
                            statusFilter === "unpaid" ? "Unpaid" :
                            statusFilter === "enrolled" ? "Currently Enrolled" : "Expired"}
-                  <button onClick={() => setStatusFilter("all")} className="hover:text-green-900">
+                  <button onClick={() => setStatusFilter("all")} className="hover:text-green-900 ml-1">
                     <X size={12} />
                   </button>
                 </span>
@@ -450,7 +450,7 @@ export default function StudentPaymentsPage() {
 
       {/* Results count */}
       {!loading && (
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-500 font-medium">
           Showing {totalCourses} course{totalCourses !== 1 ? 's' : ''}
           {totalCourses > 0 && (searchTerm || statusFilter !== "all") && " (filtered)"}
         </div>
@@ -638,7 +638,7 @@ function CourseCard({ course, paying, onPay }) {
         {/* Teacher name */}
         <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
           <User size={11} />
-          <span>{course.teacher_name}</span>
+          <span className="font-medium">{course.teacher_name}</span>
         </div>
         
         {course.description && (
@@ -672,14 +672,14 @@ function CourseCard({ course, paying, onPay }) {
         {/* Renewal message (expired but ever enrolled) */}
         {!paid && !enrolled && everEnrolled && (
           <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 mb-3">
-            Your access has expired. Pay to renew.
+            ⚠️ Your access has expired. Pay to renew.
           </p>
         )}
 
         {/* First time enrollment message */}
         {!paid && !enrolled && !everEnrolled && (
           <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5 mb-3">
-            Pay to enroll in this course for the first time.
+            💰 Pay to enroll in this course for the first time.
           </p>
         )}
 
@@ -699,7 +699,7 @@ function CourseCard({ course, paying, onPay }) {
 
           {fee === 0 ? (
             <div className="w-full text-center text-sm text-gray-400 py-3 border border-dashed border-gray-200 rounded-xl">
-              Free Course
+              🎉 Free Course
             </div>
           ) : paid ? (
             <button
@@ -715,7 +715,7 @@ function CourseCard({ course, paying, onPay }) {
               className="w-full flex items-center justify-center gap-2 bg-blue-800 hover:bg-blue-900 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold py-3 rounded-xl transition-all duration-150 shadow-sm"
             >
               {paying ? (
-                <><Loader2 size={15} className="animate-spin" /> Redirecting…</>
+                <><Loader2 size={15} className="animate-spin" /> Processing...</>
               ) : (
                 <><Wifi size={15} /> {enrolled ? "Pay Now" : everEnrolled ? "Pay to Renew" : "Enroll & Pay"}</>
               )}
