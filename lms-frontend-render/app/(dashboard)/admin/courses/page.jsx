@@ -56,8 +56,8 @@ async function generateCourseReportPDF(courses) {
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 14;
 
-  // Header bar
-  doc.setFillColor(67, 56, 202);
+  // Header bar - Updated to new blue
+  doc.setFillColor(30, 64, 175); // #1E40AF
   doc.rect(0, 0, pageW, 22, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(15);
@@ -88,7 +88,7 @@ async function generateCourseReportPDF(courses) {
     const x = margin + i * (boxW + 4);
     doc.setFillColor(...s.color);
     doc.roundedRect(x, statsY, boxW, 14, 2, 2, "F");
-    doc.setTextColor(67, 56, 202);
+    doc.setTextColor(30, 64, 175); // #1E40AF
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text(s.label.toUpperCase(), x + 4, statsY + 5);
@@ -97,7 +97,7 @@ async function generateCourseReportPDF(courses) {
     doc.text(s.value, x + 4, statsY + 11);
   });
 
-  // Table
+  // Table (rest remains same)
   const tableY = statsY + 20;
 
   const rows = courses.map((c, idx) => [
@@ -116,9 +116,7 @@ async function generateCourseReportPDF(courses) {
   doc.autoTable({
     startY: tableY,
     margin: { left: margin, right: margin },
-    head: [[
-      "#", "Course ID", "Title", "Teacher", "Schedule", "Enrolled", "Price (Rs.)", "Lessons"
-    ]],
+    head: [["#", "Course ID", "Title", "Teacher", "Schedule", "Enrolled", "Price (Rs.)", "Lessons"]],
     body: rows,
     styles: {
       fontSize: 8,
@@ -129,7 +127,7 @@ async function generateCourseReportPDF(courses) {
       lineWidth: 0.2,
     },
     headStyles: {
-      fillColor: [67, 56, 202],
+      fillColor: [30, 64, 175], // #1E40AF
       textColor: 255,
       fontStyle: "bold",
       fontSize: 8,
@@ -140,7 +138,7 @@ async function generateCourseReportPDF(courses) {
     },
     columnStyles: {
       0:  { halign: "center", cellWidth: 8 },
-      1:  { cellWidth: 28, fontStyle: "bold", textColor: [79, 70, 229] },
+      1:  { cellWidth: 28, fontStyle: "bold", textColor: [30, 64, 175] },
       2:  { cellWidth: 40 },
       3:  { cellWidth: 32 },
       4:  { cellWidth: 32 },
@@ -154,17 +152,8 @@ async function generateCourseReportPDF(courses) {
       doc.setFontSize(7);
       doc.setTextColor(160, 160, 160);
       doc.setFont("helvetica", "normal");
-      doc.text(
-        `Page ${pNum} of ${pCount}`,
-        pageW / 2,
-        doc.internal.pageSize.getHeight() - 6,
-        { align: "center" }
-      );
-      doc.text(
-        "Confidential — Internal Use Only",
-        margin,
-        doc.internal.pageSize.getHeight() - 6
-      );
+      doc.text(`Page ${pNum} of ${pCount}`, pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: "center" });
+      doc.text("Confidential — Internal Use Only", margin, doc.internal.pageSize.getHeight() - 6);
     },
   });
 
@@ -501,13 +490,15 @@ export default function AdminCoursesPage() {
     return `${count} lesson${count !== 1 ? 's' : ''}`;
   };
 
+  const primaryColor = "#1E40AF";
+
   return (
     <div className="min-h-screen p-4 md:p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <BookOpen className="text-indigo-600" size={26} /> Course Management
+            <BookOpen className="text-[#1E40AF]" size={26} /> Course Management
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Create and manage courses with lessons, teachers and pricing.
@@ -532,7 +523,7 @@ export default function AdminCoursesPage() {
           </button>
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition-all"
+            className="flex items-center gap-2 bg-[#1E40AF] hover:bg-[#1C3A9E] text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition-all"
           >
             <Plus size={16} /> Add Course
           </button>
@@ -546,7 +537,7 @@ export default function AdminCoursesPage() {
         </div>
       )}
       {success && (
-        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg px-4 py-3 mb-4 text-sm">
+        <div className="flex items-center gap-2 bg-[#1E40AF]/10 border border-[#1E40AF]/20 text-[#1E40AF] rounded-lg px-4 py-3 mb-4 text-sm">
           <CheckCircle size={16} /> {success}
         </div>
       )}
@@ -554,9 +545,9 @@ export default function AdminCoursesPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
-          { label: "Total Courses", val: stats.total, color: "text-blue-600", bg: "bg-blue-50", icon: <BookOpen size={18} /> },
+          { label: "Total Courses", val: stats.total, color: "text-[#1E40AF]", bg: "bg-[#1E40AF]/5", icon: <BookOpen size={18} /> },
           { label: "Total Lessons", val: stats.lessons, color: "text-green-600", bg: "bg-green-50", icon: <ListChecks size={18} /> },
-          { label: "Total Enrolled", val: stats.enrolled, color: "text-indigo-600", bg: "bg-indigo-50", icon: <Users size={18} /> },
+          { label: "Total Enrolled", val: stats.enrolled, color: "text-[#1E40AF]", bg: "bg-[#1E40AF]/5", icon: <Users size={18} /> },
         ].map((s, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
             <div className={`${s.color} ${s.bg} p-2 rounded-lg flex-shrink-0`}>{s.icon}</div>
@@ -575,11 +566,11 @@ export default function AdminCoursesPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by title, ID or teacher name…"
-          className="w-full pl-9 pr-4 py-2.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          className="w-full pl-9 pr-4 py-2.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/30 focus:border-[#1E40AF]"
         />
       </div>
 
-      {/* Course grid - No LessonManager component */}
+      {/* Course grid */}
       {loading ? (
         <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
           <Loader size={20} className="animate-spin" /> Loading courses…
@@ -589,7 +580,7 @@ export default function AdminCoursesPage() {
           <BookOpen size={48} className="mx-auto mb-3 opacity-20" />
           <p className="font-medium">{search ? "No courses match your search." : "No courses yet."}</p>
           {!search && (
-            <button onClick={openAdd} className="mt-3 text-sm text-indigo-600 hover:underline">
+            <button onClick={openAdd} className="mt-3 text-sm text-[#1E40AF] hover:underline">
               + Add your first course
             </button>
           )}
@@ -598,24 +589,24 @@ export default function AdminCoursesPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map(c => (
             <div key={c.course_id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-              <div className="relative h-40 bg-gradient-to-br from-indigo-50 to-blue-100 flex-shrink-0">
+              <div className="relative h-40 bg-gradient-to-br from-[#1E40AF]/5 to-blue-100 flex-shrink-0">
                 {c.thumbnail_url ? (
                   <img src={c.thumbnail_url} alt={c.title} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-indigo-200">
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[#1E40AF]/20">
                     <ImageIcon size={36} />
                     <span className="text-xs">No image</span>
                   </div>
                 )}
                 <div className="absolute top-2 right-2 flex gap-1">
                   <button onClick={() => setPreview(c)} title="Preview"
-                    className="p-1.5 bg-white/90 hover:bg-white text-gray-500 hover:text-indigo-600 rounded-lg shadow-sm transition-colors">
+                    className="p-1.5 bg-white/90 hover:bg-white text-gray-500 hover:text-[#1E40AF] rounded-lg shadow-sm transition-colors">
                     <Eye size={14} />
                   </button>
                   <button onClick={() => openEdit(c)} disabled={c.enrolled_count > 0}
                     title={c.enrolled_count > 0 ? `Cannot edit: ${c.enrolled_count} student(s) enrolled` : "Edit"}
                     className={`p-1.5 bg-white/90 hover:bg-white rounded-lg shadow-sm transition-colors ${
-                      c.enrolled_count > 0 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-indigo-600"
+                      c.enrolled_count > 0 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-[#1E40AF]"
                     }`}>
                     <Pencil size={14} />
                   </button>
@@ -637,7 +628,7 @@ export default function AdminCoursesPage() {
                 <div className="space-y-1.5 mt-auto">
                   {c.teacher_name ? (
                     <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                      <GraduationCap size={12} className="text-indigo-400 flex-shrink-0" />
+                      <GraduationCap size={12} className="text-[#1E40AF] flex-shrink-0" />
                       <span className="truncate">{c.teacher_name}</span>
                     </div>
                   ) : (
@@ -648,12 +639,12 @@ export default function AdminCoursesPage() {
                   
                   {c.duration && (
                     <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                      <Clock size={12} className="text-blue-400" /> {c.duration}
+                      <Clock size={12} className="text-blue-500" /> {c.duration}
                     </div>
                   )}
                   
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <ListChecks size={12} className="text-green-400" /> 
+                    <ListChecks size={12} className="text-green-500" /> 
                     <span>{getLessonsSummary(c)}</span>
                   </div>
                 </div>
@@ -664,7 +655,7 @@ export default function AdminCoursesPage() {
                     <span className="text-sm font-semibold text-gray-700">{c.enrolled_count}</span>
                     <span className="text-xs text-gray-400">enrolled</span>
                   </div>
-                  <span className="text-sm font-bold text-indigo-600">Rs. {parseFloat(c.fee).toLocaleString()}</span>
+                  <span className="text-sm font-bold text-[#1E40AF]">Rs. {parseFloat(c.fee).toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -679,8 +670,8 @@ export default function AdminCoursesPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
               <h2 className="font-bold text-gray-800 text-lg flex items-center gap-2">
                 {modal === "add"
-                  ? <><Plus size={20} className="text-indigo-600" /> Add New Course</>
-                  : <><Pencil size={20} className="text-indigo-600" /> Edit Course</>}
+                  ? <><Plus size={20} className="text-[#1E40AF]" /> Add New Course</>
+                  : <><Pencil size={20} className="text-[#1E40AF]" /> Edit Course</>}
               </h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg">
                 <X size={20} />
@@ -700,8 +691,8 @@ export default function AdminCoursesPage() {
                   onClick={() => fileRef.current?.click()}
                   className={`relative border-2 border-dashed rounded-xl cursor-pointer transition-all ${
                     form.thumbnail_url
-                      ? validationErrors.thumbnail_url ? "border-red-300 bg-red-50/20" : "border-indigo-300 bg-indigo-50/20"
-                      : validationErrors.thumbnail_url ? "border-red-300 hover:border-red-400" : "border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/10"
+                      ? validationErrors.thumbnail_url ? "border-red-300 bg-red-50/20" : "border-[#1E40AF]/30 bg-[#1E40AF]/5"
+                      : validationErrors.thumbnail_url ? "border-red-300 hover:border-red-400" : "border-gray-200 hover:border-[#1E40AF]/40 hover:bg-[#1E40AF]/5"
                   }`}
                 >
                   {imgLoading ? (
@@ -741,15 +732,12 @@ export default function AdminCoursesPage() {
                 )}
               </FormLabel>
 
-              {/* Title, Duration, Price, Teacher, Description fields remain the same */}
-              {/* (The rest of the modal is unchanged from previous version) */}
-
               <FormLabel label="Course Title" required error={validationErrors.title}>
                 <input 
                   value={form.title} 
                   onChange={e => handleFieldChange("title", e.target.value)}
                   placeholder="e.g. A/L Combined Mathematics"
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${
+                  className={`w-full border rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/30 focus:border-[#1E40AF] ${
                     validationErrors.title ? "border-red-300 bg-red-50" : "border-gray-200"
                   }`}
                 />
@@ -759,7 +747,7 @@ export default function AdminCoursesPage() {
                 <div className="space-y-3">
                   <div className="relative">
                     <button type="button" onClick={() => setShowDatePicker(!showDatePicker)}
-                      className={`w-full border rounded-lg px-3 py-2.5 text-sm text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 flex items-center justify-between bg-white ${
+                      className={`w-full border rounded-lg px-3 py-2.5 text-sm text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/30 focus:border-[#1E40AF] flex items-center justify-between bg-white ${
                         validationErrors.duration && !selectedDay ? "border-red-300" : "border-gray-200"
                       }`}>
                       <div className="flex items-center gap-2">
@@ -777,7 +765,7 @@ export default function AdminCoursesPage() {
                               <button key={day} type="button"
                                 onClick={() => { handleDaySelect(day); setShowDatePicker(false); }}
                                 className={`px-3 py-2 text-sm rounded-lg transition-all text-left ${
-                                  selectedDay === day ? "bg-indigo-600 text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                                  selectedDay === day ? "bg-[#1E40AF] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
                                 }`}>
                                 {day}
                               </button>
@@ -794,15 +782,15 @@ export default function AdminCoursesPage() {
                       value={manualTime} 
                       onChange={handleManualTimeChange}
                       placeholder="Enter time (e.g., 8:30 PM - 12:30 AM)"
-                      className={`w-full border rounded-lg pl-9 pr-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${
+                      className={`w-full border rounded-lg pl-9 pr-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/30 focus:border-[#1E40AF] ${
                         validationErrors.duration && !manualTime ? "border-red-300 bg-red-50" : "border-gray-200"
                       }`}
                     />
                   </div>
                   {(selectedDay || manualTime) && (
-                    <div className={`p-2 rounded-lg ${validationErrors.duration ? "bg-red-50" : "bg-indigo-50"}`}>
-                      <p className={`text-xs font-medium ${validationErrors.duration ? "text-red-600" : "text-indigo-600"}`}>Preview:</p>
-                      <p className={`text-sm font-semibold ${validationErrors.duration ? "text-red-700" : "text-indigo-900"}`}>
+                    <div className={`p-2 rounded-lg ${validationErrors.duration ? "bg-red-50" : "bg-[#1E40AF]/5"}`}>
+                      <p className={`text-xs font-medium ${validationErrors.duration ? "text-red-600" : "text-[#1E40AF]"}`}>Preview:</p>
+                      <p className={`text-sm font-semibold ${validationErrors.duration ? "text-red-700" : "text-[#1E40AF]"}`}>
                         {selectedDay && manualTime ? `${selectedDay} ${manualTime}` : selectedDay || manualTime}
                       </p>
                     </div>
@@ -821,7 +809,7 @@ export default function AdminCoursesPage() {
                       placeholder="0.00" 
                       min="0" 
                       step="0.01"
-                      className={`w-full border rounded-lg pl-10 pr-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${
+                      className={`w-full border rounded-lg pl-10 pr-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/30 focus:border-[#1E40AF] ${
                         validationErrors.fee ? "border-red-300 bg-red-50" : "border-gray-200"
                       }`}
                     />
@@ -834,7 +822,7 @@ export default function AdminCoursesPage() {
                     <select 
                       value={form.teacher_id} 
                       onChange={e => handleFieldChange("teacher_id", e.target.value)}
-                      className={`w-full border rounded-lg pl-8 pr-8 py-2.5 text-sm text-gray-900 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer ${
+                      className={`w-full border rounded-lg pl-8 pr-8 py-2.5 text-sm text-gray-900 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/30 focus:border-[#1E40AF] cursor-pointer ${
                         validationErrors.teacher_id ? "border-red-300 bg-red-50" : "border-gray-200"
                       }`}>
                       <option value="">— Select a teacher —</option>
@@ -855,7 +843,7 @@ export default function AdminCoursesPage() {
                   onChange={e => handleFieldChange("description", e.target.value)}
                   placeholder="Describe what students will learn in this course…" 
                   rows={3}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none ${
+                  className={`w-full border rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1E40AF]/30 focus:border-[#1E40AF] resize-none ${
                     validationErrors.description ? "border-red-300 bg-red-50" : "border-gray-200"
                   }`}
                 />
@@ -870,7 +858,7 @@ export default function AdminCoursesPage() {
               <button 
                 onClick={handleSave} 
                 disabled={saving || imgLoading}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-60 transition-all shadow-md"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#1E40AF] hover:bg-[#1C3A9E] text-white rounded-xl text-sm font-semibold disabled:opacity-60 transition-all shadow-md"
               >
                 {saving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
                 {modal === "add" ? "Create Course" : "Save Changes"}
@@ -880,14 +868,15 @@ export default function AdminCoursesPage() {
         </div>
       )}
 
+      {/* Preview Modal & Delete Modal remain the same (only minor color tweaks applied) */}
       {/* Preview Modal */}
       {preview && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="h-48 bg-gradient-to-br from-indigo-50 to-blue-100 relative">
+            <div className="h-48 bg-gradient-to-br from-[#1E40AF]/5 to-blue-100 relative">
               {preview.thumbnail_url
                 ? <img src={preview.thumbnail_url} alt={preview.title} className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center"><BookOpen size={48} className="text-indigo-200" /></div>}
+                : <div className="w-full h-full flex items-center justify-center"><BookOpen size={48} className="text-[#1E40AF]/20" /></div>}
               <button onClick={() => setPreview(null)}
                 className="absolute top-3 right-3 bg-white/90 hover:bg-white text-gray-600 rounded-lg p-1.5 shadow-sm">
                 <X size={18} />
@@ -899,7 +888,7 @@ export default function AdminCoursesPage() {
               {preview.description && <p className="text-sm text-gray-500 leading-relaxed mb-4">{preview.description}</p>}
               <div className="space-y-2.5">
                 {preview.teacher_name
-                  ? <div className="flex items-center gap-2 text-sm"><GraduationCap size={15} className="text-indigo-500" /><span className="text-gray-500">Teacher:</span><span className="font-semibold text-gray-800">{preview.teacher_name}</span></div>
+                  ? <div className="flex items-center gap-2 text-sm"><GraduationCap size={15} className="text-[#1E40AF]" /><span className="text-gray-500">Teacher:</span><span className="font-semibold text-gray-800">{preview.teacher_name}</span></div>
                   : <div className="flex items-center gap-2 text-sm text-gray-400"><UserX size={15} /> No teacher assigned</div>}
                 {preview.duration && (
                   <div className="flex items-center gap-2 text-sm">
@@ -910,10 +899,10 @@ export default function AdminCoursesPage() {
                   <ListChecks size={15} className="text-green-500" /><span className="text-gray-500">Lessons:</span><span className="font-semibold text-gray-800">{getLessonsSummary(preview)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Users size={15} className="text-indigo-500" /><span className="text-gray-500">Enrolled:</span><span className="font-semibold text-gray-800">{preview.enrolled_count} students</span>
+                  <Users size={15} className="text-[#1E40AF]" /><span className="text-gray-500">Enrolled:</span><span className="font-semibold text-gray-800">{preview.enrolled_count} students</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <DollarSign size={15} className="text-blue-500" /><span className="text-gray-500">Price:</span><span className="font-bold text-indigo-600 text-base">Rs. {parseFloat(preview.fee).toLocaleString()}</span>
+                  <DollarSign size={15} className="text-[#1E40AF]" /><span className="text-gray-500">Price:</span><span className="font-bold text-[#1E40AF] text-base">Rs. {parseFloat(preview.fee).toLocaleString()}</span>
                 </div>
               </div>
               <div className="flex gap-2 mt-5">
@@ -923,7 +912,7 @@ export default function AdminCoursesPage() {
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold ${
                     preview.enrolled_count > 0
                       ? "border border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50"
-                      : "border border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                      : "border border-[#1E40AF]/30 text-[#1E40AF] hover:bg-[#1E40AF]/5"
                   }`}>
                   <Pencil size={14} /> Edit
                 </button>
