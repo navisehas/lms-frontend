@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -7,10 +7,12 @@ import {
   Clock, User, DollarSign, Lock,
   BookOpen, FileText, ExternalLink, BadgeCheck,
   ChevronDown, ChevronRight, GraduationCap, PlayCircle,
+  RefreshCw, CheckCircle,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
+const POLL_INTERVAL = 5000; // Poll every 5 seconds for payment confirmation
 
 function getMaterialHref(value) {
   if (!value) return null;
@@ -30,6 +32,11 @@ export default function CourseDetailsPage() {
   const [error,       setError]       = useState("");
   const [isEnrolled,  setIsEnrolled]  = useState(false);
   const [openLessons, setOpenLessons] = useState({});
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [paymentChecked, setPaymentChecked] = useState(false);
+  
+  const pollTimer = useRef(null);
+  const userRef = useRef(null);
 
   const materialsByLesson = useMemo(() => {
     const grouped = new Map();
@@ -52,47 +59,132 @@ export default function CourseDetailsPage() {
     }
   }, [materialsByLesson.length]);
 
-  useEffect(() => {
-    const auth = guardRoute("STUDENT", router);
-    if (auth) { setUser(auth); fetchCourseDetails(auth.user_id); }
-  }, [router, courseId]);
-
-  async function fetchCourseDetails(studentId) {
-    setLoading(true);
-    setError("");
+  // Fetch course details and check enrollment
+  const fetchCourseDetails = useCallback(async (studentId, silent = false) => {
+    if (!studentId || !courseId) return;
+    if (!silent) setLoading(true);
+    
     try {
       const courseRes = await authFetch(`${API}/courses/${courseId}`);
-      if (!courseRes.ok) { setError("Course not found."); setCourse(null); return; }
+      if (!courseRes.ok) { 
+        if (!silent) setError("Course not found."); 
+        setCourse(null); 
+        return; 
+      }
       const courseData = await courseRes.json();
       setCourse(courseData);
 
-      const enrollRes  = await authFetch(`${API}/payments/courses/${studentId}`);
+      const enrollRes = await authFetch(`${API}/payments/courses/${studentId}`);
       if (enrollRes.ok) {
-        const enrollData    = await enrollRes.json();
+        const enrollData = await enrollRes.json();
         const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
         const enrolled = Boolean(matchedCourse?.is_enrolled);
-        setIsEnrolled(enrolled);
-
-        if (enrolled) {
-          const matRes  = await authFetch(`${API}/courses/${courseId}/materials`);
-          const matData = await matRes.json();
-          if (!matRes.ok || !matData.success) {
-            setError(matData.error || "Failed to load course materials.");
-            setMaterials([]);
+        
+        // Only update if enrollment status changed
+        if (enrolled !== isEnrolled) {
+          setIsEnrolled(enrolled);
+          
+          // If newly enrolled, fetch materials
+          if (enrolled) {
+            await fetchMaterials(courseId);
           } else {
-            setMaterials(matData.materials || []);
+            setMaterials([]);
           }
-        } else {
-          setMaterials([]);
+        } else if (enrolled && materials.length === 0 && !silent) {
+          // If already enrolled but no materials loaded, fetch them
+          await fetchMaterials(courseId);
         }
       }
-    } catch {
-      setError("Failed to load course details.");
-      setCourse(null);
+    } catch (err) {
+      console.error("Fetch course details error:", err);
+      if (!silent) setError("Failed to load course details.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }
+  }, [courseId, isEnrolled, materials.length]);
+
+  // Fetch course materials
+  const fetchMaterials = useCallback(async (courseId) => {
+    try {
+      const matRes = await authFetch(`${API}/courses/${courseId}/materials`);
+      const matData = await matRes.json();
+      if (!matRes.ok || !matData.success) {
+        console.error("Failed to load materials:", matData.error);
+        setMaterials([]);
+      } else {
+        setMaterials(matData.materials || []);
+      }
+    } catch (err) {
+      console.error("Fetch materials error:", err);
+      setMaterials([]);
+    }
+  }, []);
+
+  // Check payment status specifically (for polling)
+  const checkPaymentStatus = useCallback(async (studentId) => {
+    if (!studentId || !courseId) return;
+    
+    try {
+      const enrollRes = await authFetch(`${API}/payments/courses/${studentId}`);
+      if (enrollRes.ok) {
+        const enrollData = await enrollRes.json();
+        const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
+        const enrolled = Boolean(matchedCourse?.is_enrolled);
+        
+        if (enrolled !== isEnrolled) {
+          // Payment confirmed! Update status and fetch materials
+          setIsEnrolled(enrolled);
+          if (enrolled) {
+            await fetchMaterials(courseId);
+            setPaymentChecked(true);
+            // Stop polling once payment is confirmed
+            if (pollTimer.current) {
+              clearInterval(pollTimer.current);
+              pollTimer.current = null;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Payment check error:", err);
+    }
+  }, [courseId, isEnrolled, fetchMaterials]);
+
+  // Initial load and setup polling for payment confirmation
+  useEffect(() => {
+    const auth = guardRoute("STUDENT", router);
+    if (auth) {
+      setUser(auth);
+      userRef.current = auth;
+      fetchCourseDetails(auth.user_id, false);
+      
+      // Start polling for payment confirmation if not enrolled
+      if (!isEnrolled) {
+        setCheckingPayment(true);
+        pollTimer.current = setInterval(() => {
+          if (userRef.current && !isEnrolled) {
+            checkPaymentStatus(userRef.current.user_id);
+          }
+        }, POLL_INTERVAL);
+      }
+    }
+    
+    return () => {
+      if (pollTimer.current) {
+        clearInterval(pollTimer.current);
+        pollTimer.current = null;
+      }
+    };
+  }, [router, courseId, fetchCourseDetails, checkPaymentStatus, isEnrolled]);
+
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    if (user) {
+      setCheckingPayment(true);
+      await fetchCourseDetails(user.user_id, false);
+      setCheckingPayment(false);
+    }
+  };
 
   function toggleLesson(title) {
     setOpenLessons((prev) => ({ ...prev, [title]: !prev[title] }));
@@ -111,6 +203,22 @@ export default function CourseDetailsPage() {
         <ArrowLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
         Back to My Courses
       </Link>
+
+      {/* Payment checking indicator */}
+      {checkingPayment && !isEnrolled && (
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl px-4 py-3.5 text-sm">
+          <Loader size={16} className="animate-spin flex-shrink-0" />
+          <span>Checking for payment confirmation...</span>
+        </div>
+      )}
+
+      {/* Payment success message */}
+      {paymentChecked && isEnrolled && (
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3.5 text-sm">
+          <CheckCircle size={16} className="flex-shrink-0" />
+          <span>Payment confirmed! Course materials are now available.</span>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3.5 text-sm">
@@ -185,11 +293,23 @@ export default function CourseDetailsPage() {
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <BookOpen size={18} className="text-indigo-500" /> Course Materials
               </h2>
-              {isEnrolled && materials.length > 0 && (
-                <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
-                  {materials.length} file{materials.length !== 1 ? "s" : ""}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {isEnrolled && materials.length > 0 && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
+                    {materials.length} file{materials.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+                {!isEnrolled && (
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={checkingPayment}
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={checkingPayment ? "animate-spin" : ""} />
+                    Check Payment
+                  </button>
+                )}
+              </div>
             </div>
 
             {!isEnrolled ? (
@@ -198,15 +318,28 @@ export default function CourseDetailsPage() {
                   <Lock size={28} className="text-amber-400" />
                 </div>
                 <p className="text-amber-900 font-bold text-base mb-2">Materials Locked</p>
-                <p className="text-amber-600 text-sm mb-6 max-w-xs mx-auto">
+                <p className="text-amber-600 text-sm mb-3 max-w-xs mx-auto">
                   Complete your payment to unlock all lessons and course materials.
                 </p>
-                <Link
-                  href="/student/payments"
-                  className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow-sm"
-                >
-                  <Lock size={14} /> Go to Payments
-                </Link>
+                <p className="text-amber-500 text-xs mb-6">
+                  After payment confirmation, materials will appear here automatically.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Link
+                    href="/student/payments"
+                    className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow-sm"
+                  >
+                    <Lock size={14} /> Go to Payments
+                  </Link>
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={checkingPayment}
+                    className="inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-amber-600 border border-amber-200 font-semibold px-6 py-3 rounded-xl transition-colors text-sm"
+                  >
+                    <RefreshCw size={14} className={checkingPayment ? "animate-spin" : ""} />
+                    {checkingPayment ? "Checking..." : "Refresh Status"}
+                  </button>
+                </div>
               </div>
             ) : materials.length === 0 ? (
               <div className="text-center py-14 bg-gray-50 rounded-2xl border border-gray-200">
