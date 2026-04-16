@@ -12,13 +12,48 @@ import {
 import { authFetch, guardRoute } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
-const POLL_INTERVAL = 5000; // Poll every 5 seconds for payment confirmation
+const POLL_INTERVAL = 5000;
 
 function getMaterialHref(value) {
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
-  return `${API}${value.startsWith("/") ? value : `/${value}`}`;
+  // If it's a relative path, ensure it starts with /
+  const path = value.startsWith("/") ? value : `/${value}`;
+  return `${API}${path}`;
 }
+
+// Function to handle file download
+const handleDownload = async (url, filename) => {
+  try {
+    // If it's a full URL
+    if (url.startsWith('http')) {
+      window.open(url, '_blank');
+      return;
+    }
+    
+    // If it's an API endpoint that requires auth
+    const response = await authFetch(url, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Download failed');
+    }
+    
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename || 'download';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error('Download error:', error);
+    window.open(url, '_blank');
+  }
+};
 
 export default function CourseDetailsPage() {
   const router   = useRouter();
@@ -50,7 +85,6 @@ export default function CourseDetailsPage() {
     }));
   }, [materials]);
 
-  // Auto-open all lessons on load
   useEffect(() => {
     if (materialsByLesson.length > 0) {
       const initial = {};
@@ -59,7 +93,6 @@ export default function CourseDetailsPage() {
     }
   }, [materialsByLesson.length]);
 
-  // Fetch course details and check enrollment
   const fetchCourseDetails = useCallback(async (studentId, silent = false) => {
     if (!studentId || !courseId) return;
     if (!silent) setLoading(true);
@@ -80,18 +113,21 @@ export default function CourseDetailsPage() {
         const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
         const enrolled = Boolean(matchedCourse?.is_enrolled);
         
-        // Only update if enrollment status changed
         if (enrolled !== isEnrolled) {
           setIsEnrolled(enrolled);
           
-          // If newly enrolled, fetch materials
           if (enrolled) {
             await fetchMaterials(courseId);
+            setPaymentChecked(true);
+            setTimeout(() => setPaymentChecked(false), 5000);
+            if (pollTimer.current) {
+              clearInterval(pollTimer.current);
+              pollTimer.current = null;
+            }
           } else {
             setMaterials([]);
           }
         } else if (enrolled && materials.length === 0 && !silent) {
-          // If already enrolled but no materials loaded, fetch them
           await fetchMaterials(courseId);
         }
       }
@@ -103,16 +139,19 @@ export default function CourseDetailsPage() {
     }
   }, [courseId, isEnrolled, materials.length]);
 
-  // Fetch course materials
   const fetchMaterials = useCallback(async (courseId) => {
     try {
       const matRes = await authFetch(`${API}/courses/${courseId}/materials`);
       const matData = await matRes.json();
       if (!matRes.ok || !matData.success) {
         console.error("Failed to load materials:", matData.error);
+        if (matData.error) {
+          setError(matData.error);
+        }
         setMaterials([]);
       } else {
         setMaterials(matData.materials || []);
+        setError("");
       }
     } catch (err) {
       console.error("Fetch materials error:", err);
@@ -120,7 +159,6 @@ export default function CourseDetailsPage() {
     }
   }, []);
 
-  // Check payment status specifically (for polling)
   const checkPaymentStatus = useCallback(async (studentId) => {
     if (!studentId || !courseId) return;
     
@@ -132,12 +170,11 @@ export default function CourseDetailsPage() {
         const enrolled = Boolean(matchedCourse?.is_enrolled);
         
         if (enrolled !== isEnrolled) {
-          // Payment confirmed! Update status and fetch materials
           setIsEnrolled(enrolled);
           if (enrolled) {
             await fetchMaterials(courseId);
             setPaymentChecked(true);
-            // Stop polling once payment is confirmed
+            setTimeout(() => setPaymentChecked(false), 5000);
             if (pollTimer.current) {
               clearInterval(pollTimer.current);
               pollTimer.current = null;
@@ -150,7 +187,6 @@ export default function CourseDetailsPage() {
     }
   }, [courseId, isEnrolled, fetchMaterials]);
 
-  // Initial load and setup polling for payment confirmation
   useEffect(() => {
     const auth = guardRoute("STUDENT", router);
     if (auth) {
@@ -158,7 +194,6 @@ export default function CourseDetailsPage() {
       userRef.current = auth;
       fetchCourseDetails(auth.user_id, false);
       
-      // Start polling for payment confirmation if not enrolled
       if (!isEnrolled) {
         setCheckingPayment(true);
         pollTimer.current = setInterval(() => {
@@ -177,7 +212,6 @@ export default function CourseDetailsPage() {
     };
   }, [router, courseId, fetchCourseDetails, checkPaymentStatus, isEnrolled]);
 
-  // Manual refresh function
   const handleManualRefresh = async () => {
     if (user) {
       setCheckingPayment(true);
@@ -235,7 +269,6 @@ export default function CourseDetailsPage() {
         <>
           {/* Course Hero Card */}
           <div className={`relative bg-white rounded-3xl border shadow-sm overflow-hidden ${isEnrolled ? "border-green-200" : "border-gray-200"}`}>
-            {/* Accent bar */}
             <div className={`h-1.5 w-full ${isEnrolled ? "bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
 
             <div className="p-6 sm:p-8">
@@ -263,7 +296,6 @@ export default function CourseDetailsPage() {
                 <p className="text-sm text-gray-600 leading-relaxed mb-6">{course.description}</p>
               )}
 
-              {/* Meta grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {course.teacher_name && (
                   <div className="bg-gray-50 rounded-xl p-3.5">
@@ -353,7 +385,6 @@ export default function CourseDetailsPage() {
               <div className="space-y-3">
                 {materialsByLesson.map(({ lessonTitle, lessonMaterials }, idx) => (
                   <div key={lessonTitle} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                    {/* Lesson header — collapsible */}
                     <button
                       onClick={() => toggleLesson(lessonTitle)}
                       className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
@@ -372,46 +403,57 @@ export default function CourseDetailsPage() {
                         : <ChevronRight size={16} className="text-gray-400" />}
                     </button>
 
-                    {/* Materials list */}
                     {openLessons[lessonTitle] && (
                       <div className="border-t border-gray-100 divide-y divide-gray-50">
-                        {lessonMaterials.map((material) => (
-                          <div
-                            key={material.material_id}
-                            className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors gap-4"
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                                {material.external_url
-                                  ? <PlayCircle size={15} className="text-indigo-500" />
-                                  : <FileText size={15} className="text-indigo-400" />}
+                        {lessonMaterials.map((material) => {
+                          const downloadUrl = getMaterialHref(material.content_url);
+                          const externalUrl = material.external_url;
+                          
+                          return (
+                            <div
+                              key={material.material_id}
+                              className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors gap-4"
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                                  {material.external_url
+                                    ? <PlayCircle size={15} className="text-indigo-500" />
+                                    : <FileText size={15} className="text-indigo-400" />}
+                                </div>
+                                <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
                               </div>
-                              <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
+                              <div className="flex gap-2 flex-shrink-0">
+                                {material.content_url && downloadUrl && (
+                                  <a
+                                    href={downloadUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                                    onClick={(e) => {
+                                      // For direct file downloads, prevent default if needed
+                                      if (!downloadUrl.startsWith('http')) {
+                                        e.preventDefault();
+                                        handleDownload(downloadUrl, material.title);
+                                      }
+                                    }}
+                                  >
+                                    <Download size={12} /> Download
+                                  </a>
+                                )}
+                                {material.external_url && externalUrl && (
+                                  <a
+                                    href={externalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                                  >
+                                    <ExternalLink size={12} /> Open Link
+                                  </a>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex gap-2 flex-shrink-0">
-                              {material.content_url && (
-                                <a
-                                  href={getMaterialHref(material.content_url)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-                                >
-                                  <Download size={12} /> Download
-                                </a>
-                              )}
-                              {material.external_url && (
-                                <a
-                                  href={material.external_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                                >
-                                  <ExternalLink size={12} /> Open Link
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
