@@ -1,908 +1,634 @@
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const multer = require("multer");
-const { v4: uuidv4 } = require("uuid");
-const pool = require("../config/db");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+"use client";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
+import {
+  AlertCircle, ArrowLeft, Loader, Download,
+  Clock, User, DollarSign, Lock,
+  BookOpen, FileText, ExternalLink, BadgeCheck,
+  ChevronDown, ChevronRight, GraduationCap, PlayCircle,
+  RefreshCw, CheckCircle, Tag, Layers, File, FileVideo,
+  FileImage, Link2, FolderOpen, BookMarked,
+} from "lucide-react";
+import { authFetch, guardRoute } from "@/lib/auth";
 
-const router = express.Router();
-const ALLOWED_TYPES = new Set(["PDF", "MEETING", "DOC", "VIDEO", "LINK", "OTHER"]);
-const uploadDir = path.join(__dirname, "..", "public", "uploads", "materials");
-let materialsSchemaReadyPromise = null;
+const API = process.env.NEXT_PUBLIC_API_URL;
+const POLL_INTERVAL = 5000;
 
-fs.mkdirSync(uploadDir, { recursive: true });
+function getMaterialHref(value) {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  const path = value.startsWith("/") ? value : `/${value}`;
+  return `${API}${path}`;
+}
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const extension = path.extname(file.originalname || "") || "";
-    cb(null, `${Date.now()}-${uuidv4()}${extension}`);
-  },
-});
-
-const upload = multer({ storage });
-const uploadAnyMaterial = upload.any();
-const materialsJsonParser = express.json({ limit: "20mb" });
-const materialsUrlEncodedParser = express.urlencoded({ extended: true, limit: "20mb" });
-
-router.use((req, res, next) => {
-  if (req.method === "GET" || req.method === "DELETE") {
-    return next();
+const handleDownload = async (url, filename) => {
+  try {
+    if (url.startsWith("http")) { window.open(url, "_blank"); return; }
+    const response = await authFetch(url, { method: "GET" });
+    if (!response.ok) throw new Error("Download failed");
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = filename || "download";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    window.open(url, "_blank");
   }
+};
 
-  const contentType = String(req.headers["content-type"] || "").toLowerCase();
-
-  if (contentType.includes("multipart/form-data")) {
-    return next();
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function getTypeIcon(type, externalUrl) {
+  if (externalUrl) return <PlayCircle size={14} className="text-blue-500" />;
+  switch (type?.toUpperCase()) {
+    case "PDF":     return <FileText size={14} className="text-red-500" />;
+    case "VIDEO":   return <FileVideo size={14} className="text-purple-500" />;
+    case "LINK":    return <Link2 size={14} className="text-blue-500" />;
+    case "MEETING": return <PlayCircle size={14} className="text-green-500" />;
+    case "DOC":     return <File size={14} className="text-blue-500" />;
+    default:        return <FileImage size={14} className="text-gray-400" />;
   }
+}
 
-  if (contentType.includes("application/x-www-form-urlencoded")) {
-    return materialsUrlEncodedParser(req, res, (err) => {
-      if (err) {
-        req.body = {};
-      }
-      return next();
+function getTypeBadgeStyle(type) {
+  switch (type?.toUpperCase()) {
+    case "PDF":     return "bg-red-50 text-red-600 border-red-100";
+    case "VIDEO":   return "bg-purple-50 text-purple-600 border-purple-100";
+    case "LINK":    return "bg-blue-50 text-blue-600 border-blue-100";
+    case "MEETING": return "bg-green-50 text-green-600 border-green-100";
+    case "DOC":     return "bg-blue-50 text-blue-600 border-blue-100";
+    default:        return "bg-gray-50 text-gray-500 border-gray-100";
+  }
+}
+
+// ─── Material Row ─────────────────────────────────────────────────────────────
+function MaterialCard({ material, index }) {
+  const downloadUrl = getMaterialHref(material.content_url);
+  const externalUrl = material.external_url;
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 hover:bg-blue-50/60 transition-colors rounded-xl gap-4 group">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {/* Number + Icon */}
+        <div className="relative flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center">
+            {getTypeIcon(material.material_type, externalUrl)}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-800 truncate leading-tight">{material.title}</p>
+          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(material.material_type)}`}>
+            {material.material_type}
+          </span>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 flex-shrink-0">
+        {downloadUrl && material.content_url && (
+          <a
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+            onClick={(e) => {
+              if (!downloadUrl.startsWith("http")) {
+                e.preventDefault();
+                handleDownload(downloadUrl, material.title);
+              }
+            }}
+          >
+            <Download size={11} /> Download
+          </a>
+        )}
+        {externalUrl && (
+          <a
+            href={externalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-800 bg-blue-100 hover:bg-blue-200 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <ExternalLink size={11} /> Open
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Subtopic Section ─────────────────────────────────────────────────────────
+function SubtopicSection({ subtopic, materials, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const isUncategorized = subtopic === "__none__";
+
+  return (
+    <div className="rounded-xl overflow-hidden border border-blue-100">
+      {/* Subtopic header — only show if it has a real name */}
+      {!isUncategorized && (
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 transition text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Tag size={12} className="text-blue-500 flex-shrink-0" />
+            <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">{subtopic}</span>
+            <span className="text-xs text-blue-400 font-medium">
+              {materials.length} file{materials.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          {open
+            ? <ChevronDown size={13} className="text-blue-400" />
+            : <ChevronRight size={13} className="text-blue-400" />}
+        </button>
+      )}
+
+      {/* Materials list */}
+      {(open || isUncategorized) && (
+        <div className={`divide-y divide-gray-50 ${!isUncategorized ? "px-2 py-1" : "px-2 py-1"}`}>
+          {materials.map((mat, i) => (
+            <MaterialCard key={mat.material_id} material={mat} index={i} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Lesson Block ─────────────────────────────────────────────────────────────
+function LessonBlock({ lesson, index, isOpen, onToggle }) {
+  const subtopicGroups = useMemo(() => {
+    const groups = new Map();
+    (lesson.materials || []).forEach((m) => {
+      const raw = m.subtopic ?? m.sub_topic ?? m.subTopic ?? m.category ?? m.topic ?? null;
+      const key = (typeof raw === "string" && raw.trim()) ? raw.trim() : "__none__";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(m);
     });
+    // Sort: named subtopics alphabetically, __none__ last
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === "__none__") return 1;
+      if (b === "__none__") return -1;
+      return a.localeCompare(b);
+    });
+  }, [lesson.materials]);
+
+  const totalMaterials = lesson.materials?.length || 0;
+  const subtopicCount = subtopicGroups.filter(([k]) => k !== "__none__").length;
+
+  return (
+    <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden shadow-sm">
+      {/* Lesson Header */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-blue-50/40 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <span className="w-8 h-8 rounded-xl bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center flex-shrink-0 shadow-sm">
+            {index + 1}
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-gray-900 truncate">{lesson.lessonTitle}</p>
+            {lesson.lessonDescription && (
+              <p className="text-xs text-gray-400 mt-0.5 truncate">{lesson.lessonDescription}</p>
+            )}
+          </div>
+          {/* Stats pills */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {subtopicCount > 0 && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">
+                <Tag size={10} /> {subtopicCount} topic{subtopicCount !== 1 ? "s" : ""}
+              </span>
+            )}
+            <span className="text-xs text-blue-500 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full font-medium">
+              {totalMaterials} file{totalMaterials !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+        <div className="ml-3 flex-shrink-0">
+          {isOpen
+            ? <ChevronDown size={16} className="text-blue-400" />
+            : <ChevronRight size={16} className="text-blue-400" />}
+        </div>
+      </button>
+
+      {/* Subtopic Groups */}
+      {isOpen && (
+        <div className="border-t border-blue-50 px-3 py-3 space-y-2">
+          {totalMaterials === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-5">No materials in this lesson yet.</p>
+          ) : (
+            subtopicGroups.map(([subtopic, mats]) => (
+              <SubtopicSection
+                key={subtopic}
+                subtopic={subtopic}
+                materials={mats}
+                defaultOpen={true}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Course Progress Summary ──────────────────────────────────────────────────
+function CourseSummaryBar({ lessonBlocks }) {
+  const totalLessons = lessonBlocks.length;
+  const totalFiles = lessonBlocks.reduce((s, l) => s + (l.materials?.length || 0), 0);
+  const totalTopics = lessonBlocks.reduce((s, l) => {
+    const unique = new Set((l.materials || []).map(m => m.subtopic).filter(Boolean));
+    return s + unique.size;
+  }, 0);
+
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      {[
+        { icon: <BookOpen size={15} className="text-blue-600" />, value: totalLessons, label: "Lessons", bg: "bg-blue-50 border-blue-100" },
+        { icon: <Tag size={15} className="text-indigo-500" />,    value: totalTopics,  label: "Topics",  bg: "bg-indigo-50 border-indigo-100" },
+        { icon: <FileText size={15} className="text-blue-500" />, value: totalFiles,   label: "Files",   bg: "bg-blue-50 border-blue-100" },
+      ].map((stat) => (
+        <div key={stat.label} className={`${stat.bg} border rounded-xl px-3 py-3 flex items-center gap-2.5`}>
+          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0">
+            {stat.icon}
+          </div>
+          <div>
+            <p className="text-base font-extrabold text-gray-900 leading-none">{stat.value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{stat.label}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function CourseDetailsPage() {
+  const router   = useRouter();
+  const params   = useParams();
+  const courseId = params.id;
+
+  const [user,            setUser]            = useState(null);
+  const [course,          setCourse]          = useState(null);
+  const [materials,       setMaterials]       = useState([]);
+  const [lessons,         setLessons]         = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState("");
+  const [isEnrolled,      setIsEnrolled]      = useState(false);
+  const [openLessons,     setOpenLessons]     = useState({});
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [paymentChecked,  setPaymentChecked]  = useState(false);
+
+  const pollTimer = useRef(null);
+  const userRef   = useRef(null);
+
+  // ── Build lesson blocks ───────────────────────────────────────────────────
+  const lessonBlocks = useMemo(() => {
+    const byLessonId = new Map();
+
+    materials.forEach((m) => {
+      const key = m.lesson_id || m.lesson_title || "General";
+      if (!byLessonId.has(key)) {
+        byLessonId.set(key, {
+          lessonId:          m.lesson_id || null,
+          lessonTitle:       m.lesson_title || (m.lesson_id ? `Lesson` : "General"),
+          lessonDescription: null,
+          lessonOrder:       999,
+          materials:         [],
+        });
+      }
+      byLessonId.get(key).materials.push(m);
+    });
+
+    lessons.forEach((l) => {
+      if (byLessonId.has(l.lesson_id)) {
+        const block = byLessonId.get(l.lesson_id);
+        block.lessonTitle       = l.title || block.lessonTitle;
+        block.lessonDescription = l.description || null;
+        block.lessonOrder       = l.lesson_order ?? block.lessonOrder;
+      }
+    });
+
+    return Array.from(byLessonId.values()).sort((a, b) => a.lessonOrder - b.lessonOrder);
+  }, [materials, lessons]);
+
+  // Auto-open all lessons
+  useEffect(() => {
+    if (lessonBlocks.length > 0) {
+      const initial = {};
+      lessonBlocks.forEach((lb) => { initial[lb.lessonId || lb.lessonTitle] = true; });
+      setOpenLessons(initial);
+    }
+  }, [lessonBlocks.length]);
+
+  function toggleLesson(key) {
+    setOpenLessons((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  return materialsJsonParser(req, res, (err) => {
-    if (err) {
-      req.body = {};
-    }
-    return next();
-  });
-});
+  // Expand / collapse all
+  function expandAll() {
+    const all = {};
+    lessonBlocks.forEach((lb) => { all[lb.lessonId || lb.lessonTitle] = true; });
+    setOpenLessons(all);
+  }
+  function collapseAll() {
+    const all = {};
+    lessonBlocks.forEach((lb) => { all[lb.lessonId || lb.lessonTitle] = false; });
+    setOpenLessons(all);
+  }
 
-function getUploadedFiles(req) {
-  const files = [];
-  
-  if (req.files) {
-    if (Array.isArray(req.files)) {
-      files.push(...req.files);
-    } else {
-      // Handle different field names
-      const fields = ['files', 'document', 'file', 'content', 'content_file', 'material', 'material_file'];
-      for (const field of fields) {
-        if (req.files[field] && Array.isArray(req.files[field])) {
-          files.push(...req.files[field]);
+  // ── Fetch helpers ─────────────────────────────────────────────────────────
+  const fetchMaterials = useCallback(async (cId) => {
+    try {
+      const matRes  = await authFetch(`${API}/courses/${cId}/materials`);
+      const matData = await matRes.json();
+      if (!matRes.ok || !matData.success) {
+        setMaterials([]);
+        if (matData.error) setError(matData.error);
+      } else {
+        setMaterials(matData.materials || []);
+        setError("");
+      }
+    } catch (_) { setMaterials([]); }
+  }, []);
+
+  const fetchLessons = useCallback(async (cId) => {
+    try {
+      const res = await authFetch(`${API}/courses/${cId}/lessons`);
+      if (res.ok) { const data = await res.json(); setLessons(data.lessons || []); }
+    } catch (_) {}
+  }, []);
+
+  const fetchCourseDetails = useCallback(async (studentId, silent = false) => {
+    if (!studentId || !courseId) return;
+    if (!silent) setLoading(true);
+    try {
+      const courseRes = await authFetch(`${API}/courses/${courseId}`);
+      if (!courseRes.ok) {
+        if (!silent) setError("Course not found.");
+        setCourse(null);
+        return;
+      }
+      const courseData = await courseRes.json();
+      setCourse(courseData);
+
+      const enrollRes = await authFetch(`${API}/payments/courses/${studentId}`);
+      if (enrollRes.ok) {
+        const enrollData    = await enrollRes.json();
+        const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
+        const enrolled      = Boolean(matchedCourse?.is_enrolled);
+
+        if (enrolled !== isEnrolled) {
+          setIsEnrolled(enrolled);
+          if (enrolled) {
+            await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
+            setPaymentChecked(true);
+            setTimeout(() => setPaymentChecked(false), 5000);
+            if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+          } else {
+            setMaterials([]);
+          }
+        } else if (enrolled && materials.length === 0 && !silent) {
+          await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
         }
       }
+    } catch (_) {
+      if (!silent) setError("Failed to load course details.");
+    } finally {
+      if (!silent) setLoading(false);
     }
-  }
-  
-  if (req.file) {
-    files.push(req.file);
-  }
-  
-  return files;
-}
+  }, [courseId, isEnrolled, materials.length, fetchMaterials, fetchLessons]);
 
-function pickBodyValue(body, keys) {
-  for (const key of keys) {
-    const value = body?.[key];
-    if (value !== undefined && value !== null) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function getValueByPath(container, key) {
-  if (!container || !key) {
-    return undefined;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(container, key)) {
-    return container[key];
-  }
-
-  const normalizedPath = key.replace(/\[(\w+)\]/g, ".$1").split(".");
-  let current = container;
-
-  for (const part of normalizedPath) {
-    if (current === null || current === undefined || typeof current !== "object" || !(part in current)) {
-      return undefined;
-    }
-    current = current[part];
-  }
-
-  return current;
-}
-
-function pickRequestValue(req, keys) {
-  const sources = [req.body, req.query, req.params];
-
-  for (const source of sources) {
-    for (const key of keys) {
-      const value = getValueByPath(source, key);
-      if (value !== undefined && value !== null) {
-        return value;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function toNullIfBlankOrNullish(value) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (typeof value === "object") {
-    const objectValue =
-      value.url ||
-      value.link ||
-      value.value ||
-      value.id ||
-      value.course_id ||
-      value.courseId ||
-      value.lesson_id ||
-      value.lessonId ||
-      null;
-
-    if (objectValue !== null && objectValue !== undefined) {
-      return toNullIfBlankOrNullish(objectValue);
-    }
-  }
-
-  const normalized = String(value).trim();
-  if (!normalized) {
-    return null;
-  }
-
-  const lower = normalized.toLowerCase();
-  if (lower === "null" || lower === "undefined") {
-    return null;
-  }
-
-  return normalized;
-}
-
-function extractIdValue(value) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    return extractIdValue(value[0]);
-  }
-
-  if (typeof value === "object") {
-    return toNullIfBlankOrNullish(
-      value.course_id ||
-      value.courseId ||
-      value.lesson_id ||
-      value.lessonId ||
-      value.id ||
-      value.value
-    );
-  }
-
-  const normalized = String(value).trim();
-  if (!normalized) {
-    return null;
-  }
-
-  if ((normalized.startsWith("{") && normalized.endsWith("}")) || (normalized.startsWith("[") && normalized.endsWith("]"))) {
+  const checkPaymentStatus = useCallback(async (studentId) => {
+    if (!studentId || !courseId) return;
     try {
-      const parsed = JSON.parse(normalized);
-      return extractIdValue(parsed);
-    } catch (_error) {
-      return normalized;
-    }
-  }
-
-  return normalized;
-}
-
-async function ensureMaterialsSchema() {
-  if (!materialsSchemaReadyPromise) {
-    materialsSchemaReadyPromise = (async () => {
-      const client = await pool.connect();
-      try {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS lessons (
-            lesson_id TEXT PRIMARY KEY,
-            course_id TEXT NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT,
-            resource_url TEXT,
-            lesson_order INTEGER NOT NULL DEFAULT 1,
-            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS lessons
-          ADD COLUMN IF NOT EXISTS title TEXT
-        `);
-
-        await client.query(`
-          DO $$
-          BEGIN
-            IF EXISTS (
-              SELECT 1
-              FROM information_schema.columns
-              WHERE table_schema = 'public' AND table_name = 'lessons' AND column_name = 'lesson_title'
-            ) THEN
-              EXECUTE 'UPDATE lessons SET title = COALESCE(title, lesson_title) WHERE title IS NULL';
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-              FROM information_schema.columns
-              WHERE table_schema = 'public' AND table_name = 'lessons' AND column_name = 'lesson_name'
-            ) THEN
-              EXECUTE 'UPDATE lessons SET title = COALESCE(title, lesson_name) WHERE title IS NULL';
-            END IF;
-          END $$
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS lessons
-          ADD COLUMN IF NOT EXISTS lesson_order INTEGER NOT NULL DEFAULT 1
-        `);
-
-        await client.query(`
-          CREATE INDEX IF NOT EXISTS idx_lessons_course_id ON lessons(course_id)
-        `);
-
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS materials (
-            material_id TEXT PRIMARY KEY,
-            course_id TEXT NOT NULL,
-            lesson_id TEXT,
-            title TEXT NOT NULL,
-            content_url TEXT,
-            external_url TEXT,
-            material_type TEXT NOT NULL DEFAULT 'DOC',
-            subtopic TEXT,
-            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS lessons
-          ADD COLUMN IF NOT EXISTS course_id TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS lessons
-          ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS material_id TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS course_id TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS title TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS lesson_id TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS content_url TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS material_type TEXT NOT NULL DEFAULT 'DOC'
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS external_url TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS subtopic TEXT
-        `);
-
-        await client.query(`
-          ALTER TABLE IF EXISTS materials
-          ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-        `);
-
-        await client.query(`
-          DO $$
-          BEGIN
-            IF EXISTS (
-              SELECT 1
-              FROM information_schema.columns
-              WHERE table_schema = 'public' AND table_name = 'materials' AND column_name = 'material_title'
-            ) THEN
-              EXECUTE 'UPDATE materials SET title = COALESCE(title, material_title) WHERE title IS NULL';
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-              FROM information_schema.columns
-              WHERE table_schema = 'public' AND table_name = 'materials' AND column_name = 'name'
-            ) THEN
-              EXECUTE 'UPDATE materials SET title = COALESCE(title, name) WHERE title IS NULL';
-            END IF;
-          END $$
-        `);
-
-        await client.query(`
-          DO $$
-          BEGIN
-            IF EXISTS (
-              SELECT 1
-              FROM information_schema.columns
-              WHERE table_schema = 'public' AND table_name = 'materials' AND column_name = 'resource_link'
-            ) THEN
-              EXECUTE 'ALTER TABLE materials ALTER COLUMN resource_link DROP NOT NULL';
-              EXECUTE 'ALTER TABLE materials ALTER COLUMN resource_link SET DEFAULT ''''';
-              EXECUTE 'UPDATE materials SET resource_link = '''' WHERE resource_link IS NULL';
-            END IF;
-          END $$
-        `);
-
-        await client.query(`
-          CREATE INDEX IF NOT EXISTS idx_materials_course_id ON materials(course_id)
-        `);
-
-        await client.query(`
-          CREATE INDEX IF NOT EXISTS idx_materials_lesson_id ON materials(lesson_id)
-        `);
-      } finally {
-        client.release();
+      const enrollRes  = await authFetch(`${API}/payments/courses/${studentId}`);
+      if (enrollRes.ok) {
+        const enrollData    = await enrollRes.json();
+        const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
+        const enrolled      = Boolean(matchedCourse?.is_enrolled);
+        if (enrolled !== isEnrolled) {
+          setIsEnrolled(enrolled);
+          if (enrolled) {
+            await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
+            setPaymentChecked(true);
+            setTimeout(() => setPaymentChecked(false), 5000);
+            if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+          }
+        }
       }
-    })().catch((error) => {
-      materialsSchemaReadyPromise = null;
-      throw error;
-    });
-  }
+    } catch (_) {}
+  }, [courseId, isEnrolled, fetchMaterials, fetchLessons]);
 
-  await materialsSchemaReadyPromise;
-}
+  useEffect(() => {
+    const auth = guardRoute("STUDENT", router);
+    if (auth) {
+      setUser(auth);
+      userRef.current = auth;
+      fetchCourseDetails(auth.user_id, false);
+      if (!isEnrolled) {
+        setCheckingPayment(true);
+        pollTimer.current = setInterval(() => {
+          if (userRef.current && !isEnrolled) checkPaymentStatus(userRef.current.user_id);
+        }, POLL_INTERVAL);
+      }
+    }
+    return () => { if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; } };
+  }, [router, courseId]);
 
-function getPublicUploadPath(file) {
-  if (!file?.filename) return "";
-  return `/uploads/materials/${file.filename}`;
-}
+  const handleManualRefresh = async () => {
+    if (user) {
+      setCheckingPayment(true);
+      await fetchCourseDetails(user.user_id, false);
+      setCheckingPayment(false);
+    }
+  };
 
-function removeUploadedFile(publicPath) {
-  if (!publicPath || !publicPath.startsWith("/uploads/materials/")) {
-    return;
-  }
+  if (!user) return null;
 
-  const absolutePath = path.join(__dirname, "..", "public", publicPath.replace(/^\//, ""));
-  if (fs.existsSync(absolutePath)) {
-    fs.unlinkSync(absolutePath);
-  }
-}
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
 
-async function getCourseWithAccess(client, courseId, user) {
-  const result = await client.query(
-    `SELECT c.course_id, c.title, c.teacher_id
-     FROM courses c
-     WHERE c.course_id = $1`,
-    [courseId]
+      {/* Back */}
+      <Link href="/student/courses"
+        className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors group">
+        <ArrowLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
+        Back to My Courses
+      </Link>
+
+      {/* Banners */}
+      {checkingPayment && !isEnrolled && (
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-3.5 text-sm">
+          <Loader size={15} className="animate-spin flex-shrink-0" />
+          Checking for payment confirmation…
+        </div>
+      )}
+      {paymentChecked && isEnrolled && (
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3.5 text-sm">
+          <CheckCircle size={15} className="flex-shrink-0" />
+          Payment confirmed! Course materials are now available.
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3.5 text-sm">
+          <AlertCircle size={15} className="flex-shrink-0" /> {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-32 gap-3 text-blue-400">
+          <Loader size={28} className="animate-spin" />
+          <span className="text-sm font-medium text-gray-500">Loading course…</span>
+        </div>
+      ) : !course ? null : (
+        <>
+          {/* ── Course Hero Card ──────────────────────────────────────── */}
+          <div className={`relative bg-white rounded-3xl border shadow-sm overflow-hidden ${isEnrolled ? "border-blue-200" : "border-amber-200"}`}>
+            <div className={`h-1.5 w-full ${isEnrolled ? "bg-gradient-to-r from-blue-500 via-blue-700 to-indigo-700" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
+            <div className="p-6 sm:p-8">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${isEnrolled ? "bg-blue-50" : "bg-amber-50"}`}>
+                    <GraduationCap size={24} className={isEnrolled ? "text-blue-700" : "text-amber-500"} />
+                  </div>
+                  <div>
+                    <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">{course.title}</h1>
+                    {course.description && <p className="text-sm text-gray-500 mt-1 leading-relaxed">{course.description}</p>}
+                  </div>
+                </div>
+                {isEnrolled ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
+                    <BadgeCheck size={13} /> Enrolled
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
+                    <Lock size={13} /> Locked
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {course.teacher_name && (
+                  <div className="bg-blue-50 rounded-xl p-3">
+                    <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><User size={11} /> Teacher</p>
+                    <p className="font-bold text-gray-800 text-sm">{course.teacher_name}</p>
+                  </div>
+                )}
+                {course.duration && (
+                  <div className="bg-blue-50 rounded-xl p-3">
+                    <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><Clock size={11} /> Duration</p>
+                    <p className="font-bold text-gray-800 text-sm">{course.duration}</p>
+                  </div>
+                )}
+                <div className="bg-blue-50 rounded-xl p-3">
+                  <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><DollarSign size={11} /> Monthly Fee</p>
+                  <p className="font-bold text-blue-700 text-sm">
+                    {course.fee > 0 ? `Rs. ${parseFloat(course.fee).toLocaleString()}` : "Free"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Materials Section ─────────────────────────────────────── */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <BookOpen size={17} className="text-blue-600" /> Course Materials
+              </h2>
+              <div className="flex items-center gap-2">
+                {isEnrolled && materials.length > 0 && (
+                  <>
+                    <span className="text-xs text-blue-500 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full font-medium">
+                      {materials.length} file{materials.length !== 1 ? "s" : ""}
+                    </span>
+                    <button onClick={expandAll}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 hover:bg-blue-50 rounded-lg transition">
+                      Expand all
+                    </button>
+                    <button onClick={collapseAll}
+                      className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 hover:bg-gray-100 rounded-lg transition">
+                      Collapse
+                    </button>
+                  </>
+                )}
+                {!isEnrolled && (
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={checkingPayment}
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={checkingPayment ? "animate-spin" : ""} />
+                    Check Payment
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Not Enrolled ── */}
+            {!isEnrolled ? (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-12 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                  <Lock size={28} className="text-amber-400" />
+                </div>
+                <p className="text-amber-900 font-bold text-base mb-2">Materials Locked</p>
+                <p className="text-amber-600 text-sm mb-3 max-w-xs mx-auto">
+                  Complete your payment to unlock all lessons and course materials.
+                </p>
+                <p className="text-amber-500 text-xs mb-6">
+                  After payment confirmation, materials will appear here automatically.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Link href="/student/payments"
+                    className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow-sm">
+                    <Lock size={14} /> Go to Payments
+                  </Link>
+                  <button onClick={handleManualRefresh} disabled={checkingPayment}
+                    className="inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-amber-600 border border-amber-200 font-semibold px-6 py-3 rounded-xl transition-colors text-sm">
+                    <RefreshCw size={14} className={checkingPayment ? "animate-spin" : ""} />
+                    {checkingPayment ? "Checking..." : "Refresh Status"}
+                  </button>
+                </div>
+              </div>
+
+            ) : materials.length === 0 ? (
+              <div className="text-center py-14 bg-blue-50 rounded-2xl border border-blue-100">
+                <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                  <BookOpen size={26} className="text-blue-300" />
+                </div>
+                <p className="text-gray-600 font-semibold">No materials yet</p>
+                <p className="text-gray-400 text-sm mt-1">Your teacher will add them soon.</p>
+              </div>
+
+            ) : (
+              <>
+                {/* Summary bar */}
+                <CourseSummaryBar lessonBlocks={lessonBlocks} />
+
+                {/* Lesson blocks */}
+                <div className="space-y-3">
+                  {lessonBlocks.map((lb, idx) => {
+                    const key = lb.lessonId || lb.lessonTitle;
+                    return (
+                      <LessonBlock
+                        key={key}
+                        lesson={lb}
+                        index={idx}
+                        isOpen={!!openLessons[key]}
+                        onToggle={() => toggleLesson(key)}
+                      />
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
-
-  if (result.rows.length === 0) {
-    return { error: { status: 404, message: "Course not found." } };
-  }
-
-  const course = result.rows[0];
-
-  if (user.role === "TEACHER" && course.teacher_id !== user.user_id) {
-    return { error: { status: 403, message: "Access denied for this course." } };
-  }
-
-  return { course };
 }
-
-async function resolveSingleTeacherCourseId(client, user) {
-  if (!user || user.role !== "TEACHER" || !user.user_id) {
-    return null;
-  }
-
-  const result = await client.query(
-    `SELECT course_id
-     FROM courses
-     WHERE teacher_id = $1
-     ORDER BY course_id ASC
-     LIMIT 2`,
-    [user.user_id]
-  );
-
-  if (result.rows.length === 1) {
-    return result.rows[0].course_id;
-  }
-
-  return null;
-}
-
-async function getLessonWithAccess(client, lessonId, user) {
-  const result = await client.query(
-    `SELECT
-       l.lesson_id,
-       l.course_id,
-       l.title AS lesson_title,
-       l.lesson_order,
-       c.title AS course_title,
-       c.teacher_id
-     FROM lessons l
-     JOIN courses c ON c.course_id = l.course_id
-     WHERE l.lesson_id = $1`,
-    [lessonId]
-  );
-
-  if (result.rows.length === 0) {
-    return { error: { status: 404, message: "Lesson not found." } };
-  }
-
-  const lesson = result.rows[0];
-
-  if (user.role === "TEACHER" && lesson.teacher_id !== user.user_id) {
-    return { error: { status: 403, message: "Access denied for this lesson." } };
-  }
-
-  return { lesson };
-}
-
-async function getMaterialWithAccess(client, materialId, user) {
-  const result = await client.query(
-    `SELECT
-       m.material_id,
-       m.course_id,
-       m.lesson_id,
-       m.title,
-       m.content_url,
-       m.external_url,
-       m.material_type,
-       m.subtopic,
-       l.title AS lesson_title,
-       c.title AS course_title,
-       c.teacher_id
-     FROM materials m
-     LEFT JOIN lessons l ON l.lesson_id = m.lesson_id
-     JOIN courses c ON c.course_id = m.course_id
-     WHERE m.material_id = $1`,
-    [materialId]
-  );
-
-  if (result.rows.length === 0) {
-    return { error: { status: 404, message: "Material not found." } };
-  }
-
-  const material = result.rows[0];
-
-  if (user.role === "TEACHER" && material.teacher_id !== user.user_id) {
-    return { error: { status: 403, message: "Access denied for this material." } };
-  }
-
-  return { material };
-}
-
-router.get("/teacher/:teacher_id/courses", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await ensureMaterialsSchema();
-    const { teacher_id } = req.params;
-
-    if (req.user.role === "TEACHER" && req.user.user_id !== teacher_id) {
-      return res.status(403).json({ error: "Access denied." });
-    }
-
-    const result = await client.query(
-      `SELECT
-         c.course_id,
-         c.title,
-         c.description,
-         c.duration,
-         c.thumbnail_url,
-         COALESCE(mc.material_count, 0)::int AS material_count,
-         COALESCE(lc.lesson_count, 0)::int AS lesson_count
-       FROM courses c
-       LEFT JOIN (
-         SELECT course_id, COUNT(*) AS material_count
-         FROM materials
-         GROUP BY course_id
-       ) mc ON mc.course_id = c.course_id
-       LEFT JOIN (
-         SELECT course_id, COUNT(*) AS lesson_count
-         FROM lessons
-         GROUP BY course_id
-       ) lc ON lc.course_id = c.course_id
-       WHERE c.teacher_id = $1
-       ORDER BY c.title ASC`,
-      [teacher_id]
-    );
-
-    res.json({ success: true, courses: result.rows });
-  } catch (err) {
-    console.error("GET /materials/teacher/:teacher_id/courses:", err.message);
-    res.status(500).json({ error: "Failed to fetch teacher courses." });
-  } finally {
-    client.release();
-  }
-});
-
-router.get("/lesson/:lesson_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await ensureMaterialsSchema();
-    const { lesson_id } = req.params;
-    const { lesson, error } = await getLessonWithAccess(client, lesson_id, req.user);
-
-    if (error) {
-      return res.status(error.status).json({ error: error.message });
-    }
-
-    const materialsResult = await client.query(
-      `SELECT
-         material_id,
-         course_id,
-         lesson_id,
-         title,
-         content_url,
-         external_url,
-         material_type,
-         subtopic,
-         created_at
-       FROM materials
-       WHERE lesson_id = $1
-       ORDER BY subtopic ASC NULLS LAST, created_at DESC`,
-      [lesson_id]
-    );
-
-    res.json({
-      success: true,
-      lesson,
-      materials: materialsResult.rows,
-    });
-  } catch (err) {
-    console.error("GET /materials/lesson/:lesson_id:", err.message);
-    res.status(500).json({ error: "Failed to fetch lesson materials." });
-  } finally {
-    client.release();
-  }
-});
-
-router.get("/course/:course_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await ensureMaterialsSchema();
-    const { course_id } = req.params;
-    const { course, error } = await getCourseWithAccess(client, course_id, req.user);
-
-    if (error) {
-      return res.status(error.status).json({ error: error.message });
-    }
-
-    const materialsResult = await client.query(
-      `SELECT material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at
-       FROM materials
-       WHERE course_id = $1
-       ORDER BY subtopic ASC NULLS LAST, created_at DESC`,
-      [course_id]
-    );
-
-    res.json({
-      success: true,
-      course,
-      materials: materialsResult.rows,
-    });
-  } catch (err) {
-    console.error("GET /materials/course/:course_id:", err.message);
-    res.status(500).json({ error: "Failed to fetch materials." });
-  } finally {
-    client.release();
-  }
-});
-
-router.post("/", verifyToken, authorizeRoles("TEACHER", "ADMIN"), uploadAnyMaterial, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await ensureMaterialsSchema();
-
-    const course_id = extractIdValue(
-      pickRequestValue(req, [
-        "course_id",
-        "courseId",
-        "course",
-        "selectedCourseId",
-        "selectedCourse",
-        "course.id",
-        "course.course_id",
-        "course[course_id]",
-        "course[value]",
-        "courseId.value",
-      ])
-    );
-    const lesson_id = extractIdValue(
-      pickRequestValue(req, [
-        "lesson_id",
-        "lessonId",
-        "lesson",
-        "selectedLessonId",
-        "selectedLesson",
-        "lesson.id",
-        "lesson.lesson_id",
-        "lesson[lesson_id]",
-        "lesson[value]",
-        "lessonId.value",
-      ])
-    );
-    const title = toNullIfBlankOrNullish(
-      pickBodyValue(req.body, ["title", "material_title", "materialTitle", "name", "material_name", "materialName"])
-    );
-    const external_url = pickBodyValue(req.body, [
-      "external_url",
-      "externalUrl",
-      "url",
-      "link",
-      "reference_url",
-      "referenceUrl",
-      "content_url",
-      "contentUrl",
-      "file_url",
-      "fileUrl",
-      "document_url",
-      "documentUrl",
-      "document",
-      "content",
-    ]);
-    const material_type = pickBodyValue(req.body, ["material_type", "materialType", "type"]);
-    const subtopic = toNullIfBlankOrNullish(
-      pickBodyValue(req.body, ["subtopic", "sub_topic", "subTopic", "category", "topic"])
-    );
-    
-    const uploadedFiles = getUploadedFiles(req);
-    const normalizedExternalUrl = toNullIfBlankOrNullish(external_url);
-    const normalizedTitle = title || (uploadedFiles[0]?.originalname) || `Material ${new Date().toISOString().slice(0, 19)}`;
-    const normalizedSubTopic = subtopic || "General";
-
-    const normalizedType = ALLOWED_TYPES.has(String(material_type || "").toUpperCase())
-      ? String(material_type).toUpperCase()
-      : "DOC";
-
-    let resolvedCourseId = course_id;
-    let resolvedLessonId = lesson_id || null;
-    let course = null;
-    let lessonTitle = null;
-    let accessError = null;
-
-    if (!resolvedCourseId && !resolvedLessonId) {
-      resolvedCourseId = await resolveSingleTeacherCourseId(client, req.user);
-    }
-
-    if (!resolvedCourseId && !resolvedLessonId) {
-      uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
-      return res.status(400).json({
-        error: "course_id is required. Please send course_id in the form data.",
-      });
-    }
-
-    if (resolvedLessonId) {
-      const lessonAccess = await getLessonWithAccess(client, resolvedLessonId, req.user);
-      accessError = lessonAccess.error || null;
-
-      if (!accessError) {
-        resolvedCourseId = lessonAccess.lesson.course_id;
-        course = {
-          course_id: lessonAccess.lesson.course_id,
-          title: lessonAccess.lesson.course_title,
-        };
-        lessonTitle = lessonAccess.lesson.lesson_title;
-      }
-    } else {
-      const courseAccess = await getCourseWithAccess(client, resolvedCourseId, req.user);
-      accessError = courseAccess.error || null;
-
-      if (!accessError) {
-        course = courseAccess.course;
-      }
-    }
-
-    if (accessError) {
-      uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
-      return res.status(accessError.status).json({ error: accessError.message });
-    }
-
-    if (!resolvedCourseId) {
-      uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
-      return res.status(400).json({ error: "A valid course or lesson is required." });
-    }
-
-    // Create materials for each uploaded file
-    const createdMaterials = [];
-    
-    // Handle file uploads
-    for (const file of uploadedFiles) {
-      const uploadedPath = getPublicUploadPath(file);
-      const material_id = uuidv4();
-      
-      const result = await client.query(
-        `INSERT INTO materials (material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
-         RETURNING material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at`,
-        [material_id, resolvedCourseId, resolvedLessonId, file.originalname, uploadedPath, null, normalizedType, normalizedSubTopic]
-      );
-      createdMaterials.push({
-        ...result.rows[0],
-        course_title: course.title,
-        lesson_title: lessonTitle,
-      });
-    }
-    
-    // Handle external URL if provided
-    if (normalizedExternalUrl) {
-      const material_id = uuidv4();
-      const externalTitle = title || "External Link";
-      
-      const result = await client.query(
-        `INSERT INTO materials (material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
-         RETURNING material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at`,
-        [material_id, resolvedCourseId, resolvedLessonId, externalTitle, null, normalizedExternalUrl, normalizedType, normalizedSubTopic]
-      );
-      createdMaterials.push({
-        ...result.rows[0],
-        course_title: course.title,
-        lesson_title: lessonTitle,
-      });
-    }
-
-    if (createdMaterials.length === 0 && uploadedFiles.length === 0 && !normalizedExternalUrl) {
-      return res.status(400).json({ error: "At least one file or external URL is required." });
-    }
-
-    res.status(201).json({
-      success: true,
-      materials: createdMaterials,
-    });
-  } catch (err) {
-    const uploadedFiles = getUploadedFiles(req);
-    uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
-    console.error("POST /materials:", err.message);
-    res.status(500).json({ error: "Failed to add material." });
-  } finally {
-    client.release();
-  }
-});
-
-router.put("/:material_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), uploadAnyMaterial, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await ensureMaterialsSchema();
-    const { material_id } = req.params;
-    const title = toNullIfBlankOrNullish(
-      pickBodyValue(req.body, ["title", "material_title", "materialTitle", "name", "material_name", "materialName"])
-    );
-    const external_url = pickBodyValue(req.body, [
-      "external_url",
-      "externalUrl",
-      "url",
-      "link",
-      "reference_url",
-      "referenceUrl",
-      "content_url",
-      "contentUrl",
-      "file_url",
-      "fileUrl",
-      "document_url",
-      "documentUrl",
-      "document",
-      "content",
-    ]);
-    const material_type = pickBodyValue(req.body, ["material_type", "materialType", "type"]);
-    const subtopic = toNullIfBlankOrNullish(
-      pickBodyValue(req.body, ["subtopic", "sub_topic", "subTopic", "category", "topic"])
-    );
-    const uploadedFile = getUploadedFiles(req)[0];
-    const uploadedPath = getPublicUploadPath(uploadedFile);
-    const normalizedExternalUrl = toNullIfBlankOrNullish(external_url);
-
-    if (!title) {
-      if (uploadedPath) {
-        removeUploadedFile(uploadedPath);
-      }
-      return res.status(400).json({ error: "Material title is required." });
-    }
-
-    const { material, error } = await getMaterialWithAccess(client, material_id, req.user);
-
-    if (error) {
-      if (uploadedPath) {
-        removeUploadedFile(uploadedPath);
-      }
-      return res.status(error.status).json({ error: error.message });
-    }
-
-    const resolvedContentUrl = uploadedPath || material.content_url;
-    const resolvedExternalUrl = normalizedExternalUrl || material.external_url;
-    const resolvedSubtopic = subtopic || material.subtopic;
-
-    if (!resolvedContentUrl && !resolvedExternalUrl) {
-      if (uploadedPath) {
-        removeUploadedFile(uploadedPath);
-      }
-      return res.status(400).json({ error: "Please upload a document or add a reference link." });
-    }
-
-    const normalizedType = ALLOWED_TYPES.has(String(material_type || "").toUpperCase())
-      ? String(material_type).toUpperCase()
-      : material.material_type;
-
-    const result = await client.query(
-      `UPDATE materials
-       SET title = $1,
-           content_url = $2,
-           external_url = $3,
-           material_type = $4,
-           subtopic = $5
-       WHERE material_id = $6
-       RETURNING material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at`,
-      [title.trim(), resolvedContentUrl, resolvedExternalUrl, normalizedType, resolvedSubtopic, material_id]
-    );
-
-    if (uploadedPath && material.content_url && material.content_url !== uploadedPath) {
-      removeUploadedFile(material.content_url);
-    }
-
-    res.json({
-      success: true,
-      material: {
-        ...result.rows[0],
-        course_title: material.course_title,
-        lesson_title: material.lesson_title,
-      },
-    });
-  } catch (err) {
-    const uploadedFile = getUploadedFiles(req)[0];
-    const uploadedPath = getPublicUploadPath(uploadedFile);
-    if (uploadedPath) {
-      removeUploadedFile(uploadedPath);
-    }
-    console.error("PUT /materials/:material_id:", err.message);
-    res.status(500).json({ error: "Failed to update material." });
-  } finally {
-    client.release();
-  }
-});
-
-router.delete("/:material_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await ensureMaterialsSchema();
-    const { material_id } = req.params;
-    const { material, error } = await getMaterialWithAccess(client, material_id, req.user);
-
-    if (error) {
-      return res.status(error.status).json({ error: error.message });
-    }
-
-    await client.query("DELETE FROM materials WHERE material_id = $1", [material_id]);
-    if (material.content_url) {
-      removeUploadedFile(material.content_url);
-    }
-    res.json({ success: true, message: "Material removed." });
-  } catch (err) {
-    console.error("DELETE /materials/:material_id:", err.message);
-    res.status(500).json({ error: "Failed to remove material." });
-  } finally {
-    client.release();
-  }
-});
-
-module.exports = router;
