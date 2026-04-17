@@ -81,7 +81,7 @@ export default function PublicFeedbacksPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">What Our Community Says</h1>
         </div>
         <p className="text-blue-100 text-sm max-w-md mx-auto">
-          Real feedback from our students and staff — shared openly to help us improve.
+          Users share their positive experiences here, helping us understand what we are doing well. Any complaints or issues are submitted through a separate section so we can review and improve the system properly.
         </p>
         {avgRating > 0 && (
           <div className="mt-6 inline-flex flex-col items-center bg-white/10 rounded-2xl px-8 py-4 backdrop-blur">
