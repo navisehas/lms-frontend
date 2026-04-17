@@ -1,59 +1,47 @@
-"use client";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+]"use client";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  AlertCircle, ArrowLeft, Loader, Download,
-  Clock, User, DollarSign, Lock,
-  BookOpen, FileText, ExternalLink, BadgeCheck,
-  ChevronDown, ChevronRight, GraduationCap, PlayCircle,
-  RefreshCw, CheckCircle, Tag, Layers, File, FileVideo,
-  FileImage, Link2, FolderOpen, BookMarked,
+  ArrowLeft, Loader, AlertCircle, Trash2, Edit2, Save,
+  X, BookOpen, FileText, ExternalLink, Upload, Link2,
+  ChevronDown, ChevronRight, GraduationCap, Tag, Layers,
+  CheckCircle, FolderPlus, FilePlus, File, FileVideo,
+  FileImage, Cloud, CloudUpload,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
-const POLL_INTERVAL = 5000;
 
-function getMaterialHref(value) {
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
-  const path = value.startsWith("/") ? value : `/${value}`;
-  return `${API}${path}`;
+const inputCls =
+  "w-full rounded-xl border border-blue-200 bg-white text-gray-900 placeholder-gray-400 " +
+  "px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-500 transition";
+
+const inputErrCls =
+  "w-full rounded-xl border border-red-400 bg-white text-gray-900 placeholder-gray-400 " +
+  "px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition";
+
+const labelCls = "block text-xs font-bold text-blue-700 mb-1.5 uppercase tracking-wide";
+
+function formatBytes(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const handleDownload = async (url, filename) => {
-  try {
-    if (url.startsWith("http")) { window.open(url, "_blank"); return; }
-    const response = await authFetch(url, { method: "GET" });
-    if (!response.ok) throw new Error("Download failed");
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = filename || "download";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
-  } catch (error) {
-    window.open(url, "_blank");
-  }
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function getTypeIcon(type, externalUrl) {
-  if (externalUrl) return <PlayCircle size={14} className="text-blue-500" />;
-  switch (type?.toUpperCase()) {
-    case "PDF":     return <FileText size={14} className="text-red-500" />;
-    case "VIDEO":   return <FileVideo size={14} className="text-purple-500" />;
-    case "LINK":    return <Link2 size={14} className="text-blue-500" />;
-    case "MEETING": return <PlayCircle size={14} className="text-green-500" />;
-    case "DOC":     return <File size={14} className="text-blue-500" />;
-    default:        return <FileImage size={14} className="text-gray-400" />;
-  }
+function getFileIcon(filename, type) {
+  const ext = filename?.split(".").pop()?.toLowerCase();
+  if (["mp4", "mov", "avi", "webm"].includes(ext) || type === "VIDEO")
+    return <FileVideo size={13} className="text-purple-500" />;
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext))
+    return <FileImage size={13} className="text-green-500" />;
+  if (ext === "pdf" || type === "PDF")
+    return <FileText size={13} className="text-red-500" />;
+  return <File size={13} className="text-blue-500" />;
 }
 
+// ─── Type badge style (matching student page) ────────────────────────────────
 function getTypeBadgeStyle(type) {
   switch (type?.toUpperCase()) {
     case "PDF":     return "bg-red-50 text-red-600 border-red-100";
@@ -65,92 +53,465 @@ function getTypeBadgeStyle(type) {
   }
 }
 
-// ─── Material Row ─────────────────────────────────────────────────────────────
-function MaterialCard({ material, index }) {
-  const downloadUrl = getMaterialHref(material.content_url);
-  const externalUrl = material.external_url;
+function Btn({ children, onClick, variant = "primary", size = "md", disabled, className = "", type = "button" }) {
+  const base = "inline-flex items-center gap-1.5 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+  const sizes = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2.5 text-sm", lg: "px-6 py-3 text-sm" };
+  const variants = {
+    primary: "bg-blue-700 hover:bg-blue-800 text-white shadow-sm",
+    outline: "border border-blue-300 text-blue-700 hover:bg-blue-50 bg-white",
+    ghost:   "text-blue-700 hover:bg-blue-50",
+    danger:  "border border-red-200 text-red-600 hover:bg-red-50 bg-white",
+    success: "bg-green-600 hover:bg-green-700 text-white shadow-sm",
+  };
+  return (
+    <button type={type} onClick={onClick} disabled={disabled}
+      className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>
+      {children}
+    </button>
+  );
+}
+
+// ─── Drag & Drop Upload Zone ─────────────────────────────────────────────────
+function DropZone({ files, onChange, onRemove }) {
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef(null);
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    const dropped = Array.from(e.dataTransfer.files || []);
+    if (dropped.length) onChange(dropped);
+  }
+
+  function handleDragOver(e) { e.preventDefault(); setDragging(true); }
+
+  function handleFileChange(e) {
+    const selected = Array.from(e.target.files || []);
+    if (selected.length) onChange(selected);
+    e.target.value = "";
+  }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-blue-50/60 transition-colors rounded-xl gap-4 group">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        {/* Number + Icon */}
-        <div className="relative flex-shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center">
-            {getTypeIcon(material.material_type, externalUrl)}
+    <div className="space-y-3">
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDragging(false)}
+        onClick={() => fileRef.current?.click()}
+        className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all
+          ${dragging ? "border-blue-500 bg-blue-50 scale-[1.01]" : "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50"}`}
+      >
+        <div className="flex flex-col items-center gap-2">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${dragging ? "bg-blue-200" : "bg-blue-100"}`}>
+            <CloudUpload size={20} className="text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-700">
+              {dragging ? "Drop files here" : "Drag & drop files here"}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">or <span className="text-blue-600 font-medium">browse</span> to upload · PDF, DOC, MP4, images…</p>
           </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-800 truncate leading-tight">{material.title}</p>
-          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(material.material_type)}`}>
-            {material.material_type}
-          </span>
-        </div>
+        <input ref={fileRef} type="file" multiple className="hidden" onChange={handleFileChange} />
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2 flex-shrink-0">
-        {downloadUrl && material.content_url && (
-          <a
-            href={downloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
-            onClick={(e) => {
-              if (!downloadUrl.startsWith("http")) {
-                e.preventDefault();
-                handleDownload(downloadUrl, material.title);
-              }
-            }}
-          >
-            <Download size={11} /> Download
-          </a>
-        )}
-        {externalUrl && (
-          <a
-            href={externalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-800 bg-blue-100 hover:bg-blue-200 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <ExternalLink size={11} /> Open
-          </a>
-        )}
+      {files.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            {files.length} file{files.length !== 1 ? "s" : ""} ready to upload
+          </p>
+          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+            {files.map((f, idx) => (
+              <div key={idx} className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+                <div className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+                  {getFileIcon(f.name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-800 truncate">{f.name}</p>
+                  <p className="text-xs text-gray-400">{formatBytes(f.size)}</p>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); onRemove(idx); }}
+                  className="text-gray-300 hover:text-red-500 transition flex-shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Upload Progress Bar ─────────────────────────────────────────────────────
+function UploadProgress({ saving, fileCount }) {
+  if (!saving) return null;
+  return (
+    <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between text-xs font-semibold text-blue-700">
+        <span className="flex items-center gap-1.5">
+          <Loader size={12} className="animate-spin" />
+          Uploading {fileCount > 1 ? `${fileCount} files` : "file"}…
+        </span>
+      </div>
+      <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
+        <div className="h-full bg-blue-600 rounded-full animate-pulse w-3/4" />
       </div>
     </div>
   );
 }
 
-// ─── Subtopic Section ─────────────────────────────────────────────────────────
-function SubtopicSection({ subtopic, materials, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen);
-  const isUncategorized = subtopic === "__none__";
+// ─── Material Modal ──────────────────────────────────────────────────────────
+function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
+  const isEdit = Boolean(material);
+  const [title, setTitle] = useState(material?.title || "");
+  const [externalUrl, setExternalUrl] = useState(material?.external_url || "");
+  const [files, setFiles] = useState([]);
+  const [type, setType] = useState(material?.material_type || "DOC");
+  const [subtopic, setSubtopic] = useState(material?.subtopic || "");
+  const [subtopicError, setSubtopicError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const validateSubtopic = (value) => {
+    if (!value || value.trim() === "") return { isValid: false };
+    if (value.length > 100) return { isValid: false, error: "Subtopic cannot exceed 100 characters" };
+    if (/[<>'"]/.test(value)) return { isValid: false, error: 'Subtopic cannot contain <, >, \', or " characters' };
+    return { isValid: true, value: value.trim() };
+  };
+
+  async function handleSave() {
+    const subtopicValidation = validateSubtopic(subtopic);
+    if (!subtopicValidation.isValid) {
+      setSubtopicError(true);
+      if (subtopicValidation.error) setErr(subtopicValidation.error);
+      return;
+    }
+    if (!isEdit && files.length === 0 && !externalUrl.trim()) {
+      setErr("Upload at least one file or add a link.");
+      return;
+    }
+    if (isEdit && !title.trim()) { setErr("Title is required."); return; }
+
+    setSaving(true); setErr(""); setSubtopicError(false);
+    try {
+      const fd = new FormData();
+      if (isEdit) fd.append("title", title.trim());
+      fd.append("material_type", type);
+      fd.append("subtopic", subtopicValidation.value);
+      if (lessonId) fd.append("lesson_id", lessonId);
+      if (courseId) fd.append("course_id", courseId);
+      if (externalUrl.trim()) fd.append("external_url", externalUrl.trim());
+      for (let i = 0; i < files.length; i++) fd.append("files", files[i]);
+
+      const url = isEdit ? `${API}/materials/${material.material_id}` : `${API}/materials`;
+      const method = isEdit ? "PUT" : "POST";
+      const res = await authFetch(url, { method, body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to save.");
+
+      if (isEdit) {
+        onSaved(data.material);
+      } else {
+        if (data.materials && Array.isArray(data.materials)) {
+          data.materials.forEach(mat => onSaved(mat));
+        } else if (data.material) {
+          onSaved(data.material);
+        }
+      }
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div className="rounded-xl overflow-hidden border border-blue-100">
-      {/* Subtopic header — only show if it has a real name */}
-      {!isUncategorized && (
-        <button
-          onClick={() => setOpen(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 transition text-left"
-        >
-          <div className="flex items-center gap-2">
-            <Tag size={12} className="text-blue-500 flex-shrink-0" />
-            <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">{subtopic}</span>
-            <span className="text-xs text-blue-400 font-medium">
-              {materials.length} file{materials.length !== 1 ? "s" : ""}
-            </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-gray-100 max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-extrabold text-gray-900 flex items-center gap-2 text-base">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+                <FilePlus size={14} className="text-blue-700" />
+              </div>
+              {isEdit ? "Edit Material" : "Add Materials"}
+            </h3>
+            {!isEdit && <p className="text-xs text-gray-400 mt-0.5 ml-9">Upload files or add an external link</p>}
           </div>
-          {open
-            ? <ChevronDown size={13} className="text-blue-400" />
-            : <ChevronRight size={13} className="text-blue-400" />}
-        </button>
-      )}
+          <button onClick={onClose} className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition">
+            <X size={16} />
+          </button>
+        </div>
 
-      {/* Materials list */}
-      {(open || isUncategorized) && (
-        <div className={`divide-y divide-gray-50 ${!isUncategorized ? "px-2 py-1" : "px-2 py-1"}`}>
-          {materials.map((mat, i) => (
-            <MaterialCard key={mat.material_id} material={mat} index={i} />
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+          {err && (
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-sm">
+              <AlertCircle size={14} className="flex-shrink-0" /> {err}
+            </div>
+          )}
+          <UploadProgress saving={saving} fileCount={files.length} />
+
+          {isEdit && (
+            <div>
+              <label className={labelCls}>Material Title *</label>
+              <input className={inputCls} placeholder="e.g. Chapter 1 Notes"
+                value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+          )}
+
+          <div>
+            <label className={labelCls}>Subtopic *</label>
+            <input
+              className={subtopicError ? inputErrCls : inputCls}
+              placeholder="e.g. Introduction, Week 1, Chapter 3…"
+              value={subtopic}
+              onChange={(e) => {
+                setSubtopic(e.target.value);
+                if (subtopicError && e.target.value.trim()) { setSubtopicError(false); setErr(""); }
+              }}
+              maxLength={100}
+            />
+            {subtopicError && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <AlertCircle size={11} /> Required
+              </p>
+            )}
+          </div>
+
+          {/* Type */}
+          <div>
+            <label className={labelCls}>Material Type</label>
+            <select className={inputCls} value={type} onChange={(e) => setType(e.target.value)}>
+              {["DOC", "PDF", "VIDEO", "MEETING", "LINK", "OTHER"].map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {!isEdit && (
+            <div>
+              <label className={labelCls}>Upload Files</label>
+              <DropZone
+                files={files}
+                onChange={(newFiles) => setFiles(prev => [...prev, ...newFiles])}
+                onRemove={(idx) => setFiles(prev => prev.filter((_, i) => i !== idx))}
+              />
+            </div>
+          )}
+
+          {!isEdit && (
+            <div className="flex items-center gap-3">
+              <hr className="flex-1 border-gray-200" />
+              <span className="text-xs text-gray-400 font-medium px-1">OR ADD A LINK</span>
+              <hr className="flex-1 border-gray-200" />
+            </div>
+          )}
+
+          <div>
+            <label className={labelCls}>External Link
+              {!isEdit && <span className="text-gray-400 normal-case font-normal ml-1">(YouTube, Drive, Zoom…)</span>}
+            </label>
+            <div className="relative">
+              <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" />
+              <input className={`${inputCls} pl-8`} placeholder="https://…"
+                value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} />
+            </div>
+          </div>
+
+          {!isEdit && files.length === 0 && !externalUrl && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-700">
+              <AlertCircle size={13} className="flex-shrink-0" />
+              Please upload at least one file or add an external link to continue.
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-3xl">
+          {!isEdit
+            ? <span className="text-xs text-gray-400">{files.length > 0 ? `${files.length} file${files.length !== 1 ? "s" : ""} selected` : "No files selected"}</span>
+            : <span />}
+          <div className="flex gap-2">
+            <Btn variant="outline" onClick={onClose} disabled={saving}>Cancel</Btn>
+            <Btn variant="primary" onClick={handleSave} disabled={saving}>
+              {saving
+                ? <><Loader size={13} className="animate-spin" /> Uploading…</>
+                : <><Save size={13} /> {isEdit ? "Save Changes" : `Upload${files.length > 1 ? ` ${files.length}` : ""}`}</>}
+            </Btn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Lesson Modal ────────────────────────────────────────────────────────────
+function LessonModal({ courseId, lesson, onClose, onSaved }) {
+  const isEdit = Boolean(lesson);
+  const [title, setTitle] = useState(lesson?.title || "");
+  const [description, setDescription] = useState(lesson?.description || "");
+  const [resourceUrl, setResourceUrl] = useState(lesson?.resource_url || "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function handleSave() {
+    if (!title.trim()) { setErr("Lesson title is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      const body = { course_id: courseId, title: title.trim(), description: description.trim(), resource_url: resourceUrl.trim() };
+      const url = isEdit ? `${API}/lessons/${lesson.lesson_id}` : `${API}/lessons`;
+      const method = isEdit ? "PUT" : "POST";
+      const res = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to save.");
+      onSaved(data.lesson);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h3 className="font-extrabold text-gray-900 flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+              <FolderPlus size={14} className="text-blue-700" />
+            </div>
+            {isEdit ? "Edit Lesson" : "New Lesson"}
+          </h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {err && (
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-sm">
+              <AlertCircle size={14} /> {err}
+            </div>
+          )}
+          <div>
+            <label className={labelCls}>Lesson Title *</label>
+            <input className={inputCls} placeholder="e.g. Week 1 — Introduction to the Course"
+              value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Description <span className="text-gray-400 normal-case font-normal">(optional)</span></label>
+            <textarea className={`${inputCls} resize-none`} rows={3}
+              placeholder="What will students learn in this lesson?"
+              value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Resource URL <span className="text-gray-400 normal-case font-normal">(optional)</span></label>
+            <div className="relative">
+              <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" />
+              <input className={`${inputCls} pl-8`} placeholder="https://…"
+                value={resourceUrl} onChange={(e) => setResourceUrl(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-3xl">
+          <Btn variant="outline" onClick={onClose} disabled={saving}>Cancel</Btn>
+          <Btn variant="primary" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />}
+            {isEdit ? "Save Changes" : "Create Lesson"}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Material Row ────────────────────────────────────────────────────────────
+function MaterialRow({ material, onEdit, onDelete }) {
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm(`Delete "${material.title}"?`)) return;
+    setDeleting(true);
+    try {
+      await authFetch(`${API}/materials/${material.material_id}`, { method: "DELETE" });
+      onDelete(material.material_id);
+    } catch (_) { } finally { setDeleting(false); }
+  }
+
+  return (
+    <div className="flex items-center justify-between px-3 py-2.5 hover:bg-blue-50/60 transition-colors rounded-xl gap-3 group">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center flex-shrink-0">
+          {getFileIcon(material.title, material.material_type)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
+            {material.external_url && (
+              <a href={material.external_url} target="_blank" rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-600 transition" title="Open link">
+                <ExternalLink size={11} />
+              </a>
+            )}
+            {material.content_url && (
+              <a href={`${API}${material.content_url}`} target="_blank" rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-600 transition" title="View file">
+                <FileText size={11} />
+              </a>
+            )}
+          </div>
+          {/* Color-coded type badge — matching student page */}
+          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(material.material_type)}`}>
+            {material.material_type}
+          </span>
+        </div>
+      </div>
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={() => onEdit(material)}
+          className="w-7 h-7 rounded-lg hover:bg-blue-100 flex items-center justify-center text-blue-600 transition">
+          <Edit2 size={12} />
+        </button>
+        <button onClick={handleDelete} disabled={deleting}
+          className="w-7 h-7 rounded-lg hover:bg-red-50 flex items-center justify-center text-red-400 hover:text-red-600 transition disabled:opacity-50">
+          {deleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Subtopic Group ──────────────────────────────────────────────────────────
+function SubtopicGroup({ subtopic, materials, onEditMaterial, onDeleteMaterial }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div className="border border-blue-100 rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 transition text-left"
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <div className="flex items-center gap-2">
+          <Tag size={13} className="text-blue-500 flex-shrink-0" />
+          <span className="font-semibold text-blue-700 text-sm">{subtopic}</span>
+          <span className="text-xs text-indigo-400 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+            {materials.length} item{materials.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        {collapsed
+          ? <ChevronRight size={14} className="text-blue-400" />
+          : <ChevronDown size={14} className="text-blue-400" />}
+      </button>
+      {!collapsed && (
+        <div className="divide-y divide-gray-50 px-2 py-1">
+          {materials.map((material) => (
+            <MaterialRow
+              key={material.material_id}
+              material={material}
+              onEdit={onEditMaterial}
+              onDelete={onDeleteMaterial}
+            />
           ))}
         </div>
       )}
@@ -158,89 +519,142 @@ function SubtopicSection({ subtopic, materials, defaultOpen = true }) {
   );
 }
 
-// ─── Lesson Block ─────────────────────────────────────────────────────────────
-function LessonBlock({ lesson, index, isOpen, onToggle }) {
-  const subtopicGroups = useMemo(() => {
-    const groups = new Map();
-    (lesson.materials || []).forEach((m) => {
-      const raw = m.subtopic ?? m.sub_topic ?? m.subTopic ?? m.category ?? m.topic ?? null;
-      const key = (typeof raw === "string" && raw.trim()) ? raw.trim() : "__none__";
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(m);
-    });
-    // Sort: named subtopics alphabetically, __none__ last
-    return Array.from(groups.entries()).sort(([a], [b]) => {
-      if (a === "__none__") return 1;
-      if (b === "__none__") return -1;
-      return a.localeCompare(b);
-    });
-  }, [lesson.materials]);
+// ─── Lesson Block ────────────────────────────────────────────────────────────
+function LessonBlock({ lesson, onLessonEdit, onLessonDelete, onMaterialSaved, onMaterialDeleted }) {
+  const [open, setOpen] = useState(true);
+  const [materials, setMaterials] = useState(lesson.materials || []);
+  const [showMatModal, setShowMatModal] = useState(false);
+  const [editMaterial, setEditMaterial] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const totalMaterials = lesson.materials?.length || 0;
-  const subtopicCount = subtopicGroups.filter(([k]) => k !== "__none__").length;
+  const groupedMaterials = materials.reduce((groups, mat) => {
+    const key = mat.subtopic || "Uncategorized";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(mat);
+    return groups;
+  }, {});
+  const sortedSubtopics = Object.keys(groupedMaterials).sort();
+  const totalMaterials = materials.length;
+  const subtopicCount = sortedSubtopics.filter(s => s !== "Uncategorized").length;
+
+  function handleMaterialSaved(mat) {
+    setMaterials((prev) => {
+      const idx = prev.findIndex((m) => m.material_id === mat.material_id);
+      if (idx >= 0) { const n = [...prev]; n[idx] = mat; return n; }
+      return [...prev, mat];
+    });
+    setShowMatModal(false);
+    setEditMaterial(null);
+    onMaterialSaved?.();
+  }
+
+  function handleMaterialDeleted(id) {
+    setMaterials((prev) => prev.filter((m) => m.material_id !== id));
+    onMaterialDeleted?.();
+  }
+
+  async function handleLessonDelete() {
+    if (!confirm(`Delete lesson "${lesson.title}" and all its materials?`)) return;
+    setDeleting(true);
+    try {
+      await authFetch(`${API}/lessons/${lesson.lesson_id}`, { method: "DELETE" });
+      onLessonDelete(lesson.lesson_id);
+    } catch (_) { } finally { setDeleting(false); }
+  }
 
   return (
-    <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden shadow-sm">
-      {/* Lesson Header */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-blue-50/40 transition-colors text-left"
-      >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <span className="w-8 h-8 rounded-xl bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center flex-shrink-0 shadow-sm">
-            {index + 1}
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-900 truncate">{lesson.lessonTitle}</p>
-            {lesson.lessonDescription && (
-              <p className="text-xs text-gray-400 mt-0.5 truncate">{lesson.lessonDescription}</p>
-            )}
-          </div>
-          {/* Stats pills */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {subtopicCount > 0 && (
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">
-                <Tag size={10} /> {subtopicCount} topic{subtopicCount !== 1 ? "s" : ""}
-              </span>
-            )}
-            <span className="text-xs text-blue-500 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full font-medium">
-              {totalMaterials} file{totalMaterials !== 1 ? "s" : ""}
+    <>
+      <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden shadow-sm">
+        {/* Lesson Header — dark blue gradient same as student page */}
+        <div className="flex items-center justify-between px-5 py-3.5 bg-blue-700">
+          <button onClick={() => setOpen(v => !v)} className="flex items-center gap-3 flex-1 text-left min-w-0">
+            <span className="w-8 h-8 rounded-xl bg-white/20 text-white text-xs font-extrabold flex items-center justify-center flex-shrink-0">
+              {lesson.lesson_order}
             </span>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-bold text-white block truncate">{lesson.title}</span>
+              {lesson.description && (
+                <span className="text-xs text-blue-200 block truncate mt-0.5">{lesson.description}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+              {subtopicCount > 0 && (
+                <span className="hidden sm:inline-flex items-center gap-1 text-xs text-blue-200 font-medium">
+                  <Tag size={10} /> {subtopicCount} topic{subtopicCount !== 1 ? "s" : ""}
+                </span>
+              )}
+              <span className="text-xs text-blue-200 font-medium">
+                {totalMaterials} file{totalMaterials !== 1 ? "s" : ""}
+              </span>
+              {open
+                ? <ChevronDown size={15} className="text-blue-300" />
+                : <ChevronRight size={15} className="text-blue-300" />}
+            </div>
+          </button>
+          <div className="flex gap-1.5 ml-3 flex-shrink-0">
+            <button onClick={() => onLessonEdit(lesson)}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition" title="Edit lesson">
+              <Edit2 size={12} />
+            </button>
+            <button onClick={handleLessonDelete} disabled={deleting}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-red-500/70 flex items-center justify-center text-white transition disabled:opacity-50" title="Delete lesson">
+              {deleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            </button>
           </div>
         </div>
-        <div className="ml-3 flex-shrink-0">
-          {isOpen
-            ? <ChevronDown size={16} className="text-blue-400" />
-            : <ChevronRight size={16} className="text-blue-400" />}
-        </div>
-      </button>
 
-      {/* Subtopic Groups */}
-      {isOpen && (
-        <div className="border-t border-blue-50 px-3 py-3 space-y-2">
-          {totalMaterials === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-5">No materials in this lesson yet.</p>
-          ) : (
-            subtopicGroups.map(([subtopic, mats]) => (
-              <SubtopicSection
-                key={subtopic}
-                subtopic={subtopic}
-                materials={mats}
-                defaultOpen={true}
-              />
-            ))
-          )}
-        </div>
+        {/* Materials */}
+        {open && (
+          <div className="p-4 space-y-3">
+            {totalMaterials === 0 ? (
+              <div className="flex flex-col items-center py-6 gap-2 text-center">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                  <Cloud size={18} className="text-gray-400" />
+                </div>
+                <p className="text-sm text-gray-500 font-medium">No materials yet</p>
+                <p className="text-xs text-gray-400">Add PDFs, videos, links and more</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {sortedSubtopics.map((subtopic) => (
+                  <SubtopicGroup
+                    key={subtopic}
+                    subtopic={subtopic}
+                    materials={groupedMaterials[subtopic]}
+                    onEditMaterial={(mat) => { setEditMaterial(mat); setShowMatModal(true); }}
+                    onDeleteMaterial={handleMaterialDeleted}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="pt-1 border-t border-gray-100">
+              <Btn size="sm" variant="outline"
+                onClick={() => { setEditMaterial(null); setShowMatModal(true); }}>
+                <FilePlus size={13} /> Add Materials
+              </Btn>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showMatModal && (
+        <MaterialModal
+          lessonId={lesson.lesson_id}
+          courseId={lesson.course_id}
+          material={editMaterial}
+          onClose={() => { setShowMatModal(false); setEditMaterial(null); }}
+          onSaved={handleMaterialSaved}
+        />
       )}
-    </div>
+    </>
   );
 }
 
-// ─── Course Progress Summary ──────────────────────────────────────────────────
-function CourseSummaryBar({ lessonBlocks }) {
-  const totalLessons = lessonBlocks.length;
-  const totalFiles = lessonBlocks.reduce((s, l) => s + (l.materials?.length || 0), 0);
-  const totalTopics = lessonBlocks.reduce((s, l) => {
+// ─── Course Summary Bar (matching student page) ───────────────────────────────
+function CourseSummaryBar({ lessons }) {
+  const totalLessons = lessons.length;
+  const totalFiles = lessons.reduce((s, l) => s + (l.materials?.length || 0), 0);
+  const totalTopics = lessons.reduce((s, l) => {
     const unique = new Set((l.materials || []).map(m => m.subtopic).filter(Boolean));
     return s + unique.size;
   }, 0);
@@ -248,9 +662,9 @@ function CourseSummaryBar({ lessonBlocks }) {
   return (
     <div className="grid grid-cols-3 gap-3">
       {[
-        { icon: <BookOpen size={15} className="text-blue-600" />, value: totalLessons, label: "Lessons", bg: "bg-blue-50 border-blue-100" },
-        { icon: <Tag size={15} className="text-indigo-500" />,    value: totalTopics,  label: "Topics",  bg: "bg-indigo-50 border-indigo-100" },
-        { icon: <FileText size={15} className="text-blue-500" />, value: totalFiles,   label: "Files",   bg: "bg-blue-50 border-blue-100" },
+        { icon: <BookOpen size={15} className="text-blue-600" />,  value: totalLessons, label: "Lessons", bg: "bg-blue-50 border-blue-100" },
+        { icon: <Tag size={15} className="text-indigo-500" />,     value: totalTopics,  label: "Topics",  bg: "bg-indigo-50 border-indigo-100" },
+        { icon: <FileText size={15} className="text-blue-500" />,  value: totalFiles,   label: "Files",   bg: "bg-blue-50 border-blue-100" },
       ].map((stat) => (
         <div key={stat.label} className={`${stat.bg} border rounded-xl px-3 py-3 flex items-center gap-2.5`}>
           <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm flex-shrink-0">
@@ -266,216 +680,100 @@ function CourseSummaryBar({ lessonBlocks }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function CourseDetailsPage() {
-  const router   = useRouter();
-  const params   = useParams();
+// ─── Main Page ───────────────────────────────────────────────────────────────
+export default function TeacherCourseDetailsPage() {
+  const router = useRouter();
+  const params = useParams();
   const courseId = params.id;
 
-  const [user,            setUser]            = useState(null);
-  const [course,          setCourse]          = useState(null);
-  const [materials,       setMaterials]       = useState([]);
-  const [lessons,         setLessons]         = useState([]);
-  const [loading,         setLoading]         = useState(true);
-  const [error,           setError]           = useState("");
-  const [isEnrolled,      setIsEnrolled]      = useState(false);
-  const [openLessons,     setOpenLessons]     = useState({});
-  const [checkingPayment, setCheckingPayment] = useState(false);
-  const [paymentChecked,  setPaymentChecked]  = useState(false);
+  const [user, setUser] = useState(null);
+  const [course, setCourse] = useState(null);
+  const [lessons, setLessons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showLesson, setShowLesson] = useState(false);
+  const [editLesson, setEditLesson] = useState(null);
+  const [toast, setToast] = useState("");
 
-  const pollTimer = useRef(null);
-  const userRef   = useRef(null);
-
-  // ── Build lesson blocks ───────────────────────────────────────────────────
-  const lessonBlocks = useMemo(() => {
-    const byLessonId = new Map();
-
-    materials.forEach((m) => {
-      const key = m.lesson_id || m.lesson_title || "General";
-      if (!byLessonId.has(key)) {
-        byLessonId.set(key, {
-          lessonId:          m.lesson_id || null,
-          lessonTitle:       m.lesson_title || (m.lesson_id ? `Lesson` : "General"),
-          lessonDescription: null,
-          lessonOrder:       999,
-          materials:         [],
-        });
-      }
-      byLessonId.get(key).materials.push(m);
-    });
-
-    lessons.forEach((l) => {
-      if (byLessonId.has(l.lesson_id)) {
-        const block = byLessonId.get(l.lesson_id);
-        block.lessonTitle       = l.title || block.lessonTitle;
-        block.lessonDescription = l.description || null;
-        block.lessonOrder       = l.lesson_order ?? block.lessonOrder;
-      }
-    });
-
-    return Array.from(byLessonId.values()).sort((a, b) => a.lessonOrder - b.lessonOrder);
-  }, [materials, lessons]);
-
-  // Auto-open all lessons
-  useEffect(() => {
-    if (lessonBlocks.length > 0) {
-      const initial = {};
-      lessonBlocks.forEach((lb) => { initial[lb.lessonId || lb.lessonTitle] = true; });
-      setOpenLessons(initial);
-    }
-  }, [lessonBlocks.length]);
-
-  function toggleLesson(key) {
-    setOpenLessons((prev) => ({ ...prev, [key]: !prev[key] }));
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
   }
 
-  // Expand / collapse all
-  function expandAll() {
-    const all = {};
-    lessonBlocks.forEach((lb) => { all[lb.lessonId || lb.lessonTitle] = true; });
-    setOpenLessons(all);
-  }
-  function collapseAll() {
-    const all = {};
-    lessonBlocks.forEach((lb) => { all[lb.lessonId || lb.lessonTitle] = false; });
-    setOpenLessons(all);
-  }
-
-  // ── Fetch helpers ─────────────────────────────────────────────────────────
-  const fetchMaterials = useCallback(async (cId) => {
+  const fetchAll = useCallback(async () => {
+    if (!courseId) return;
+    setLoading(true);
     try {
-      const matRes  = await authFetch(`${API}/courses/${cId}/materials`);
-      const matData = await matRes.json();
-      if (!matRes.ok || !matData.success) {
-        setMaterials([]);
-        if (matData.error) setError(matData.error);
-      } else {
-        setMaterials(matData.materials || []);
-        setError("");
-      }
-    } catch (_) { setMaterials([]); }
-  }, []);
-
-  const fetchLessons = useCallback(async (cId) => {
-    try {
-      const res = await authFetch(`${API}/courses/${cId}/lessons`);
-      if (res.ok) { const data = await res.json(); setLessons(data.lessons || []); }
-    } catch (_) {}
-  }, []);
-
-  const fetchCourseDetails = useCallback(async (studentId, silent = false) => {
-    if (!studentId || !courseId) return;
-    if (!silent) setLoading(true);
-    try {
-      const courseRes = await authFetch(`${API}/courses/${courseId}`);
-      if (!courseRes.ok) {
-        if (!silent) setError("Course not found.");
-        setCourse(null);
-        return;
-      }
-      const courseData = await courseRes.json();
-      setCourse(courseData);
-
-      const enrollRes = await authFetch(`${API}/payments/courses/${studentId}`);
-      if (enrollRes.ok) {
-        const enrollData    = await enrollRes.json();
-        const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
-        const enrolled      = Boolean(matchedCourse?.is_enrolled);
-
-        if (enrolled !== isEnrolled) {
-          setIsEnrolled(enrolled);
-          if (enrolled) {
-            await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
-            setPaymentChecked(true);
-            setTimeout(() => setPaymentChecked(false), 5000);
-            if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
-          } else {
-            setMaterials([]);
-          }
-        } else if (enrolled && materials.length === 0 && !silent) {
-          await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
-        }
+      const [courseRes, lessonsRes] = await Promise.all([
+        authFetch(`${API}/courses/${courseId}`),
+        authFetch(`${API}/lessons/course/${courseId}`),
+      ]);
+      if (courseRes.ok) { const d = await courseRes.json(); setCourse(d); }
+      if (lessonsRes.ok) {
+        const d = await lessonsRes.json();
+        const lessonsWithMaterials = await Promise.all(
+          (d.lessons || []).map(async (l) => {
+            try {
+              const matRes = await authFetch(`${API}/materials/lesson/${l.lesson_id}`);
+              const matData = await matRes.json();
+              return { ...l, materials: matData.materials || [] };
+            } catch (_) { return { ...l, materials: [] }; }
+          })
+        );
+        setLessons(lessonsWithMaterials);
       }
     } catch (_) {
-      if (!silent) setError("Failed to load course details.");
+      setError("Failed to load course data.");
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
-  }, [courseId, isEnrolled, materials.length, fetchMaterials, fetchLessons]);
-
-  const checkPaymentStatus = useCallback(async (studentId) => {
-    if (!studentId || !courseId) return;
-    try {
-      const enrollRes  = await authFetch(`${API}/payments/courses/${studentId}`);
-      if (enrollRes.ok) {
-        const enrollData    = await enrollRes.json();
-        const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
-        const enrolled      = Boolean(matchedCourse?.is_enrolled);
-        if (enrolled !== isEnrolled) {
-          setIsEnrolled(enrolled);
-          if (enrolled) {
-            await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
-            setPaymentChecked(true);
-            setTimeout(() => setPaymentChecked(false), 5000);
-            if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
-          }
-        }
-      }
-    } catch (_) {}
-  }, [courseId, isEnrolled, fetchMaterials, fetchLessons]);
+  }, [courseId]);
 
   useEffect(() => {
-    const auth = guardRoute("STUDENT", router);
-    if (auth) {
-      setUser(auth);
-      userRef.current = auth;
-      fetchCourseDetails(auth.user_id, false);
-      if (!isEnrolled) {
-        setCheckingPayment(true);
-        pollTimer.current = setInterval(() => {
-          if (userRef.current && !isEnrolled) checkPaymentStatus(userRef.current.user_id);
-        }, POLL_INTERVAL);
-      }
-    }
-    return () => { if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; } };
-  }, [router, courseId]);
+    const auth = guardRoute("TEACHER", router);
+    if (auth) { setUser(auth); fetchAll(); }
+  }, [router, courseId, fetchAll]);
 
-  const handleManualRefresh = async () => {
-    if (user) {
-      setCheckingPayment(true);
-      await fetchCourseDetails(user.user_id, false);
-      setCheckingPayment(false);
-    }
-  };
+  function handleLessonSaved(lesson) {
+    setLessons((prev) => {
+      const idx = prev.findIndex((l) => l.lesson_id === lesson.lesson_id);
+      if (idx >= 0) {
+        const n = [...prev]; n[idx] = { ...n[idx], ...lesson }; return n;
+      }
+      return [...prev, { ...lesson, materials: [] }].sort((a, b) => a.lesson_order - b.lesson_order);
+    });
+    setShowLesson(false);
+    setEditLesson(null);
+    showToast("Lesson saved!");
+  }
+
+  function handleLessonDelete(id) {
+    setLessons((prev) => prev.filter((l) => l.lesson_id !== id));
+    showToast("Lesson deleted.");
+  }
 
   if (!user) return null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
 
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-gray-900 text-white px-4 py-3 rounded-2xl shadow-xl text-sm font-semibold">
+          <CheckCircle size={15} className="text-green-400" /> {toast}
+        </div>
+      )}
+
       {/* Back */}
-      <Link href="/student/courses"
+      <Link href="/teacher/courses"
         className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors group">
         <ArrowLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
         Back to My Courses
       </Link>
 
-      {/* Banners */}
-      {checkingPayment && !isEnrolled && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-3.5 text-sm">
-          <Loader size={15} className="animate-spin flex-shrink-0" />
-          Checking for payment confirmation…
-        </div>
-      )}
-      {paymentChecked && isEnrolled && (
-        <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3.5 text-sm">
-          <CheckCircle size={15} className="flex-shrink-0" />
-          Payment confirmed! Course materials are now available.
-        </div>
-      )}
       {error && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3.5 text-sm">
-          <AlertCircle size={15} className="flex-shrink-0" /> {error}
+          <AlertCircle size={16} className="flex-shrink-0" /> {error}
         </div>
       )}
 
@@ -484,150 +782,79 @@ export default function CourseDetailsPage() {
           <Loader size={28} className="animate-spin" />
           <span className="text-sm font-medium text-gray-500">Loading course…</span>
         </div>
-      ) : !course ? null : (
+      ) : (
         <>
-          {/* ── Course Hero Card ──────────────────────────────────────── */}
-          <div className={`relative bg-white rounded-3xl border shadow-sm overflow-hidden ${isEnrolled ? "border-blue-200" : "border-amber-200"}`}>
-            <div className={`h-1.5 w-full ${isEnrolled ? "bg-gradient-to-r from-blue-500 via-blue-700 to-indigo-700" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
-            <div className="p-6 sm:p-8">
-              <div className="flex items-start justify-between gap-4 mb-4">
+          {/* Course Card */}
+          {course && (
+            <div className="relative bg-white rounded-3xl border border-blue-100 shadow-sm overflow-hidden">
+              <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-blue-700 to-indigo-700" />
+              <div className="p-6 sm:p-8">
                 <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${isEnrolled ? "bg-blue-50" : "bg-amber-50"}`}>
-                    <GraduationCap size={24} className={isEnrolled ? "text-blue-700" : "text-amber-500"} />
+                  <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <GraduationCap size={24} className="text-blue-700" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">{course.title}</h1>
-                    {course.description && <p className="text-sm text-gray-500 mt-1 leading-relaxed">{course.description}</p>}
+                    {course.description && <p className="text-sm text-gray-500 mt-1">{course.description}</p>}
                   </div>
-                </div>
-                {isEnrolled ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
-                    <BadgeCheck size={13} /> Enrolled
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
-                    <Lock size={13} /> Locked
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {course.teacher_name && (
-                  <div className="bg-blue-50 rounded-xl p-3">
-                    <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><User size={11} /> Teacher</p>
-                    <p className="font-bold text-gray-800 text-sm">{course.teacher_name}</p>
-                  </div>
-                )}
-                {course.duration && (
-                  <div className="bg-blue-50 rounded-xl p-3">
-                    <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><Clock size={11} /> Duration</p>
-                    <p className="font-bold text-gray-800 text-sm">{course.duration}</p>
-                  </div>
-                )}
-                <div className="bg-blue-50 rounded-xl p-3">
-                  <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><DollarSign size={11} /> Monthly Fee</p>
-                  <p className="font-bold text-blue-700 text-sm">
-                    {course.fee > 0 ? `Rs. ${parseFloat(course.fee).toLocaleString()}` : "Free"}
-                  </p>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* ── Materials Section ─────────────────────────────────────── */}
+          {/* Lessons Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <BookOpen size={17} className="text-blue-600" /> Course Materials
+                <BookOpen size={17} className="text-blue-600" /> Lessons & Materials
               </h2>
-              <div className="flex items-center gap-2">
-                {isEnrolled && materials.length > 0 && (
-                  <>
-                    <span className="text-xs text-blue-500 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full font-medium">
-                      {materials.length} file{materials.length !== 1 ? "s" : ""}
-                    </span>
-                    <button onClick={expandAll}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 hover:bg-blue-50 rounded-lg transition">
-                      Expand all
-                    </button>
-                    <button onClick={collapseAll}
-                      className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 hover:bg-gray-100 rounded-lg transition">
-                      Collapse
-                    </button>
-                  </>
-                )}
-                {!isEnrolled && (
-                  <button
-                    onClick={handleManualRefresh}
-                    disabled={checkingPayment}
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw size={12} className={checkingPayment ? "animate-spin" : ""} />
-                    Check Payment
-                  </button>
-                )}
-              </div>
+              <Btn variant="primary" onClick={() => { setEditLesson(null); setShowLesson(true); }}>
+                <FolderPlus size={14} /> Add Lesson
+              </Btn>
             </div>
 
-            {/* ── Not Enrolled ── */}
-            {!isEnrolled ? (
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-12 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
-                  <Lock size={28} className="text-amber-400" />
-                </div>
-                <p className="text-amber-900 font-bold text-base mb-2">Materials Locked</p>
-                <p className="text-amber-600 text-sm mb-3 max-w-xs mx-auto">
-                  Complete your payment to unlock all lessons and course materials.
-                </p>
-                <p className="text-amber-500 text-xs mb-6">
-                  After payment confirmation, materials will appear here automatically.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <Link href="/student/payments"
-                    className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow-sm">
-                    <Lock size={14} /> Go to Payments
-                  </Link>
-                  <button onClick={handleManualRefresh} disabled={checkingPayment}
-                    className="inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-amber-600 border border-amber-200 font-semibold px-6 py-3 rounded-xl transition-colors text-sm">
-                    <RefreshCw size={14} className={checkingPayment ? "animate-spin" : ""} />
-                    {checkingPayment ? "Checking..." : "Refresh Status"}
-                  </button>
-                </div>
-              </div>
-
-            ) : materials.length === 0 ? (
-              <div className="text-center py-14 bg-blue-50 rounded-2xl border border-blue-100">
+            {lessons.length === 0 ? (
+              <div className="text-center py-16 bg-gray-50 rounded-2xl border border-gray-100">
                 <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mx-auto mb-4">
-                  <BookOpen size={26} className="text-blue-300" />
+                  <BookOpen size={26} className="text-blue-600" />
                 </div>
-                <p className="text-gray-600 font-semibold">No materials yet</p>
-                <p className="text-gray-400 text-sm mt-1">Your teacher will add them soon.</p>
+                <p className="text-gray-700 font-semibold">No lessons yet</p>
+                <p className="text-gray-400 text-sm mt-1 mb-5">Start building your course by adding the first lesson.</p>
+                <Btn variant="primary" onClick={() => setShowLesson(true)}>
+                  <FolderPlus size={14} /> Add First Lesson
+                </Btn>
               </div>
-
             ) : (
               <>
                 {/* Summary bar */}
-                <CourseSummaryBar lessonBlocks={lessonBlocks} />
+                <CourseSummaryBar lessons={lessons} />
 
                 {/* Lesson blocks */}
                 <div className="space-y-3">
-                  {lessonBlocks.map((lb, idx) => {
-                    const key = lb.lessonId || lb.lessonTitle;
-                    return (
-                      <LessonBlock
-                        key={key}
-                        lesson={lb}
-                        index={idx}
-                        isOpen={!!openLessons[key]}
-                        onToggle={() => toggleLesson(key)}
-                      />
-                    );
-                  })}
+                  {lessons.map((lesson) => (
+                    <LessonBlock
+                      key={lesson.lesson_id}
+                      lesson={lesson}
+                      onLessonEdit={(l) => { setEditLesson(l); setShowLesson(true); }}
+                      onLessonDelete={handleLessonDelete}
+                      onMaterialSaved={() => showToast("Material(s) saved!")}
+                      onMaterialDeleted={() => showToast("Material deleted.")}
+                    />
+                  ))}
                 </div>
               </>
             )}
           </div>
         </>
+      )}
+
+      {showLesson && (
+        <LessonModal
+          courseId={courseId}
+          lesson={editLesson}
+          onClose={() => { setShowLesson(false); setEditLesson(null); }}
+          onSaved={handleLessonSaved}
+        />
       )}
     </div>
   );
