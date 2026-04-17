@@ -19,26 +19,33 @@ export default function Home() {
   const [showPopup, setShowPopup] = useState(false);
   const [isFadingIn, setIsFadingIn] = useState(false);
   const [popupData, setPopupData] = useState<{ image_url: string } | null>(null);
+  // Tracks whether the uploaded banner is landscape or portrait
+  const [isLandscape, setIsLandscape] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Fetch dynamic popup data from the backend
     const fetchPopupData = async () => {
       try {
         const res = await fetch(`${API}/public/popup`);
         if (res.ok) {
           const data = await res.json();
-          // Only show if the admin has toggled it to 'active' AND an image exists
           if (data && data.is_active && data.image_url) {
             setPopupData(data);
-            
-            // 🛠️ DEVELOPMENT MODE: Session storage is disabled so you can test it!
-            // To make it show only once per session in production, uncomment the "popupSeen" lines.
+
+            // ── Detect image orientation before showing the modal ──
+            const img = new Image();
+            img.onload = () => {
+              // landscape = wider than tall
+              setIsLandscape(img.naturalWidth >= img.naturalHeight);
+            };
+            img.src = data.image_url;
+
+            // 🛠️ DEVELOPMENT MODE: Session storage disabled for testing.
             // const popupSeen = sessionStorage.getItem('welcomePopupSeen');
             // if (!popupSeen) {
               const timer = setTimeout(() => {
                 setShowPopup(true);
-                setTimeout(() => setIsFadingIn(true), 50); 
-              }, 500); // Shows popup after 0.5 seconds
+                setTimeout(() => setIsFadingIn(true), 50);
+              }, 500);
               return () => clearTimeout(timer);
             // }
           }
@@ -55,9 +62,19 @@ export default function Home() {
     setIsFadingIn(false);
     setTimeout(() => {
       setShowPopup(false);
-      // sessionStorage.setItem('welcomePopupSeen', 'true'); // Disabled for testing
-    }, 300); 
+      // sessionStorage.setItem('welcomePopupSeen', 'true');
+    }, 300);
   };
+
+  // ── Modal width class based on detected orientation ──
+  // Landscape (e.g. 900×450)  → max-w-4xl  (896px)
+  // Portrait  (e.g. 500×750)  → max-w-lg   (512px)
+  // Still loading             → hidden until we know
+  const modalWidthClass = isLandscape === null
+    ? "max-w-4xl"                          // fallback while image loads
+    : isLandscape
+      ? "max-w-4xl"                        // landscape banner
+      : "max-w-lg";                        // portrait banner
 
   return (
     <main className="flex flex-col min-h-screen relative">
@@ -73,9 +90,9 @@ export default function Home() {
             onClick={closePopup}
           />
 
-          {/* Modal Content (Image Only) */}
+          {/* Modal Content — width adapts to landscape or portrait banner */}
           <div 
-            className={`relative max-w-2xl w-full z-10 flex flex-col items-center justify-center transform transition-all duration-300 ease-out ${
+            className={`relative ${modalWidthClass} w-full z-10 flex flex-col items-center justify-center transform transition-all duration-300 ease-out ${
               isFadingIn ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-4"
             }`}
           >
