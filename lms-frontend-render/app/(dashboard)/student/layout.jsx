@@ -17,6 +17,7 @@ import {
   GraduationCap,
   Receipt,
   PenTool,
+  AlertTriangle,
 } from "lucide-react";
 import { guardRoute, logout } from "@/lib/auth";
 
@@ -57,6 +58,7 @@ export default function StudentLayout({ children }) {
     { name: "Courses & Payments", href: "/student/payments",    icon: <CreditCard size={20} /> },
     { name: "Payment History",  href: "/student/history",       icon: <Receipt size={20} /> },
     { name: "Feedback",         href: "/student/feedback",      icon: <MessageSquare size={20} /> },
+    { name: "Complaints",       href: "/student/complaints",    icon: <AlertTriangle size={20} /> },
     { name: "Profile",          href: "/student/profile",       icon: <User size={20} /> },
   ];
 

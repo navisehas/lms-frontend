@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, BookOpen, FolderOpen, ClipboardEdit,
   ClipboardList, LineChart, Wallet, MessageSquare,
-  GraduationCap, Bell, Menu, X, LogOut,
+  GraduationCap, Bell, Menu, X, LogOut,AlertTriangle,
 } from "lucide-react";
 import { guardRoute, logout } from "@/lib/auth";
 
@@ -36,13 +36,14 @@ export default function TeacherLayout({ children }) {
     .slice(0, 2);
 
   const menuItems = [
-    { name: "Overview",         href: "/teacher/dashboard",      icon: <LayoutDashboard  size={20} /> },
+    { name: "Overview",         href: "/teacher/dashboard",       icon: <LayoutDashboard  size={20} /> },
     { name: "My Courses",       href: "/teacher/courses",         icon: <BookOpen         size={20} /> },
     { name: "Exams & Quizzes",  href: "/teacher/exams/create",    icon: <ClipboardEdit    size={20} /> },
     { name: "Exam Results",     href: "/teacher/exams/results",   icon: <ClipboardList    size={20} /> },
     { name: "Student Progress", href: "/teacher/analytics",       icon: <LineChart        size={20} /> },
     { name: "My Income",        href: "/teacher/income",          icon: <Wallet           size={20} /> },
     { name: "Feedback",         href: "/teacher/feedback",        icon: <MessageSquare    size={20} /> },
+    { name: "Complaints",       href: "/teacher/complaints",      icon: <AlertTriangle size={20} /> },
   ];
 
   return (

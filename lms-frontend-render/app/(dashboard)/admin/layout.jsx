@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, BookOpen, DollarSign, Globe,
   Settings, Menu, X, LogOut, Shield, MessageSquare,User,
-  Building2, Bell,
+  Building2, Bell,AlertTriangle,
 } from "lucide-react";
 import { guardRoute, logout } from "@/lib/auth";
 
@@ -41,7 +41,8 @@ export default function AdminLayout({ children }) {
     { name: "Payment History",  href: "/admin/payments",  icon: <DollarSign size={20} /> },
     { name: "Institute Income", href: "/admin/income",    icon: <Building2 size={20} /> },
     { name: "Feedback",         href: "/admin/feedback",  icon: <MessageSquare size={20} /> },
-    { name: "Popup Settings",   href: "/admin/popup",     icon: <Settings size={20} /> },
+    { name: "Complaints",       href: "/admin/complaints", icon: <AlertTriangle size={20} /> },
+    { name: "Website CMS",      href: "/admin/cms",       icon: <Globe size={20} /> },
     { name: "Notices",          href: "/admin/notice",   icon: <Bell size={20} /> },
     { name: "Profile",          href: "/admin/profile",   icon: <User size={20} /> },
   ];
