@@ -45,13 +45,6 @@ function RatingBar({ star, count, total }) {
   );
 }
 
-function formatDate(dateStr) {
-  if (!dateStr) return "";
-  // Backend returns Asia/Colombo time already — just parse and display
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 export default function PublicFeedbacksPage() {
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -88,7 +81,7 @@ export default function PublicFeedbacksPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">What Our Community Says</h1>
         </div>
         <p className="text-blue-100 text-sm max-w-md mx-auto">
-          Users share their positive experiences here, helping us understand what we are doing well.
+          
         </p>
         {avgRating > 0 && (
           <div className="mt-6 inline-flex flex-col items-center bg-white/10 rounded-2xl px-8 py-4 backdrop-blur">
@@ -142,7 +135,9 @@ export default function PublicFeedbacksPage() {
                       {AREA_LABELS[fb.area] || fb.area}
                     </span>
                   ) : <span />}
-                  <span className="text-xs text-gray-400">{formatDate(fb.created_at)}</span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(fb.created_at + "Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Colombo" })}
+                  </span>
                 </div>
               </div>
             ))}
