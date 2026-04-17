@@ -1,634 +1,908 @@
-"use client";
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import {
-  AlertCircle,
-  ArrowLeft,
-  BookOpen,
-  Clock,
-  DollarSign,
-  ExternalLink,
-  FilePlus2,
-  GraduationCap,
-  ImageIcon,
-  Layers3,
-  Loader,
-  NotebookPen,
-  Plus,
-  RefreshCw,
-  Users,
-  Edit2,
-  Trash2,
-  X,
-  Check,
-} from "lucide-react";
-import { authFetch, guardRoute } from "@/lib/auth";
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const multer = require("multer");
+const { v4: uuidv4 } = require("uuid");
+const pool = require("../config/db");
+const { verifyToken, authorizeRoles } = require("../middleware/auth");
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const router = express.Router();
+const ALLOWED_TYPES = new Set(["PDF", "MEETING", "DOC", "VIDEO", "LINK", "OTHER"]);
+const uploadDir = path.join(__dirname, "..", "public", "uploads", "materials");
+let materialsSchemaReadyPromise = null;
 
-function getLessonHref(value) {
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
-  if (/^www\./i.test(value)) return `https://${value}`;
+fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const extension = path.extname(file.originalname || "") || "";
+    cb(null, `${Date.now()}-${uuidv4()}${extension}`);
+  },
+});
+
+const upload = multer({ storage });
+const uploadAnyMaterial = upload.any();
+const materialsJsonParser = express.json({ limit: "20mb" });
+const materialsUrlEncodedParser = express.urlencoded({ extended: true, limit: "20mb" });
+
+router.use((req, res, next) => {
+  if (req.method === "GET" || req.method === "DELETE") {
+    return next();
+  }
+
+  const contentType = String(req.headers["content-type"] || "").toLowerCase();
+
+  if (contentType.includes("multipart/form-data")) {
+    return next();
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    return materialsUrlEncodedParser(req, res, (err) => {
+      if (err) {
+        req.body = {};
+      }
+      return next();
+    });
+  }
+
+  return materialsJsonParser(req, res, (err) => {
+    if (err) {
+      req.body = {};
+    }
+    return next();
+  });
+});
+
+function getUploadedFiles(req) {
+  const files = [];
+  
+  if (req.files) {
+    if (Array.isArray(req.files)) {
+      files.push(...req.files);
+    } else {
+      // Handle different field names
+      const fields = ['files', 'document', 'file', 'content', 'content_file', 'material', 'material_file'];
+      for (const field of fields) {
+        if (req.files[field] && Array.isArray(req.files[field])) {
+          files.push(...req.files[field]);
+        }
+      }
+    }
+  }
+  
+  if (req.file) {
+    files.push(req.file);
+  }
+  
+  return files;
+}
+
+function pickBodyValue(body, keys) {
+  for (const key of keys) {
+    const value = body?.[key];
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getValueByPath(container, key) {
+  if (!container || !key) {
+    return undefined;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(container, key)) {
+    return container[key];
+  }
+
+  const normalizedPath = key.replace(/\[(\w+)\]/g, ".$1").split(".");
+  let current = container;
+
+  for (const part of normalizedPath) {
+    if (current === null || current === undefined || typeof current !== "object" || !(part in current)) {
+      return undefined;
+    }
+    current = current[part];
+  }
+
+  return current;
+}
+
+function pickRequestValue(req, keys) {
+  const sources = [req.body, req.query, req.params];
+
+  for (const source of sources) {
+    for (const key of keys) {
+      const value = getValueByPath(source, key);
+      if (value !== undefined && value !== null) {
+        return value;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function toNullIfBlankOrNullish(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "object") {
+    const objectValue =
+      value.url ||
+      value.link ||
+      value.value ||
+      value.id ||
+      value.course_id ||
+      value.courseId ||
+      value.lesson_id ||
+      value.lessonId ||
+      null;
+
+    if (objectValue !== null && objectValue !== undefined) {
+      return toNullIfBlankOrNullish(objectValue);
+    }
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const lower = normalized.toLowerCase();
+  if (lower === "null" || lower === "undefined") {
+    return null;
+  }
+
+  return normalized;
+}
+
+function extractIdValue(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    return extractIdValue(value[0]);
+  }
+
+  if (typeof value === "object") {
+    return toNullIfBlankOrNullish(
+      value.course_id ||
+      value.courseId ||
+      value.lesson_id ||
+      value.lessonId ||
+      value.id ||
+      value.value
+    );
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if ((normalized.startsWith("{") && normalized.endsWith("}")) || (normalized.startsWith("[") && normalized.endsWith("]"))) {
+    try {
+      const parsed = JSON.parse(normalized);
+      return extractIdValue(parsed);
+    } catch (_error) {
+      return normalized;
+    }
+  }
+
+  return normalized;
+}
+
+async function ensureMaterialsSchema() {
+  if (!materialsSchemaReadyPromise) {
+    materialsSchemaReadyPromise = (async () => {
+      const client = await pool.connect();
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS lessons (
+            lesson_id TEXT PRIMARY KEY,
+            course_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            resource_url TEXT,
+            lesson_order INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS lessons
+          ADD COLUMN IF NOT EXISTS title TEXT
+        `);
+
+        await client.query(`
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'lessons' AND column_name = 'lesson_title'
+            ) THEN
+              EXECUTE 'UPDATE lessons SET title = COALESCE(title, lesson_title) WHERE title IS NULL';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'lessons' AND column_name = 'lesson_name'
+            ) THEN
+              EXECUTE 'UPDATE lessons SET title = COALESCE(title, lesson_name) WHERE title IS NULL';
+            END IF;
+          END $$
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS lessons
+          ADD COLUMN IF NOT EXISTS lesson_order INTEGER NOT NULL DEFAULT 1
+        `);
+
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_lessons_course_id ON lessons(course_id)
+        `);
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS materials (
+            material_id TEXT PRIMARY KEY,
+            course_id TEXT NOT NULL,
+            lesson_id TEXT,
+            title TEXT NOT NULL,
+            content_url TEXT,
+            external_url TEXT,
+            material_type TEXT NOT NULL DEFAULT 'DOC',
+            subtopic TEXT,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS lessons
+          ADD COLUMN IF NOT EXISTS course_id TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS lessons
+          ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS material_id TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS course_id TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS title TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS lesson_id TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS content_url TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS material_type TEXT NOT NULL DEFAULT 'DOC'
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS external_url TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS subtopic TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE IF EXISTS materials
+          ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+        `);
+
+        await client.query(`
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'materials' AND column_name = 'material_title'
+            ) THEN
+              EXECUTE 'UPDATE materials SET title = COALESCE(title, material_title) WHERE title IS NULL';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'materials' AND column_name = 'name'
+            ) THEN
+              EXECUTE 'UPDATE materials SET title = COALESCE(title, name) WHERE title IS NULL';
+            END IF;
+          END $$
+        `);
+
+        await client.query(`
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'materials' AND column_name = 'resource_link'
+            ) THEN
+              EXECUTE 'ALTER TABLE materials ALTER COLUMN resource_link DROP NOT NULL';
+              EXECUTE 'ALTER TABLE materials ALTER COLUMN resource_link SET DEFAULT ''''';
+              EXECUTE 'UPDATE materials SET resource_link = '''' WHERE resource_link IS NULL';
+            END IF;
+          END $$
+        `);
+
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_materials_course_id ON materials(course_id)
+        `);
+
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_materials_lesson_id ON materials(lesson_id)
+        `);
+      } finally {
+        client.release();
+      }
+    })().catch((error) => {
+      materialsSchemaReadyPromise = null;
+      throw error;
+    });
+  }
+
+  await materialsSchemaReadyPromise;
+}
+
+function getPublicUploadPath(file) {
+  if (!file?.filename) return "";
+  return `/uploads/materials/${file.filename}`;
+}
+
+function removeUploadedFile(publicPath) {
+  if (!publicPath || !publicPath.startsWith("/uploads/materials/")) {
+    return;
+  }
+
+  const absolutePath = path.join(__dirname, "..", "public", publicPath.replace(/^\//, ""));
+  if (fs.existsSync(absolutePath)) {
+    fs.unlinkSync(absolutePath);
+  }
+}
+
+async function getCourseWithAccess(client, courseId, user) {
+  const result = await client.query(
+    `SELECT c.course_id, c.title, c.teacher_id
+     FROM courses c
+     WHERE c.course_id = $1`,
+    [courseId]
+  );
+
+  if (result.rows.length === 0) {
+    return { error: { status: 404, message: "Course not found." } };
+  }
+
+  const course = result.rows[0];
+
+  if (user.role === "TEACHER" && course.teacher_id !== user.user_id) {
+    return { error: { status: 403, message: "Access denied for this course." } };
+  }
+
+  return { course };
+}
+
+async function resolveSingleTeacherCourseId(client, user) {
+  if (!user || user.role !== "TEACHER" || !user.user_id) {
+    return null;
+  }
+
+  const result = await client.query(
+    `SELECT course_id
+     FROM courses
+     WHERE teacher_id = $1
+     ORDER BY course_id ASC
+     LIMIT 2`,
+    [user.user_id]
+  );
+
+  if (result.rows.length === 1) {
+    return result.rows[0].course_id;
+  }
+
   return null;
 }
 
-export default function TeacherCourseManage() {
-  const router = useRouter();
-  const params = useParams();
-  const courseId = Array.isArray(params?.id) ? params.id[0] : params?.id;
-
-  const [user, setUser] = useState(null);
-  const [course, setCourse] = useState(null);
-  const [lessons, setLessons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingLessons, setLoadingLessons] = useState(false);
-  const [savingLesson, setSavingLesson] = useState(false);
-  const [error, setError] = useState("");
-  const [lessonError, setLessonError] = useState("");
-  const [lessonSuccess, setLessonSuccess] = useState("");
-  const [lessonForm, setLessonForm] = useState({
-    title: "",
-    description: "",
-    resource_url: "",
-  });
-  const [editingLessonId, setEditingLessonId] = useState(null);
-  const [editingLessonForm, setEditingLessonForm] = useState({
-    title: "",
-    description: "",
-    resource_url: "",
-  });
-  const [deletingLessonId, setDeletingLessonId] = useState(null);
-
-  useEffect(() => {
-    const auth = guardRoute("TEACHER", router);
-    if (auth && courseId) {
-      setUser(auth);
-      fetchCourseData(auth.user_id, courseId);
-    }
-  }, [router, courseId]);
-
-  async function fetchCourseData(teacherId, id) {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await authFetch(`${API}/courses/${id}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Failed to load course.");
-        setCourse(null);
-        setLessons([]);
-        return;
-      }
-
-      if (data.teacher_id !== teacherId) {
-        setError("This course is not assigned to your teacher account.");
-        setCourse(null);
-        setLessons([]);
-        return;
-      }
-
-      setCourse(data);
-      await fetchLessons(id);
-    } catch {
-      setError("Network error. Please try again.");
-      setCourse(null);
-      setLessons([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchLessons(id) {
-    setLoadingLessons(true);
-    setLessonError("");
-    try {
-      const res = await authFetch(`${API}/lessons/course/${id}`);
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setLessonError(data.error || "Failed to load course lessons.");
-        setLessons([]);
-        return;
-      }
-
-      setLessons(Array.isArray(data.lessons) ? data.lessons : []);
-    } catch {
-      setLessonError("Network error while loading lessons.");
-      setLessons([]);
-    } finally {
-      setLoadingLessons(false);
-    }
-  }
-
-  async function handleLessonSubmit(event) {
-    event.preventDefault();
-    setLessonError("");
-    setLessonSuccess("");
-
-    if (!course?.course_id) {
-      setLessonError("Course information is not ready yet.");
-      return;
-    }
-
-    if (!lessonForm.title.trim()) {
-      setLessonError("Lesson title is required.");
-      return;
-    }
-
-    setSavingLesson(true);
-    try {
-      const res = await authFetch(`${API}/lessons`, {
-        method: "POST",
-        body: JSON.stringify({
-          course_id: course.course_id,
-          title: lessonForm.title,
-          description: lessonForm.description,
-          resource_url: lessonForm.resource_url,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setLessonError(data.error || "Failed to add lesson.");
-        return;
-      }
-
-      setLessonForm({ title: "", description: "", resource_url: "" });
-      setLessonSuccess("Lesson added successfully.");
-      await fetchLessons(course.course_id);
-    } catch {
-      setLessonError("Network error. Please try again.");
-    } finally {
-      setSavingLesson(false);
-    }
-  }
-
-  function startEditingLesson(lesson) {
-    setEditingLessonId(lesson.lesson_id);
-    setEditingLessonForm({
-      title: lesson.title,
-      description: lesson.description || "",
-      resource_url: lesson.resource_url || "",
-    });
-    setLessonError("");
-    setLessonSuccess("");
-  }
-
-  async function handleEditLessonSubmit(event) {
-    event.preventDefault();
-    setLessonError("");
-    setLessonSuccess("");
-
-    if (!editingLessonForm.title.trim()) {
-      setLessonError("Lesson title is required.");
-      return;
-    }
-
-    setSavingLesson(true);
-    try {
-      const res = await authFetch(`${API}/lessons/${editingLessonId}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          title: editingLessonForm.title,
-          description: editingLessonForm.description,
-          resource_url: editingLessonForm.resource_url,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setLessonError(data.error || "Failed to update lesson.");
-        return;
-      }
-
-      setEditingLessonId(null);
-      setEditingLessonForm({ title: "", description: "", resource_url: "" });
-      setLessonSuccess("Lesson updated successfully.");
-      await fetchLessons(course.course_id);
-    } catch {
-      setLessonError("Network error. Please try again.");
-    } finally {
-      setSavingLesson(false);
-    }
-  }
-
-  async function handleDeleteLesson(lessonId) {
-    if (!confirm("Are you sure you want to delete this lesson? This action cannot be undone.")) {
-      return;
-    }
-
-    setDeletingLessonId(lessonId);
-    setLessonError("");
-    setLessonSuccess("");
-
-    try {
-      const res = await authFetch(`${API}/lessons/${lessonId}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setLessonError(data.error || "Failed to delete lesson.");
-        return;
-      }
-
-      setLessonSuccess("Lesson deleted successfully.");
-      await fetchLessons(course.course_id);
-    } catch {
-      setLessonError("Network error. Please try again.");
-    } finally {
-      setDeletingLessonId(null);
-    }
-  }
-
-  const nextLessonNumber = useMemo(() => {
-    return lessons.reduce((max, lesson) => Math.max(max, Number(lesson.lesson_order) || 0), 0) + 1;
-  }, [lessons]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
-        <Loader size={20} className="animate-spin" /> Loading course...
-      </div>
-    );
-  }
-
-  if (error || !course) {
-    return (
-      <div className="max-w-4xl mx-auto space-y-4">
-        <Link
-          href="/teacher/courses"
-          className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
-        >
-          <ArrowLeft size={16} /> Back to My Courses
-        </Link>
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-4 flex items-center gap-2">
-          <AlertCircle size={18} /> {error || "Course not found."}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <Link
-          href="/teacher/courses"
-          className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
-        >
-          <ArrowLeft size={16} /> Back to My Courses
-        </Link>
-        <button
-          onClick={() => user && fetchCourseData(user.user_id, course.course_id)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          <RefreshCw size={15} /> Refresh Course
-        </button>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="h-60 bg-gradient-to-br from-indigo-50 to-blue-100">
-          {course.thumbnail_url ? (
-            <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-indigo-200 gap-2">
-              <ImageIcon size={48} />
-              <span className="text-sm">No course image</span>
-            </div>
-          )}
-        </div>
-
-        <div className="p-6 md:p-8">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-            <div>
-              <p className="text-xs font-mono text-gray-300 mb-2">{course.course_id}</p>
-              <h1 className="text-3xl font-bold text-gray-900">{course.title}</h1>
-              <p className="text-sm text-gray-500 mt-3 max-w-3xl">
-                {course.description || "No description has been added for this course yet."}
-              </p>
-            </div>
-            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 min-w-[220px]">
-              <p className="text-xs uppercase tracking-wide text-indigo-400 font-semibold">Teacher View</p>
-              <p className="text-sm text-indigo-700 mt-2">
-                Signed in as <span className="font-semibold">{user?.name}</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mt-8">
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-2 text-violet-600 mb-2">
-                <Layers3 size={16} />
-                <span className="text-xs font-semibold uppercase tracking-wide">Lessons</span>
-              </div>
-              <p className="text-lg font-bold text-gray-800">{lessons.length}</p>
-            </div>
-
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-2 text-indigo-600 mb-2">
-                <GraduationCap size={16} />
-                <span className="text-xs font-semibold uppercase tracking-wide">Assigned Teacher</span>
-              </div>
-              <p className="text-lg font-bold text-gray-800">{course.teacher_name || user?.name}</p>
-            </div>
-
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-2 text-emerald-600 mb-2">
-                <Users size={16} />
-                <span className="text-xs font-semibold uppercase tracking-wide">Enrolled</span>
-              </div>
-              <p className="text-lg font-bold text-gray-800">{course.enrolled_count} students</p>
-            </div>
-
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-2 text-blue-600 mb-2">
-                <Clock size={16} />
-                <span className="text-xs font-semibold uppercase tracking-wide">Duration</span>
-              </div>
-              <p className="text-lg font-bold text-gray-800">{course.duration || "Not set"}</p>
-            </div>
-
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-2 text-orange-600 mb-2">
-                <DollarSign size={16} />
-                <span className="text-xs font-semibold uppercase tracking-wide">Course Fee</span>
-              </div>
-              <p className="text-lg font-bold text-gray-800">
-                Rs. {parseFloat(course.fee || 0).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {lessonError && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertCircle size={16} /> {lessonError}
-        </div>
-      )}
-
-      {lessonSuccess && (
-        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          <Plus size={16} /> {lessonSuccess}
-        </div>
-      )}
-
-      <div className="grid xl:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <BookOpen className="text-indigo-600" size={18} />
-                <h2 className="text-lg font-bold text-gray-900">Course Lessons</h2>
-              </div>
-              <p className="text-sm text-gray-500">
-                Teachers can add any number of lessons for this course.
-              </p>
-            </div>
-
-            {loadingLessons ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-gray-400">
-                <Loader size={18} className="animate-spin" /> Loading lessons...
-              </div>
-            ) : lessons.length === 0 ? (
-              <div className="text-center py-12">
-                <NotebookPen size={40} className="mx-auto text-indigo-200 mb-3" />
-                <p className="font-semibold text-gray-800">No lessons added yet</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Add the first lesson for this course using the form on the right.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {lessons.map((lesson) => {
-                  const resourceHref = getLessonHref(lesson.resource_url);
-                  const isEditing = editingLessonId === lesson.lesson_id;
-                  const isDeleting = deletingLessonId === lesson.lesson_id;
-
-                  if (isEditing) {
-                    return (
-                      <form key={lesson.lesson_id} onSubmit={handleEditLessonSubmit} className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Title</label>
-                            <input
-                              value={editingLessonForm.title}
-                              onChange={(e) =>
-                                setEditingLessonForm((prev) => ({ ...prev, title: e.target.value }))
-                              }
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Summary</label>
-                            <textarea
-                              value={editingLessonForm.description}
-                              onChange={(e) =>
-                                setEditingLessonForm((prev) => ({ ...prev, description: e.target.value }))
-                              }
-                              rows={3}
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Link</label>
-                            <input
-                              value={editingLessonForm.resource_url}
-                              onChange={(e) =>
-                                setEditingLessonForm((prev) => ({ ...prev, resource_url: e.target.value }))
-                              }
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                            />
-                          </div>
-
-                          <div className="flex gap-2">
-                            <button
-                              type="submit"
-                              disabled={savingLesson}
-                              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg transition"
-                            >
-                              {savingLesson ? (
-                                <>
-                                  <Loader size={14} className="animate-spin" /> Saving...
-                                </>
-                              ) : (
-                                <>
-                                  <Check size={14} /> Save changes
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingLessonId(null);
-                                setLessonError("");
-                              }}
-                              className="flex-1 flex items-center justify-center gap-2 border border-gray-300 text-gray-700 text-sm font-semibold py-2 rounded-lg hover:bg-gray-100 transition"
-                            >
-                              <X size={14} /> Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </form>
-                    );
-                  }
-
-                  return (
-                    <div key={lesson.lesson_id} className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                        <div className="space-y-2 flex-1">
-                          <span className="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">
-                            Lesson {lesson.lesson_order}
-                          </span>
-                          <h3 className="text-lg font-bold text-gray-900">{lesson.title}</h3>
-                          <p className="text-sm text-gray-500">
-                            {lesson.description || "No lesson summary added yet."}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            Added on{" "}
-                            {new Date(lesson.created_at).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-col gap-2 min-w-fit">
-                          {resourceHref ? (
-                            <a
-                              href={resourceHref}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-white border border-indigo-200 rounded-lg"
-                            >
-                              Open Link <ExternalLink size={14} />
-                            </a>
-                          ) : lesson.resource_url ? (
-                            <span className="text-xs text-gray-500 px-3 py-1.5 bg-white border border-gray-200 rounded-lg break-all max-w-[150px]">{lesson.resource_url}</span>
-                          ) : null}
-
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => startEditingLesson(lesson)}
-                              className="flex items-center justify-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
-                            >
-                              <Edit2 size={14} /> Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteLesson(lesson.lesson_id)}
-                              disabled={isDeleting}
-                              className="flex items-center justify-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition disabled:opacity-50"
-                            >
-                              {isDeleting ? (
-                                <>
-                                  <Loader size={14} className="animate-spin" /> Del
-                                </>
-                              ) : (
-                                <>
-                                  <Trash2 size={14} /> Delete
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-slate-50 rounded-2xl border border-slate-100 p-6">
-            <div className="flex items-center gap-2 text-slate-700 mb-3">
-              <FilePlus2 size={18} />
-              <h2 className="text-lg font-bold">Course Workspace</h2>
-            </div>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              Build this course lesson by lesson, then attach materials and links whenever you need them for students.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link
-                href={`/teacher/materials?course=${course.course_id}`}
-                className="inline-flex items-center justify-center rounded-xl bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-indigo-700 transition-colors"
-              >
-                Manage Materials
-              </Link>
-              <Link
-                href="/teacher/courses"
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold px-4 py-2.5 hover:bg-white transition-colors"
-              >
-                View All Courses
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 xl:sticky xl:top-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Plus className="text-indigo-600" size={18} />
-            <h2 className="text-lg font-bold text-gray-900">Add New Lesson</h2>
-          </div>
-          <p className="text-sm text-gray-500 mb-5">
-            Lesson <span className="font-semibold text-gray-800">{nextLessonNumber}</span> will be added next for this
-            course.
-          </p>
-
-          <form onSubmit={handleLessonSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lesson Title</label>
-              <input
-                value={lessonForm.title}
-                onChange={(event) =>
-                  setLessonForm((current) => ({ ...current, title: event.target.value }))
-                }
-                placeholder="e.g. Introduction to Grammar"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lesson Summary</label>
-              <textarea
-                value={lessonForm.description}
-                onChange={(event) =>
-                  setLessonForm((current) => ({ ...current, description: event.target.value }))
-                }
-                rows={5}
-                placeholder="Briefly describe what students will learn in this lesson."
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lesson Link</label>
-              <input
-                value={lessonForm.resource_url}
-                onChange={(event) =>
-                  setLessonForm((current) => ({ ...current, resource_url: event.target.value }))
-                }
-                placeholder="https://youtube.com/... or https://drive.google.com/..."
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={savingLesson}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {savingLesson ? <Loader size={16} className="animate-spin" /> : <Plus size={16} />}
-              {savingLesson ? "Adding Lesson..." : "Add Lesson"}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+async function getLessonWithAccess(client, lessonId, user) {
+  const result = await client.query(
+    `SELECT
+       l.lesson_id,
+       l.course_id,
+       l.title AS lesson_title,
+       l.lesson_order,
+       c.title AS course_title,
+       c.teacher_id
+     FROM lessons l
+     JOIN courses c ON c.course_id = l.course_id
+     WHERE l.lesson_id = $1`,
+    [lessonId]
   );
+
+  if (result.rows.length === 0) {
+    return { error: { status: 404, message: "Lesson not found." } };
+  }
+
+  const lesson = result.rows[0];
+
+  if (user.role === "TEACHER" && lesson.teacher_id !== user.user_id) {
+    return { error: { status: 403, message: "Access denied for this lesson." } };
+  }
+
+  return { lesson };
 }
+
+async function getMaterialWithAccess(client, materialId, user) {
+  const result = await client.query(
+    `SELECT
+       m.material_id,
+       m.course_id,
+       m.lesson_id,
+       m.title,
+       m.content_url,
+       m.external_url,
+       m.material_type,
+       m.subtopic,
+       l.title AS lesson_title,
+       c.title AS course_title,
+       c.teacher_id
+     FROM materials m
+     LEFT JOIN lessons l ON l.lesson_id = m.lesson_id
+     JOIN courses c ON c.course_id = m.course_id
+     WHERE m.material_id = $1`,
+    [materialId]
+  );
+
+  if (result.rows.length === 0) {
+    return { error: { status: 404, message: "Material not found." } };
+  }
+
+  const material = result.rows[0];
+
+  if (user.role === "TEACHER" && material.teacher_id !== user.user_id) {
+    return { error: { status: 403, message: "Access denied for this material." } };
+  }
+
+  return { material };
+}
+
+router.get("/teacher/:teacher_id/courses", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureMaterialsSchema();
+    const { teacher_id } = req.params;
+
+    if (req.user.role === "TEACHER" && req.user.user_id !== teacher_id) {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    const result = await client.query(
+      `SELECT
+         c.course_id,
+         c.title,
+         c.description,
+         c.duration,
+         c.thumbnail_url,
+         COALESCE(mc.material_count, 0)::int AS material_count,
+         COALESCE(lc.lesson_count, 0)::int AS lesson_count
+       FROM courses c
+       LEFT JOIN (
+         SELECT course_id, COUNT(*) AS material_count
+         FROM materials
+         GROUP BY course_id
+       ) mc ON mc.course_id = c.course_id
+       LEFT JOIN (
+         SELECT course_id, COUNT(*) AS lesson_count
+         FROM lessons
+         GROUP BY course_id
+       ) lc ON lc.course_id = c.course_id
+       WHERE c.teacher_id = $1
+       ORDER BY c.title ASC`,
+      [teacher_id]
+    );
+
+    res.json({ success: true, courses: result.rows });
+  } catch (err) {
+    console.error("GET /materials/teacher/:teacher_id/courses:", err.message);
+    res.status(500).json({ error: "Failed to fetch teacher courses." });
+  } finally {
+    client.release();
+  }
+});
+
+router.get("/lesson/:lesson_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureMaterialsSchema();
+    const { lesson_id } = req.params;
+    const { lesson, error } = await getLessonWithAccess(client, lesson_id, req.user);
+
+    if (error) {
+      return res.status(error.status).json({ error: error.message });
+    }
+
+    const materialsResult = await client.query(
+      `SELECT
+         material_id,
+         course_id,
+         lesson_id,
+         title,
+         content_url,
+         external_url,
+         material_type,
+         subtopic,
+         created_at
+       FROM materials
+       WHERE lesson_id = $1
+       ORDER BY subtopic ASC NULLS LAST, created_at DESC`,
+      [lesson_id]
+    );
+
+    res.json({
+      success: true,
+      lesson,
+      materials: materialsResult.rows,
+    });
+  } catch (err) {
+    console.error("GET /materials/lesson/:lesson_id:", err.message);
+    res.status(500).json({ error: "Failed to fetch lesson materials." });
+  } finally {
+    client.release();
+  }
+});
+
+router.get("/course/:course_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureMaterialsSchema();
+    const { course_id } = req.params;
+    const { course, error } = await getCourseWithAccess(client, course_id, req.user);
+
+    if (error) {
+      return res.status(error.status).json({ error: error.message });
+    }
+
+    const materialsResult = await client.query(
+      `SELECT material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at
+       FROM materials
+       WHERE course_id = $1
+       ORDER BY subtopic ASC NULLS LAST, created_at DESC`,
+      [course_id]
+    );
+
+    res.json({
+      success: true,
+      course,
+      materials: materialsResult.rows,
+    });
+  } catch (err) {
+    console.error("GET /materials/course/:course_id:", err.message);
+    res.status(500).json({ error: "Failed to fetch materials." });
+  } finally {
+    client.release();
+  }
+});
+
+router.post("/", verifyToken, authorizeRoles("TEACHER", "ADMIN"), uploadAnyMaterial, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureMaterialsSchema();
+
+    const course_id = extractIdValue(
+      pickRequestValue(req, [
+        "course_id",
+        "courseId",
+        "course",
+        "selectedCourseId",
+        "selectedCourse",
+        "course.id",
+        "course.course_id",
+        "course[course_id]",
+        "course[value]",
+        "courseId.value",
+      ])
+    );
+    const lesson_id = extractIdValue(
+      pickRequestValue(req, [
+        "lesson_id",
+        "lessonId",
+        "lesson",
+        "selectedLessonId",
+        "selectedLesson",
+        "lesson.id",
+        "lesson.lesson_id",
+        "lesson[lesson_id]",
+        "lesson[value]",
+        "lessonId.value",
+      ])
+    );
+    const title = toNullIfBlankOrNullish(
+      pickBodyValue(req.body, ["title", "material_title", "materialTitle", "name", "material_name", "materialName"])
+    );
+    const external_url = pickBodyValue(req.body, [
+      "external_url",
+      "externalUrl",
+      "url",
+      "link",
+      "reference_url",
+      "referenceUrl",
+      "content_url",
+      "contentUrl",
+      "file_url",
+      "fileUrl",
+      "document_url",
+      "documentUrl",
+      "document",
+      "content",
+    ]);
+    const material_type = pickBodyValue(req.body, ["material_type", "materialType", "type"]);
+    const subtopic = toNullIfBlankOrNullish(
+      pickBodyValue(req.body, ["subtopic", "sub_topic", "subTopic", "category", "topic"])
+    );
+    
+    const uploadedFiles = getUploadedFiles(req);
+    const normalizedExternalUrl = toNullIfBlankOrNullish(external_url);
+    const normalizedTitle = title || (uploadedFiles[0]?.originalname) || `Material ${new Date().toISOString().slice(0, 19)}`;
+    const normalizedSubTopic = subtopic || "General";
+
+    const normalizedType = ALLOWED_TYPES.has(String(material_type || "").toUpperCase())
+      ? String(material_type).toUpperCase()
+      : "DOC";
+
+    let resolvedCourseId = course_id;
+    let resolvedLessonId = lesson_id || null;
+    let course = null;
+    let lessonTitle = null;
+    let accessError = null;
+
+    if (!resolvedCourseId && !resolvedLessonId) {
+      resolvedCourseId = await resolveSingleTeacherCourseId(client, req.user);
+    }
+
+    if (!resolvedCourseId && !resolvedLessonId) {
+      uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
+      return res.status(400).json({
+        error: "course_id is required. Please send course_id in the form data.",
+      });
+    }
+
+    if (resolvedLessonId) {
+      const lessonAccess = await getLessonWithAccess(client, resolvedLessonId, req.user);
+      accessError = lessonAccess.error || null;
+
+      if (!accessError) {
+        resolvedCourseId = lessonAccess.lesson.course_id;
+        course = {
+          course_id: lessonAccess.lesson.course_id,
+          title: lessonAccess.lesson.course_title,
+        };
+        lessonTitle = lessonAccess.lesson.lesson_title;
+      }
+    } else {
+      const courseAccess = await getCourseWithAccess(client, resolvedCourseId, req.user);
+      accessError = courseAccess.error || null;
+
+      if (!accessError) {
+        course = courseAccess.course;
+      }
+    }
+
+    if (accessError) {
+      uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
+      return res.status(accessError.status).json({ error: accessError.message });
+    }
+
+    if (!resolvedCourseId) {
+      uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
+      return res.status(400).json({ error: "A valid course or lesson is required." });
+    }
+
+    // Create materials for each uploaded file
+    const createdMaterials = [];
+    
+    // Handle file uploads
+    for (const file of uploadedFiles) {
+      const uploadedPath = getPublicUploadPath(file);
+      const material_id = uuidv4();
+      
+      const result = await client.query(
+        `INSERT INTO materials (material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+         RETURNING material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at`,
+        [material_id, resolvedCourseId, resolvedLessonId, file.originalname, uploadedPath, null, normalizedType, normalizedSubTopic]
+      );
+      createdMaterials.push({
+        ...result.rows[0],
+        course_title: course.title,
+        lesson_title: lessonTitle,
+      });
+    }
+    
+    // Handle external URL if provided
+    if (normalizedExternalUrl) {
+      const material_id = uuidv4();
+      const externalTitle = title || "External Link";
+      
+      const result = await client.query(
+        `INSERT INTO materials (material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+         RETURNING material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at`,
+        [material_id, resolvedCourseId, resolvedLessonId, externalTitle, null, normalizedExternalUrl, normalizedType, normalizedSubTopic]
+      );
+      createdMaterials.push({
+        ...result.rows[0],
+        course_title: course.title,
+        lesson_title: lessonTitle,
+      });
+    }
+
+    if (createdMaterials.length === 0 && uploadedFiles.length === 0 && !normalizedExternalUrl) {
+      return res.status(400).json({ error: "At least one file or external URL is required." });
+    }
+
+    res.status(201).json({
+      success: true,
+      materials: createdMaterials,
+    });
+  } catch (err) {
+    const uploadedFiles = getUploadedFiles(req);
+    uploadedFiles.forEach(file => removeUploadedFile(getPublicUploadPath(file)));
+    console.error("POST /materials:", err.message);
+    res.status(500).json({ error: "Failed to add material." });
+  } finally {
+    client.release();
+  }
+});
+
+router.put("/:material_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), uploadAnyMaterial, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureMaterialsSchema();
+    const { material_id } = req.params;
+    const title = toNullIfBlankOrNullish(
+      pickBodyValue(req.body, ["title", "material_title", "materialTitle", "name", "material_name", "materialName"])
+    );
+    const external_url = pickBodyValue(req.body, [
+      "external_url",
+      "externalUrl",
+      "url",
+      "link",
+      "reference_url",
+      "referenceUrl",
+      "content_url",
+      "contentUrl",
+      "file_url",
+      "fileUrl",
+      "document_url",
+      "documentUrl",
+      "document",
+      "content",
+    ]);
+    const material_type = pickBodyValue(req.body, ["material_type", "materialType", "type"]);
+    const subtopic = toNullIfBlankOrNullish(
+      pickBodyValue(req.body, ["subtopic", "sub_topic", "subTopic", "category", "topic"])
+    );
+    const uploadedFile = getUploadedFiles(req)[0];
+    const uploadedPath = getPublicUploadPath(uploadedFile);
+    const normalizedExternalUrl = toNullIfBlankOrNullish(external_url);
+
+    if (!title) {
+      if (uploadedPath) {
+        removeUploadedFile(uploadedPath);
+      }
+      return res.status(400).json({ error: "Material title is required." });
+    }
+
+    const { material, error } = await getMaterialWithAccess(client, material_id, req.user);
+
+    if (error) {
+      if (uploadedPath) {
+        removeUploadedFile(uploadedPath);
+      }
+      return res.status(error.status).json({ error: error.message });
+    }
+
+    const resolvedContentUrl = uploadedPath || material.content_url;
+    const resolvedExternalUrl = normalizedExternalUrl || material.external_url;
+    const resolvedSubtopic = subtopic || material.subtopic;
+
+    if (!resolvedContentUrl && !resolvedExternalUrl) {
+      if (uploadedPath) {
+        removeUploadedFile(uploadedPath);
+      }
+      return res.status(400).json({ error: "Please upload a document or add a reference link." });
+    }
+
+    const normalizedType = ALLOWED_TYPES.has(String(material_type || "").toUpperCase())
+      ? String(material_type).toUpperCase()
+      : material.material_type;
+
+    const result = await client.query(
+      `UPDATE materials
+       SET title = $1,
+           content_url = $2,
+           external_url = $3,
+           material_type = $4,
+           subtopic = $5
+       WHERE material_id = $6
+       RETURNING material_id, course_id, lesson_id, title, content_url, external_url, material_type, subtopic, created_at`,
+      [title.trim(), resolvedContentUrl, resolvedExternalUrl, normalizedType, resolvedSubtopic, material_id]
+    );
+
+    if (uploadedPath && material.content_url && material.content_url !== uploadedPath) {
+      removeUploadedFile(material.content_url);
+    }
+
+    res.json({
+      success: true,
+      material: {
+        ...result.rows[0],
+        course_title: material.course_title,
+        lesson_title: material.lesson_title,
+      },
+    });
+  } catch (err) {
+    const uploadedFile = getUploadedFiles(req)[0];
+    const uploadedPath = getPublicUploadPath(uploadedFile);
+    if (uploadedPath) {
+      removeUploadedFile(uploadedPath);
+    }
+    console.error("PUT /materials/:material_id:", err.message);
+    res.status(500).json({ error: "Failed to update material." });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete("/:material_id", verifyToken, authorizeRoles("TEACHER", "ADMIN"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureMaterialsSchema();
+    const { material_id } = req.params;
+    const { material, error } = await getMaterialWithAccess(client, material_id, req.user);
+
+    if (error) {
+      return res.status(error.status).json({ error: error.message });
+    }
+
+    await client.query("DELETE FROM materials WHERE material_id = $1", [material_id]);
+    if (material.content_url) {
+      removeUploadedFile(material.content_url);
+    }
+    res.json({ success: true, message: "Material removed." });
+  } catch (err) {
+    console.error("DELETE /materials/:material_id:", err.message);
+    res.status(500).json({ error: "Failed to remove material." });
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;
