@@ -6,7 +6,6 @@ import { Menu, X, LayoutDashboard } from "lucide-react";
 import Image from "next/image";
 import { getUser, isLoggedIn } from "@/lib/auth";
 
-// Routes users to the correct dashboard based on their role
 const ROLE_DASHBOARD = {
   ADMIN:   "/admin/dashboard",
   MANAGER: "/manager/dashboard",
@@ -15,10 +14,10 @@ const ROLE_DASHBOARD = {
 };
 
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState(null);
+  const [isOpen, setIsOpen]     = useState(false);
+  const [user, setUser]         = useState(null);
   const [loggedIn, setLoggedIn] = useState(false);
-  const pathname  = usePathname();
+  const pathname = usePathname();
 
   useEffect(() => {
     const u  = getUser();
@@ -27,17 +26,15 @@ export default function Navbar() {
     setLoggedIn(ok);
   }, [pathname]);
 
-  // Close mobile menu on route change
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+  useEffect(() => { setIsOpen(false); }, [pathname]);
 
   const navLinks = [
-    { name: "Home",    href: "/" },
-    { name: "About",   href: "/about" },
-    { name: "Courses", href: "/courses" },
-    { name: "Gallery", href: "/gallery" },
-    { name: "Contact", href: "/contact" },
+    { name: "Home",      href: "/" },
+    { name: "About",     href: "/about" },
+    { name: "Courses",   href: "/courses" },
+    { name: "Gallery",   href: "/gallery" },
+    { name: "Feedbacks", href: "/feedbacks" },
+    { name: "Contact",   href: "/contact" },
   ];
 
   return (
@@ -65,7 +62,6 @@ export default function Navbar() {
 
           {/* RIGHT: nav links + auth (Desktop) */}
           <div className="hidden md:flex items-center gap-6">
-
             {navLinks.map((link) => (
               <Link
                 key={link.name}
@@ -85,9 +81,8 @@ export default function Navbar() {
               </Link>
             ))}
 
-            {/* Login / Dashboard Button */}
             {loggedIn && user ? (
-              <Link 
+              <Link
                 href={ROLE_DASHBOARD[user.role] || "/student/dashboard"}
                 className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-sm"
               >
@@ -109,12 +104,10 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* ── MOBILE DROPDOWN OVERLAY ── */}
+      {/* MOBILE DROPDOWN */}
       {isOpen && (
         <div className="md:hidden absolute top-16 left-0 w-full bg-white border-t shadow-2xl z-50 flex flex-col max-h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="px-4 pt-4 pb-6 space-y-2">
-            
-            {/* Mobile Links */}
             {navLinks.map((link) => (
               <Link key={link.name} href={link.href} onClick={() => setIsOpen(false)}
                 className={`block px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
@@ -125,9 +118,7 @@ export default function Navbar() {
                 {link.name}
               </Link>
             ))}
-
             <div className="pt-4 mt-2 border-t border-gray-100">
-              {/* Mobile Login / Dashboard Button */}
               {loggedIn && user ? (
                 <Link href={ROLE_DASHBOARD[user.role] || "/student/dashboard"} onClick={() => setIsOpen(false)}
                   className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white px-4 py-3.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-sm">
