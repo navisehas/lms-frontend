@@ -347,17 +347,41 @@ function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
 }
 
 // ─── Lesson Modal ────────────────────────────────────────────────────────────
-function LessonModal({ courseId, lesson, onClose, onSaved }) {
+function LessonModal({ courseId, lesson, existingLessons = [], onClose, onSaved }) {
   const isEdit = Boolean(lesson);
   const [title, setTitle] = useState(lesson?.title || "");
   const [description, setDescription] = useState(lesson?.description || "");
   const [resourceUrl, setResourceUrl] = useState(lesson?.resource_url || "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [titleError, setTitleError] = useState("");
+
+  function checkDuplicate(value) {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return false;
+    return existingLessons.some(
+      (l) =>
+        l.title.trim().toLowerCase() === trimmed &&
+        l.lesson_id !== lesson?.lesson_id
+    );
+  }
+
+  function handleTitleChange(e) {
+    const val = e.target.value;
+    setTitle(val);
+    if (titleError) {
+      // Clear error once the user types something different
+      if (!checkDuplicate(val)) setTitleError("");
+    }
+  }
 
   async function handleSave() {
-    if (!title.trim()) { setErr("Lesson title is required."); return; }
-    setSaving(true); setErr("");
+    if (!title.trim()) { setTitleError("Lesson title is required."); return; }
+    if (checkDuplicate(title)) {
+      setTitleError("A lesson with this name already exists.");
+      return;
+    }
+    setSaving(true); setErr(""); setTitleError("");
     try {
       const body = { course_id: courseId, title: title.trim(), description: description.trim(), resource_url: resourceUrl.trim() };
       const url = isEdit ? `${API}/lessons/${lesson.lesson_id}` : `${API}/lessons`;
@@ -396,8 +420,17 @@ function LessonModal({ courseId, lesson, onClose, onSaved }) {
           )}
           <div>
             <label className={labelCls}>Lesson Title *</label>
-            <input className={inputCls} placeholder="e.g. Week 1 — Introduction to the Course"
-              value={title} onChange={(e) => setTitle(e.target.value)} />
+            <input
+              className={titleError ? inputErrCls : inputCls}
+              placeholder="e.g. Week 1 — Introduction to the Course"
+              value={title}
+              onChange={handleTitleChange}
+            />
+            {titleError && (
+              <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                <AlertCircle size={11} className="flex-shrink-0" /> {titleError}
+              </p>
+            )}
           </div>
           <div>
             <label className={labelCls}>Description <span className="text-gray-400 normal-case font-normal">(optional)</span></label>
@@ -852,6 +885,7 @@ export default function TeacherCourseDetailsPage() {
         <LessonModal
           courseId={courseId}
           lesson={editLesson}
+          existingLessons={lessons}
           onClose={() => { setShowLesson(false); setEditLesson(null); }}
           onSaved={handleLessonSaved}
         />
