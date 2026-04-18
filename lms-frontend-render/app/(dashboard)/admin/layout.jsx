@@ -42,7 +42,7 @@ export default function AdminLayout({ children }) {
     { name: "Institute Income", href: "/admin/income",    icon: <Building2 size={20} /> },
     { name: "Feedback",         href: "/admin/feedback",  icon: <MessageSquare size={20} /> },
     { name: "Complaints",       href: "/admin/complaints", icon: <AlertTriangle size={20} /> },
-    { name: "Website CMS",      href: "/admin/cms",       icon: <Globe size={20} /> },
+    { name: "Welcome popup",      href: "/admin/popup",       icon: <Globe size={20} /> },
     { name: "Notices",          href: "/admin/notice",   icon: <Bell size={20} /> },
     { name: "Profile",          href: "/admin/profile",   icon: <User size={20} /> },
   ];
