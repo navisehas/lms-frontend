@@ -8,7 +8,7 @@ import {
   BookOpen, FileText, ExternalLink, BadgeCheck,
   ChevronDown, ChevronRight, GraduationCap, PlayCircle,
   RefreshCw, CheckCircle, Tag, Layers, File, FileVideo,
-  FileImage, Link2, FolderOpen, BookMarked,
+  FileImage, Link2, FolderOpen, BookMarked, Search, X,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
@@ -41,19 +41,72 @@ const handleDownload = async (url, filename) => {
   }
 };
 
+// ─── Auto-detect material type from URL/filename ──────────────────────────────
+function detectMaterialType(material) {
+  // 1. Detect from title/filename FIRST (most reliable for uploaded files)
+  const name = (material.title || "").toLowerCase();
+  const ext  = name.includes(".") ? name.split(".").pop() : "";
+  if (ext === "pdf") return "PDF";
+  if (["mp4","mov","avi","mkv","webm","flv","wmv"].includes(ext)) return "VIDEO";
+  if (["jpg","jpeg","png","gif","webp","svg","bmp"].includes(ext)) return "IMAGE";
+  if (["ppt","pptx","xls","xlsx","doc","docx","txt","rtf","odt","sql","csv","json","xml","zip","rar"].includes(ext)) return "DOC";
+
+  // 2. Detect from external_url
+  const exUrl = (material.external_url || "").toLowerCase();
+  if (exUrl) {
+    if (exUrl.includes("zoom.us") || exUrl.includes("meet.google") || exUrl.includes("teams.microsoft") || exUrl.includes("webex.com") || exUrl.includes("whereby.com") || exUrl.includes("skype.com")) return "MEETING";
+    if (exUrl.includes("youtube.com") || exUrl.includes("youtu.be") || exUrl.includes("vimeo.com") || exUrl.includes("loom.com") || exUrl.includes("dailymotion.com")) return "VIDEO";
+    if (exUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
+    if (exUrl.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)(\?|#|$)/)) return "VIDEO";
+    if (exUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
+    if (exUrl.startsWith("http")) return "LINK";
+  }
+
+  // 3. Detect from content_url path
+  const cUrl = (material.content_url || "").toLowerCase();
+  if (cUrl) {
+    if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
+    if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
+    if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
+    if (cUrl.match(/\.(doc|docx|ppt|pptx|xls|xlsx)(\?|#|$)/)) return "DOC";
+  }
+
+  // 4. Fall back to explicit DB value if meaningful (skip "DOC" — it's just the default)
+  const explicit = material.material_type?.toUpperCase();
+  if (explicit && explicit !== "OTHER" && explicit !== "DOC") return explicit;
+
+  return "DOC";
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getTypeIcon(type, externalUrl) {
-  if (externalUrl) return <PlayCircle size={14} className="text-blue-500" />;
+  if (externalUrl) {
+    const lower = (externalUrl || "").toLowerCase();
+    if (
+      lower.includes("zoom.us") ||
+      lower.includes("meet.google.com") ||
+      lower.includes("teams.microsoft.com") ||
+      lower.includes("webex.com")
+    ) return <PlayCircle size={14} className="text-green-500" />;
+    if (
+      lower.includes("youtube.com") ||
+      lower.includes("youtu.be") ||
+      lower.includes("vimeo.com") ||
+      lower.includes("loom.com")
+    ) return <FileVideo size={14} className="text-purple-500" />;
+  }
   switch (type?.toUpperCase()) {
     case "PDF":     return <FileText size={14} className="text-red-500" />;
     case "VIDEO":   return <FileVideo size={14} className="text-purple-500" />;
     case "LINK":    return <Link2 size={14} className="text-blue-500" />;
     case "MEETING": return <PlayCircle size={14} className="text-green-500" />;
     case "DOC":     return <File size={14} className="text-blue-500" />;
+    case "IMAGE":   return <FileImage size={14} className="text-pink-400" />;
     default:        return <FileImage size={14} className="text-gray-400" />;
   }
 }
 
+// ─── Type badge style (matching student page) ────────────────────────────────
 function getTypeBadgeStyle(type) {
   switch (type?.toUpperCase()) {
     case "PDF":     return "bg-red-50 text-red-600 border-red-100";
@@ -61,6 +114,7 @@ function getTypeBadgeStyle(type) {
     case "LINK":    return "bg-blue-50 text-blue-600 border-blue-100";
     case "MEETING": return "bg-green-50 text-green-600 border-green-100";
     case "DOC":     return "bg-blue-50 text-blue-600 border-blue-100";
+    case "IMAGE":   return "bg-pink-50 text-pink-500 border-pink-100";
     default:        return "bg-gray-50 text-gray-500 border-gray-100";
   }
 }
@@ -70,19 +124,22 @@ function MaterialCard({ material, index }) {
   const downloadUrl = getMaterialHref(material.content_url);
   const externalUrl = material.external_url;
 
+  // ✅ FIX: auto-detect the type so badge always shows correctly
+  const resolvedType = detectMaterialType(material);
+
   return (
     <div className="flex items-center justify-between px-4 py-3 hover:bg-blue-50/60 transition-colors rounded-xl gap-4 group">
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {/* Number + Icon */}
         <div className="relative flex-shrink-0">
           <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center">
-            {getTypeIcon(material.material_type, externalUrl)}
+            {getTypeIcon(resolvedType, externalUrl)}
           </div>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-800 truncate leading-tight">{material.title}</p>
-          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(material.material_type)}`}>
-            {material.material_type}
+          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(resolvedType)}`}>
+            {resolvedType}
           </span>
         </div>
       </div>
@@ -282,6 +339,7 @@ export default function CourseDetailsPage() {
   const [openLessons,     setOpenLessons]     = useState({});
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [paymentChecked,  setPaymentChecked]  = useState(false);
+  const [searchQuery,     setSearchQuery]     = useState("");
 
   const pollTimer = useRef(null);
   const userRef   = useRef(null);
@@ -315,6 +373,24 @@ export default function CourseDetailsPage() {
 
     return Array.from(byLessonId.values()).sort((a, b) => a.lessonOrder - b.lessonOrder);
   }, [materials, lessons]);
+
+  // ── Filtered lesson blocks based on search ────────────────────────────────
+  const filteredLessonBlocks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return lessonBlocks;
+    return lessonBlocks
+      .map((lb) => {
+        const lessonMatch = lb.lessonTitle?.toLowerCase().includes(q) || lb.lessonDescription?.toLowerCase().includes(q);
+        const filteredMaterials = (lb.materials || []).filter((m) =>
+          m.title?.toLowerCase().includes(q) ||
+          (m.subtopic ?? m.sub_topic ?? m.subTopic ?? "")?.toLowerCase().includes(q)
+        );
+        if (lessonMatch) return lb; // show entire lesson if lesson title matches
+        if (filteredMaterials.length > 0) return { ...lb, materials: filteredMaterials };
+        return null;
+      })
+      .filter(Boolean);
+  }, [lessonBlocks, searchQuery]);
 
   // Auto-open all lessons
   useEffect(() => {
@@ -569,6 +645,28 @@ export default function CourseDetailsPage() {
               </div>
             </div>
 
+            {/* ── Search bar ── */}
+            {isEnrolled && materials.length > 0 && (
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search lessons, topics or files…"
+                  className="w-full pl-9 pr-9 py-2.5 text-sm bg-white border border-blue-100 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300 placeholder-gray-400 text-gray-800 transition"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* ── Not Enrolled ── */}
             {!isEnrolled ? (
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-12 text-center">
@@ -611,18 +709,26 @@ export default function CourseDetailsPage() {
 
                 {/* Lesson blocks */}
                 <div className="space-y-3">
-                  {lessonBlocks.map((lb, idx) => {
-                    const key = lb.lessonId || lb.lessonTitle;
-                    return (
-                      <LessonBlock
-                        key={key}
-                        lesson={lb}
-                        index={idx}
-                        isOpen={!!openLessons[key]}
-                        onToggle={() => toggleLesson(key)}
-                      />
-                    );
-                  })}
+                  {filteredLessonBlocks.length === 0 ? (
+                    <div className="text-center py-10 bg-blue-50 rounded-2xl border border-blue-100">
+                      <Search size={22} className="mx-auto text-blue-300 mb-2" />
+                      <p className="text-gray-500 font-semibold text-sm">No results for "{searchQuery}"</p>
+                      <p className="text-gray-400 text-xs mt-1">Try a different keyword.</p>
+                    </div>
+                  ) : (
+                    filteredLessonBlocks.map((lb, idx) => {
+                      const key = lb.lessonId || lb.lessonTitle;
+                      return (
+                        <LessonBlock
+                          key={key}
+                          lesson={lb}
+                          index={idx}
+                          isOpen={!!openLessons[key]}
+                          onToggle={() => toggleLesson(key)}
+                        />
+                      );
+                    })
+                  )}
                 </div>
               </>
             )}
