@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -7,7 +7,7 @@ import {
   X, BookOpen, FileText, ExternalLink, Upload, Link2,
   ChevronDown, ChevronRight, GraduationCap, Tag, Layers,
   CheckCircle, FolderPlus, FilePlus, File, FileVideo,
-  FileImage, Cloud, CloudUpload,
+  FileImage, Cloud, CloudUpload, Search,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
@@ -41,7 +41,6 @@ function getFileIcon(filename, type) {
   return <File size={13} className="text-blue-500" />;
 }
 
-// ─── Type badge style (matching student page) ────────────────────────────────
 function getTypeBadgeStyle(type) {
   switch (type?.toUpperCase()) {
     case "PDF":     return "bg-red-50 text-red-600 border-red-100";
@@ -49,6 +48,7 @@ function getTypeBadgeStyle(type) {
     case "LINK":    return "bg-blue-50 text-blue-600 border-blue-100";
     case "MEETING": return "bg-green-50 text-green-600 border-green-100";
     case "DOC":     return "bg-blue-50 text-blue-600 border-blue-100";
+    case "IMAGE":   return "bg-pink-50 text-pink-500 border-pink-100";
     default:        return "bg-gray-50 text-gray-500 border-gray-100";
   }
 }
@@ -161,17 +161,78 @@ function UploadProgress({ saving, fileCount }) {
   );
 }
 
+// ─── Auto-detect material type ────────────────────────────────────────────────
+function detectTypeFromFile(file) {
+  const ext = file.name?.split(".").pop()?.toLowerCase();
+  if (["mp4", "mov", "avi", "webm", "mkv", "flv", "wmv"].includes(ext)) return "VIDEO";
+  if (ext === "pdf") return "PDF";
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext)) return "IMAGE";
+  if (["doc", "docx", "ppt", "pptx", "txt", "xls", "xlsx", "sql", "csv", "rtf", "odt"].includes(ext)) return "DOC";
+  return "DOC";
+}
+
+function detectTypeFromUrl(url) {
+  if (!url) return null;
+  const lower = url.toLowerCase();
+  if (lower.includes("youtube.com") || lower.includes("youtu.be") || lower.includes("vimeo.com") || lower.includes("loom.com") || lower.includes("dailymotion.com")) return "VIDEO";
+  if (lower.includes("zoom.us") || lower.includes("meet.google") || lower.includes("teams.microsoft") || lower.includes("webex.com") || lower.includes("whereby.com")) return "MEETING";
+  if (lower.includes("drive.google") || lower.includes("docs.google") || lower.includes("dropbox") || lower.includes("onedrive")) return "LINK";
+  if (lower.match(/\.pdf(\?|#|$)/)) return "PDF";
+  if (lower.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)(\?|#|$)/)) return "VIDEO";
+  if (lower.match(/\.(doc|docx|ppt|pptx|xls|xlsx)(\?|#|$)/)) return "DOC";
+  if (lower.startsWith("http")) return "LINK";
+  return "LINK";
+}
+
+function detectMaterialType(material) {
+  const name = (material.title || "").toLowerCase();
+  const ext  = name.includes(".") ? name.split(".").pop() : "";
+  if (ext === "pdf") return "PDF";
+  if (["mp4","mov","avi","mkv","webm","flv","wmv"].includes(ext)) return "VIDEO";
+  if (["jpg","jpeg","png","gif","webp","svg","bmp"].includes(ext)) return "IMAGE";
+  if (["ppt","pptx","xls","xlsx","doc","docx","txt","rtf","odt","sql","csv","json","xml","zip","rar"].includes(ext)) return "DOC";
+
+  const exUrl = (material.external_url || "").toLowerCase();
+  if (exUrl) {
+    if (exUrl.includes("zoom.us") || exUrl.includes("meet.google") || exUrl.includes("teams.microsoft") || exUrl.includes("webex.com") || exUrl.includes("whereby.com")) return "MEETING";
+    if (exUrl.includes("youtube.com") || exUrl.includes("youtu.be") || exUrl.includes("vimeo.com") || exUrl.includes("loom.com")) return "VIDEO";
+    if (exUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
+    if (exUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
+    if (exUrl.startsWith("http")) return "LINK";
+  }
+
+  const cUrl = (material.content_url || "").toLowerCase();
+  if (cUrl) {
+    if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
+    if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
+    if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
+  }
+
+  const explicit = material.material_type?.toUpperCase();
+  if (explicit && explicit !== "OTHER") return explicit;
+
+  return "DOC";
+}
+
 // ─── Material Modal ──────────────────────────────────────────────────────────
 function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
   const isEdit = Boolean(material);
   const [title, setTitle] = useState(material?.title || "");
   const [externalUrl, setExternalUrl] = useState(material?.external_url || "");
   const [files, setFiles] = useState([]);
-  const [type, setType] = useState(material?.material_type || "DOC");
+  const [type, setType] = useState(material?.material_type || null);
   const [subtopic, setSubtopic] = useState(material?.subtopic || "");
   const [subtopicError, setSubtopicError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
+  const detectedType = (() => {
+    if (files.length > 0) return detectTypeFromFile(files[0]);
+    if (externalUrl.trim()) return detectTypeFromUrl(externalUrl.trim());
+    return null;
+  })();
+
+  const activeType = isEdit ? (type || material?.material_type) : detectedType;
 
   const validateSubtopic = (value) => {
     if (!value || value.trim() === "") return { isValid: false };
@@ -193,11 +254,13 @@ function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
     }
     if (isEdit && !title.trim()) { setErr("Title is required."); return; }
 
+    const resolvedType = activeType || "DOC";
+
     setSaving(true); setErr(""); setSubtopicError(false);
     try {
       const fd = new FormData();
       if (isEdit) fd.append("title", title.trim());
-      fd.append("material_type", type);
+      fd.append("material_type", resolvedType);
       fd.append("subtopic", subtopicValidation.value);
       if (lessonId) fd.append("lesson_id", lessonId);
       if (courseId) fd.append("course_id", courseId);
@@ -280,15 +343,15 @@ function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
             )}
           </div>
 
-          {/* Type */}
-          <div>
-            <label className={labelCls}>Material Type</label>
-            <select className={inputCls} value={type} onChange={(e) => setType(e.target.value)}>
-              {["DOC", "PDF", "VIDEO", "MEETING", "LINK", "OTHER"].map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
+          {activeType && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Detected Type</span>
+              <span className={`inline-flex items-center text-xs font-semibold border rounded-full px-3 py-1 ${getTypeBadgeStyle(activeType)}`}>
+                {activeType}
+              </span>
+              <span className="text-xs text-gray-400">— set automatically</span>
+            </div>
+          )}
 
           {!isEdit && (
             <div>
@@ -370,7 +433,6 @@ function LessonModal({ courseId, lesson, existingLessons = [], onClose, onSaved 
     const val = e.target.value;
     setTitle(val);
     if (titleError) {
-      // Clear error once the user types something different
       if (!checkDuplicate(val)) setTitleError("");
     }
   }
@@ -463,6 +525,7 @@ function LessonModal({ courseId, lesson, existingLessons = [], onClose, onSaved 
 // ─── Material Row ────────────────────────────────────────────────────────────
 function MaterialRow({ material, onEdit, onDelete }) {
   const [deleting, setDeleting] = useState(false);
+  const resolvedType = detectMaterialType(material);
 
   async function handleDelete() {
     if (!confirm(`Delete "${material.title}"?`)) return;
@@ -477,7 +540,7 @@ function MaterialRow({ material, onEdit, onDelete }) {
     <div className="flex items-center justify-between px-3 py-2.5 hover:bg-blue-50/60 transition-colors rounded-xl gap-3 group">
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center flex-shrink-0">
-          {getFileIcon(material.title, material.material_type)}
+          {getFileIcon(material.title, resolvedType)}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -495,9 +558,8 @@ function MaterialRow({ material, onEdit, onDelete }) {
               </a>
             )}
           </div>
-          {/* Color-coded type badge — matching student page */}
-          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(material.material_type)}`}>
-            {material.material_type}
+          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(resolvedType)}`}>
+            {resolvedType}
           </span>
         </div>
       </div>
@@ -553,14 +615,17 @@ function SubtopicGroup({ subtopic, materials, onEditMaterial, onDeleteMaterial }
 }
 
 // ─── Lesson Block ────────────────────────────────────────────────────────────
-function LessonBlock({ lesson, onLessonEdit, onLessonDelete, onMaterialSaved, onMaterialDeleted }) {
+function LessonBlock({ lesson, onLessonEdit, onLessonDelete, onMaterialSaved, onMaterialDeleted, highlightMaterials }) {
   const [open, setOpen] = useState(true);
   const [materials, setMaterials] = useState(lesson.materials || []);
   const [showMatModal, setShowMatModal] = useState(false);
   const [editMaterial, setEditMaterial] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  const groupedMaterials = materials.reduce((groups, mat) => {
+  // In search mode, show only matched materials; otherwise show all
+  const displayMaterials = highlightMaterials ?? materials;
+
+  const groupedMaterials = displayMaterials.reduce((groups, mat) => {
     const key = mat.subtopic || "Uncategorized";
     if (!groups[key]) groups[key] = [];
     groups[key].push(mat);
@@ -598,7 +663,7 @@ function LessonBlock({ lesson, onLessonEdit, onLessonDelete, onMaterialSaved, on
   return (
     <>
       <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden shadow-sm">
-        {/* Lesson Header — dark blue gradient same as student page */}
+        {/* Lesson Header */}
         <div className="flex items-center justify-between px-5 py-3.5 bg-blue-700">
           <button onClick={() => setOpen(v => !v)} className="flex items-center gap-3 flex-1 text-left min-w-0">
             <span className="w-8 h-8 rounded-xl bg-white/20 text-white text-xs font-extrabold flex items-center justify-center flex-shrink-0">
@@ -639,7 +704,7 @@ function LessonBlock({ lesson, onLessonEdit, onLessonDelete, onMaterialSaved, on
         {/* Materials */}
         {open && (
           <div className="p-4 space-y-3">
-            {totalMaterials === 0 ? (
+            {displayMaterials.length === 0 ? (
               <div className="flex flex-col items-center py-6 gap-2 text-center">
                 <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                   <Cloud size={18} className="text-gray-400" />
@@ -683,7 +748,7 @@ function LessonBlock({ lesson, onLessonEdit, onLessonDelete, onMaterialSaved, on
   );
 }
 
-// ─── Course Summary Bar (matching student page) ───────────────────────────────
+// ─── Course Summary Bar ───────────────────────────────────────────────────────
 function CourseSummaryBar({ lessons }) {
   const totalLessons = lessons.length;
   const totalFiles = lessons.reduce((s, l) => s + (l.materials?.length || 0), 0);
@@ -727,6 +792,7 @@ export default function TeacherCourseDetailsPage() {
   const [showLesson, setShowLesson] = useState(false);
   const [editLesson, setEditLesson] = useState(null);
   const [toast, setToast] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   function showToast(msg) {
     setToast(msg);
@@ -766,6 +832,24 @@ export default function TeacherCourseDetailsPage() {
     const auth = guardRoute("TEACHER", router);
     if (auth) { setUser(auth); fetchAll(); }
   }, [router, courseId, fetchAll]);
+
+  // ── Filter lessons based on search query ─────────────────────────────────
+  const filteredLessons = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return lessons.map(l => ({ ...l, _filteredMaterials: null }));
+    return lessons
+      .map((l) => {
+        const lessonMatch = l.title?.toLowerCase().includes(q) || l.description?.toLowerCase().includes(q);
+        const filteredMaterials = (l.materials || []).filter((m) =>
+          m.title?.toLowerCase().includes(q) ||
+          (m.subtopic || "").toLowerCase().includes(q)
+        );
+        if (lessonMatch) return { ...l, _filteredMaterials: null };
+        if (filteredMaterials.length > 0) return { ...l, _filteredMaterials: filteredMaterials };
+        return null;
+      })
+      .filter(Boolean);
+  }, [lessons, searchQuery]);
 
   function handleLessonSaved(lesson) {
     setLessons((prev) => {
@@ -862,18 +946,47 @@ export default function TeacherCourseDetailsPage() {
                 {/* Summary bar */}
                 <CourseSummaryBar lessons={lessons} />
 
+                {/* ── Search bar ─────────────────────────────────────────── */}
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search lessons, topics or files…"
+                    className="w-full pl-9 pr-9 py-2.5 text-sm bg-white border border-blue-100 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300 placeholder-gray-400 text-gray-800 transition"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
                 {/* Lesson blocks */}
                 <div className="space-y-3">
-                  {lessons.map((lesson) => (
-                    <LessonBlock
-                      key={lesson.lesson_id}
-                      lesson={lesson}
-                      onLessonEdit={(l) => { setEditLesson(l); setShowLesson(true); }}
-                      onLessonDelete={handleLessonDelete}
-                      onMaterialSaved={() => showToast("Material(s) saved!")}
-                      onMaterialDeleted={() => showToast("Material deleted.")}
-                    />
-                  ))}
+                  {filteredLessons.length === 0 ? (
+                    <div className="text-center py-10 bg-blue-50 rounded-2xl border border-blue-100">
+                      <Search size={22} className="mx-auto text-blue-300 mb-2" />
+                      <p className="text-gray-500 font-semibold text-sm">No results for "{searchQuery}"</p>
+                      <p className="text-gray-400 text-xs mt-1">Try a different keyword.</p>
+                    </div>
+                  ) : (
+                    filteredLessons.map((lesson) => (
+                      <LessonBlock
+                        key={lesson.lesson_id}
+                        lesson={lesson}
+                        highlightMaterials={lesson._filteredMaterials}
+                        onLessonEdit={(l) => { setEditLesson(l); setShowLesson(true); }}
+                        onLessonDelete={handleLessonDelete}
+                        onMaterialSaved={() => showToast("Material(s) saved!")}
+                        onMaterialDeleted={() => showToast("Material deleted.")}
+                      />
+                    ))
+                  )}
                 </div>
               </>
             )}
