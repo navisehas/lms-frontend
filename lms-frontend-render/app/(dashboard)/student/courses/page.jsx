@@ -6,7 +6,7 @@ import {
   AlertCircle, BookOpen, CheckCircle, Lock,
   Loader, RefreshCw, BadgeCheck, ChevronRight,
   GraduationCap, Sparkles, LayoutGrid, Calendar,
-  Wifi, Loader2, User,
+  Wifi, Loader2, User, ImageIcon,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
@@ -107,21 +107,25 @@ export default function StudentCoursesPage() {
       const coursesRes = await authFetch(`${API}/courses`);
       const coursesData = coursesRes.ok ? await coursesRes.json() : { courses: [] };
       
-      // Create a map of course_id to teacher_id
-      const courseTeacherMap = {};
+      // Create a map of course_id to teacher_id and thumbnail_url
+      const courseInfoMap = {};
       if (Array.isArray(coursesData)) {
         coursesData.forEach(course => {
-          courseTeacherMap[course.course_id] = course.teacher_id;
+          courseInfoMap[course.course_id] = {
+            teacher_id: course.teacher_id,
+            thumbnail_url: course.thumbnail_url,
+          };
         });
       }
 
       // Show only courses the student has ever paid for (ever_enrolled = true)
       const myCourses = (enrollData.courses || []).filter((c) => c.ever_enrolled === true);
       
-      // Add teacher_id to each course
+      // Add teacher_id and thumbnail_url to each course
       const coursesWithTeacher = myCourses.map(course => ({
         ...course,
-        teacher_id: courseTeacherMap[course.course_id] || null,
+        teacher_id: courseInfoMap[course.course_id]?.teacher_id || null,
+        thumbnail_url: courseInfoMap[course.course_id]?.thumbnail_url || null,
       }));
       
       setCourses(coursesWithTeacher);
@@ -368,21 +372,40 @@ function CourseCard({ course, paying, onPay, teacher }) {
       {/* Top accent bar */}
       <div className={`h-1 w-full ${active ? "bg-gradient-to-r from-green-400 to-emerald-500" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
 
+      {/* Thumbnail */}
+      <div className="h-40 bg-gradient-to-br from-blue-50 to-indigo-50 relative overflow-hidden">
+        {course.thumbnail_url ? (
+          <img
+            src={course.thumbnail_url}
+            alt={course.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-blue-200 gap-2">
+            <ImageIcon size={30} />
+            <span className="text-xs">No image</span>
+          </div>
+        )}
+        {/* Active/Expired badge overlay */}
+        <div className="absolute top-2 right-2">
+          {active ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-500 text-white px-2.5 py-1 text-xs font-bold shadow">
+              <BadgeCheck size={11} /> Active
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 text-white px-2.5 py-1 text-xs font-bold shadow">
+              <Lock size={11} /> Renewal Due
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="p-5">
         {/* Title row */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <h2 className="text-base font-bold text-gray-900 leading-snug group-hover:text-blue-800 transition-colors flex-1 min-w-0">
             {course.title}
           </h2>
-          {active ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 text-xs font-bold flex-shrink-0">
-              <BadgeCheck size={11} /> Active
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-1 text-xs font-bold flex-shrink-0">
-              <Lock size={11} /> Renewal Due
-            </span>
-          )}
         </div>
 
         {/* Teacher Info */}
