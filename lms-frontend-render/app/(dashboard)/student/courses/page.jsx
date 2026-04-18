@@ -6,7 +6,7 @@ import {
   AlertCircle, BookOpen, CheckCircle, Lock,
   Loader, RefreshCw, BadgeCheck, ChevronRight,
   GraduationCap, Sparkles, LayoutGrid, Calendar,
-  Wifi, Loader2, User, ImageIcon,
+  Wifi, Loader2, User, ImageIcon, Search, X,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
@@ -23,6 +23,7 @@ export default function StudentCoursesPage() {
   const [error,       setError]       = useState("");
   const [payingCourse, setPayingCourse] = useState(null);
   const [teachers,    setTeachers]    = useState({});
+  const [searchTerm,  setSearchTerm]  = useState("");
   
   // Track if we left for PayHere
   const leftForPayHere = useRef(false);
@@ -197,8 +198,16 @@ export default function StudentCoursesPage() {
     }
   }
 
-  const activeCourses  = courses.filter((c) => c.is_enrolled === true);
-  const expiredCourses = courses.filter((c) => c.is_enrolled === false);
+  const filteredCourses = searchTerm.trim()
+    ? courses.filter((c) =>
+        c.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.course_id?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : courses;
+
+  const activeCourses  = filteredCourses.filter((c) => c.is_enrolled === true);
+  const expiredCourses = filteredCourses.filter((c) => c.is_enrolled === false);
 
   // Check if there's a cancelled payment param
   useEffect(() => {
@@ -267,6 +276,33 @@ export default function StudentCoursesPage() {
         </div>
       </div>
 
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" size={16} />
+          <input
+            type="text"
+            placeholder="Search by course name, description, or ID…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-10 py-2.5 border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 text-gray-700 placeholder-gray-400 text-sm transition"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+        {searchTerm && (
+          <p className="text-xs text-gray-400 mt-2 pl-1">
+            {filteredCourses.length} result{filteredCourses.length !== 1 ? "s" : ""} for "{searchTerm}"
+          </p>
+        )}
+      </div>
+
       {loading ? (
         <div className="flex flex-col items-center justify-center py-32 gap-3 text-gray-400">
           <Loader size={28} className="animate-spin" style={{ color: "#1E40AF" }} />
@@ -287,6 +323,20 @@ export default function StudentCoursesPage() {
           >
             View Available Courses <ChevronRight size={14} />
           </Link>
+        </div>
+      ) : filteredCourses.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-12 text-center">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: "#EFF6FF" }}>
+            <Search size={28} style={{ color: "#93C5FD" }} />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800">No matching courses found</h2>
+          <p className="text-sm text-gray-400 mt-2">Try a different search term.</p>
+          <button
+            onClick={() => setSearchTerm("")}
+            className="inline-flex items-center gap-2 mt-5 bg-blue-700 hover:bg-blue-800 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm shadow-sm"
+          >
+            Clear Search
+          </button>
         </div>
       ) : (
         <div className="space-y-10">
