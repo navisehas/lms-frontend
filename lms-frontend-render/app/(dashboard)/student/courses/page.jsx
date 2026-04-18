@@ -226,16 +226,13 @@ export default function StudentCoursesPage() {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-md" style={{ backgroundColor: "#1E40AF" }}>
-            <GraduationCap size={22} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 leading-tight">My Courses</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              {user ? `Welcome back, ${user.name || "Student"}` : "Your learning dashboard"}
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <BookOpen className="text-blue-600" size={26} /> My Courses
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {user ? `Welcome back, ${user.name || "Student"}` : "Your learning dashboard"}
+          </p>
         </div>
         <button
           onClick={() => user && fetchCourses(user.user_id)}
