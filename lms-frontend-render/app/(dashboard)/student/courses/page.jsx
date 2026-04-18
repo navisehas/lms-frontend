@@ -40,10 +40,8 @@ export default function StudentCoursesPage() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && leftForPayHere.current) {
-        // We've returned from PayHere, reset the paying state
         setPayingCourse(null);
         leftForPayHere.current = false;
-        // Refresh courses to get updated payment status
         if (user) {
           fetchCourses(user.user_id);
         }
@@ -52,7 +50,6 @@ export default function StudentCoursesPage() {
 
     const handlePageShow = (event) => {
       if (event.persisted && leftForPayHere.current) {
-        // Page loaded from bfcache (back button)
         setPayingCourse(null);
         leftForPayHere.current = false;
         if (user) {
@@ -103,29 +100,25 @@ export default function StudentCoursesPage() {
         return;
       }
 
-      // Fetch course details to get teacher_id
       const coursesRes = await authFetch(`${API}/courses`);
       const coursesData = coursesRes.ok ? await coursesRes.json() : { courses: [] };
       
-      // Create a map of course_id to teacher_id and thumbnail_url
-      const courseInfoMap = {};
+      const courseTeacherMap = {};
       if (Array.isArray(coursesData)) {
         coursesData.forEach(course => {
-          courseInfoMap[course.course_id] = {
+          courseTeacherMap[course.course_id] = {
             teacher_id: course.teacher_id,
             thumbnail_url: course.thumbnail_url,
           };
         });
       }
 
-      // Show only courses the student has ever paid for (ever_enrolled = true)
       const myCourses = (enrollData.courses || []).filter((c) => c.ever_enrolled === true);
       
-      // Add teacher_id and thumbnail_url to each course
       const coursesWithTeacher = myCourses.map(course => ({
         ...course,
-        teacher_id: courseInfoMap[course.course_id]?.teacher_id || null,
-        thumbnail_url: courseInfoMap[course.course_id]?.thumbnail_url || null,
+        teacher_id:    courseTeacherMap[course.course_id]?.teacher_id    || null,
+        thumbnail_url: courseTeacherMap[course.course_id]?.thumbnail_url || null,
       }));
       
       setCourses(coursesWithTeacher);
@@ -193,7 +186,6 @@ export default function StudentCoursesPage() {
         form.appendChild(input);
       });
 
-      // Set flag before submitting
       leftForPayHere.current = true;
       document.body.appendChild(form);
       form.submit();
@@ -212,14 +204,10 @@ export default function StudentCoursesPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("cancelled") === "1") {
-      // Payment was cancelled, reset states
       setPayingCourse(null);
       leftForPayHere.current = false;
-      // Show a temporary message
       setError("Payment was cancelled. Please try again if you wish to proceed.");
-      // Remove the param from URL
       window.history.replaceState({}, "", "/student/courses");
-      // Clear error after 5 seconds
       setTimeout(() => setError(""), 5000);
     }
   }, []);
@@ -313,7 +301,7 @@ export default function StudentCoursesPage() {
                   {activeCourses.length}
                 </span>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {activeCourses.map((course) => (
                   <CourseCard
                     key={course.course_id}
@@ -337,7 +325,7 @@ export default function StudentCoursesPage() {
                   {expiredCourses.length}
                 </span>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {expiredCourses.map((course) => (
                   <CourseCard
                     key={course.course_id}
@@ -363,17 +351,15 @@ function CourseCard({ course, paying, onPay, teacher }) {
 
   return (
     <div
-      className={`group relative bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md ${
+      className={`group relative bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col transition-all duration-200 hover:shadow-md ${
         active
           ? "border-green-200 hover:border-green-300"
           : "border-amber-100 hover:border-amber-200"
       }`}
     >
-      {/* Top accent bar */}
-      <div className={`h-1 w-full ${active ? "bg-gradient-to-r from-green-400 to-emerald-500" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
-
-      {/* Thumbnail */}
-      <div className="h-40 bg-gradient-to-br from-blue-50 to-indigo-50 relative overflow-hidden">
+      {/* Thumbnail — matches teacher card h-44 */}
+      <div className="h-44 bg-gradient-to-br from-blue-50 to-indigo-50 relative overflow-hidden flex-shrink-0">
+        <div className={`h-1.5 w-full absolute top-0 ${active ? "bg-gradient-to-r from-green-400 to-emerald-500" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
         {course.thumbnail_url ? (
           <img
             src={course.thumbnail_url}
@@ -381,31 +367,32 @@ function CourseCard({ course, paying, onPay, teacher }) {
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-blue-200 gap-2">
-            <ImageIcon size={30} />
-            <span className="text-xs">No image</span>
+          <div className="w-full h-full flex flex-col items-center justify-center text-blue-200 gap-2 pt-1.5">
+            <ImageIcon size={34} />
+            <span className="text-xs">No course image</span>
           </div>
         )}
-        {/* Active/Expired badge overlay */}
-        <div className="absolute top-2 right-2">
+        {/* Status badge overlaid on thumbnail */}
+        <div className="absolute top-3 right-3">
           {active ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-500 text-white px-2.5 py-1 text-xs font-bold shadow">
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 text-xs font-bold shadow-sm">
               <BadgeCheck size={11} /> Active
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 text-white px-2.5 py-1 text-xs font-bold shadow">
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-1 text-xs font-bold shadow-sm">
               <Lock size={11} /> Renewal Due
             </span>
           )}
         </div>
       </div>
 
-      <div className="p-5">
-        {/* Title row */}
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <h2 className="text-base font-bold text-gray-900 leading-snug group-hover:text-blue-800 transition-colors flex-1 min-w-0">
+      <div className="p-5 flex flex-col flex-1">
+        {/* Title */}
+        <div className="mb-2">
+          <h2 className="text-base font-bold text-gray-900 leading-snug group-hover:text-blue-800 transition-colors line-clamp-2">
             {course.title}
           </h2>
+          <p className="text-xs font-mono text-gray-300 mt-1">{course.course_id}</p>
         </div>
 
         {/* Teacher Info */}
@@ -425,14 +412,14 @@ function CourseCard({ course, paying, onPay, teacher }) {
 
         {/* Description */}
         {course.description && (
-          <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-3">
+          <p className="text-xs text-gray-500 leading-relaxed line-clamp-3 mb-3">
             {course.description}
           </p>
         )}
 
         {/* Access until (active only) */}
         {active && course.access_until && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
             <Calendar size={12} />
             Access until{" "}
             {new Date(course.access_until).toLocaleDateString("en-LK", {
@@ -443,13 +430,13 @@ function CourseCard({ course, paying, onPay, teacher }) {
 
         {/* Renewal message (expired) */}
         {!active && (
-          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
             Your access has expired. Pay this month's fee to regain access.
           </p>
         )}
 
         {/* Fee Display */}
-        <div className="flex items-center justify-between mb-4 pt-2 border-t border-gray-100">
+        <div className="flex items-center justify-between mt-auto mb-4 pt-2 border-t border-gray-100">
           <div className="flex items-baseline gap-1">
             <span className="text-xs text-gray-400">Rs.</span>
             <span className="text-lg font-bold text-gray-800">
@@ -470,7 +457,6 @@ function CourseCard({ course, paying, onPay, teacher }) {
               <Sparkles size={14} /> View Materials
               <ChevronRight size={14} className="ml-auto" />
             </Link>
-            {/* Pay this month button (if not yet paid) */}
             {!paid && (
               <button
                 onClick={() => onPay(course)}
