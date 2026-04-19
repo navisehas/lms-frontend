@@ -45,7 +45,7 @@ export default function ManagerLayout({ children }) {
     { name: "All Attendance",     href: "/manager/attendance", icon: <Clock size={20} /> },
     { name: "Feedback",           href: "/manager/feedback",   icon: <MessageSquare size={20} /> },
     { name: "Complaints",         href: "/manager/complaints", icon: <AlertTriangle size={20} /> },
-    { name: "Profile",          href: "/teacher/profile",         icon: <User    size={20} /> },
+    { name: "Profile",            href: "/manager/profile",         icon: <User    size={20} /> },
   ];
 
   return (
