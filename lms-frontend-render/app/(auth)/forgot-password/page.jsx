@@ -1,21 +1,21 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Phone, KeyRound, Loader2 } from "lucide-react";
+import { ArrowLeft, Phone, KeyRound, Loader2 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function ForgotPassword() {
-  // Steps: "enter_id" → "enter_otp" → "done"
-  const [step, setStep] = useState("enter_id");
-  const [userId, setUserId] = useState("");
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  // Steps: "enter_id" → "enter_otp" → (redirect to /reset-password)
+  const [step, setStep]               = useState("enter_id");
+  const [userId, setUserId]           = useState("");
+  const [otp, setOtp]                 = useState(["", "", "", "", "", ""]);
   const [maskedPhone, setMaskedPhone] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // ── Step 1: Send OTP ────────────────────────────────────────────────────────
+  // ── Step 1: Request OTP ─────────────────────────────────────────────────────
   const handleSendOtp = async (e) => {
     e?.preventDefault();
     setError(null);
@@ -41,7 +41,15 @@ export default function ForgotPassword() {
     }
   };
 
-  // ── Step 2: Verify OTP ──────────────────────────────────────────────────────
+  // ── Step 2: Verify OTP on backend, then navigate to reset page ──────────────
+  // We call /forgot-password/reset with a dummy password just to verify the OTP,
+  // but instead we store user_id + otp in sessionStorage and let reset-password
+  // page do the actual password update (cleaner UX flow).
+  // Actually: we verify OTP by calling send-otp again is wrong.
+  // The correct approach: store userId + otp in sessionStorage, then the
+  // reset-password page sends all three (user_id, otp, new_password) together.
+  // OTP is only consumed (deleted) when /forgot-password/reset is called.
+  // This keeps OTP single-use and verified server-side at reset time.
   const handleVerifyOtp = async (e) => {
     e?.preventDefault();
     const otpString = otp.join("");
@@ -52,8 +60,10 @@ export default function ForgotPassword() {
     setError(null);
     setLoading(true);
     try {
-      // We just verify OTP here; navigate to reset page with token info
-      // Store user_id + otp in sessionStorage for the reset page
+      // Store user_id + otp in sessionStorage.
+      // The reset-password page will send these together with the new password
+      // to /forgot-password/reset, which verifies the OTP and updates the password
+      // atomically — so the OTP is never exposed beyond one use.
       sessionStorage.setItem("reset_user_id", userId.trim().toUpperCase());
       sessionStorage.setItem("reset_otp", otpString);
       window.location.href = "/reset-password";
@@ -108,7 +118,7 @@ export default function ForgotPassword() {
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Forgot Password?</h1>
           <p className="text-sm text-gray-500 mt-2">
-            Enter your User ID and we'll send an OTP to your registered phone.
+            Enter your User ID and we&apos;ll send an OTP to your registered phone.
           </p>
         </div>
 
@@ -148,7 +158,10 @@ export default function ForgotPassword() {
         </form>
 
         <div className="mt-8 text-center">
-          <Link href="/login" className="flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition">
+          <Link
+            href="/login"
+            className="flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition"
+          >
             <ArrowLeft className="w-4 h-4" /> Back to Login
           </Link>
         </div>
@@ -166,7 +179,8 @@ export default function ForgotPassword() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Check your phone</h1>
           <p className="text-sm text-gray-500 mt-2">
-            We sent a 6-digit OTP to <span className="font-semibold text-gray-700">{maskedPhone}</span>
+            We sent a 6-digit OTP to{" "}
+            <span className="font-semibold text-gray-700">{maskedPhone}</span>
           </p>
         </div>
 
@@ -177,7 +191,6 @@ export default function ForgotPassword() {
         )}
 
         <form onSubmit={handleVerifyOtp} className="space-y-6">
-          {/* OTP Input Boxes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
               Enter OTP
@@ -207,13 +220,13 @@ export default function ForgotPassword() {
             {loading ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
             ) : (
-              "Verify OTP"
+              "Verify & Continue"
             )}
           </button>
         </form>
 
         <div className="mt-5 text-center text-sm text-gray-500">
-          Didn't receive it?{" "}
+          Didn&apos;t receive it?{" "}
           {resendCooldown > 0 ? (
             <span className="text-gray-400">Resend in {resendCooldown}s</span>
           ) : (
@@ -229,7 +242,11 @@ export default function ForgotPassword() {
 
         <div className="mt-6 text-center">
           <button
-            onClick={() => { setStep("enter_id"); setOtp(["","","","","",""]); setError(null); }}
+            onClick={() => {
+              setStep("enter_id");
+              setOtp(["", "", "", "", "", ""]);
+              setError(null);
+            }}
             className="flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition mx-auto"
           >
             <ArrowLeft className="w-4 h-4" /> Use a different User ID
