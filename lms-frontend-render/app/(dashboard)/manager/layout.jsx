@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, QrCode, Users, Banknote,
-  Menu, X, LogOut, Clock, GraduationCap, MessageSquare, Bell, AlertTriangle,
+  Menu, X, LogOut, Clock, GraduationCap, MessageSquare, Bell, AlertTriangle,User,
 } from "lucide-react";
 import { guardRoute, logout } from "@/lib/auth";
 
@@ -45,6 +45,7 @@ export default function ManagerLayout({ children }) {
     { name: "All Attendance",     href: "/manager/attendance", icon: <Clock size={20} /> },
     { name: "Feedback",           href: "/manager/feedback",   icon: <MessageSquare size={20} /> },
     { name: "Complaints",         href: "/manager/complaints", icon: <AlertTriangle size={20} /> },
+    { name: "Profile",          href: "/teacher/profile",         icon: <User    size={20} /> },
   ];
 
   return (
