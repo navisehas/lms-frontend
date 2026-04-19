@@ -136,7 +136,7 @@ export default function ManagerProfile() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-[60vh]">
-        <Loader className="animate-spin text-teal-600" size={40} />
+        <Loader className="animate-spin text-blue-600" size={40} />
       </div>
     );
   }
@@ -156,7 +156,7 @@ export default function ManagerProfile() {
         <div className="space-y-6 lg:sticky lg:top-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-center">
             {/* Manager specific header color (Teal/Emerald) */}
-            <div className="h-28 bg-teal-700 relative">
+            <div className="h-28 bg-blue-700 relative">
                <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
                  <div className="relative">
                    <div className="w-24 h-24 rounded-full border-4 border-white bg-white overflow-hidden shadow-sm">
@@ -172,7 +172,7 @@ export default function ManagerProfile() {
             <div className="pt-16 pb-6 px-6">
               <h2 className="text-xl font-bold text-gray-900">{user.name}</h2>
               <p className="text-sm font-mono text-gray-500 mt-1">{user.user_id}</p>
-              <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
+              <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                 {user.status || "Active Manager"}
               </div>
             </div>
@@ -185,7 +185,7 @@ export default function ManagerProfile() {
             </div>
           </div>
 
-          <button onClick={handleDownloadID} className="w-full flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-bold py-3.5 rounded-xl transition shadow-md">
+          <button onClick={handleDownloadID} className="w-full flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-xl transition shadow-md">
             <Download size={20} /> Download Official ID
           </button>
         </div>
@@ -196,7 +196,7 @@ export default function ManagerProfile() {
           {/* Profile Details (Read Only) */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-              <div className="p-2 bg-teal-50 text-teal-700 rounded-lg"><ShieldCheck size={20} /></div>
+              <div className="p-2 bg-blue-50 text-blue-700 rounded-lg"><ShieldCheck size={20} /></div>
               <h2 className="text-lg font-bold text-gray-900">Administrative Information</h2>
             </div>
             
@@ -260,7 +260,7 @@ export default function ManagerProfile() {
                    <p className="text-xs text-gray-500">Change your password</p>
                  </div>
                </div>
-               <button className="text-sm font-bold text-teal-700 hover:underline">
+               <button className="text-sm font-bold text-blue-700 hover:underline">
                  {showPasswordSection ? "Hide" : "Edit"}
                </button>
             </div>
@@ -269,7 +269,7 @@ export default function ManagerProfile() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Current Password</label>
                   <div className="relative">
-                    <input type={showOldPass ? "text" : "password"} value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} className="w-full py-2.5 px-3 border border-gray-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500 outline-none text-sm text-gray-900" required />
+                    <input type={showOldPass ? "text" : "password"} value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} className="w-full py-2.5 px-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900" required />
                     <button type="button" onClick={() => setShowOldPass(!showOldPass)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
                       {showOldPass ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -279,7 +279,7 @@ export default function ManagerProfile() {
                   <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">New Password</label>
                     <div className="relative">
-                      <input type={showNewPass ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full py-2.5 px-3 border border-gray-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500 outline-none text-sm text-gray-900" required />
+                      <input type={showNewPass ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full py-2.5 px-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900" required />
                       <button type="button" onClick={() => setShowNewPass(!showNewPass)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
                         {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -288,7 +288,7 @@ export default function ManagerProfile() {
                   <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Confirm Password</label>
                     <div className="relative">
-                      <input type={showConfirmPass ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full py-2.5 px-3 border border-gray-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500 outline-none text-sm text-gray-900" required />
+                      <input type={showConfirmPass ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full py-2.5 px-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900" required />
                       <button type="button" onClick={() => setShowConfirmPass(!showConfirmPass)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
                         {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
