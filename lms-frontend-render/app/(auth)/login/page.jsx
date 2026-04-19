@@ -38,21 +38,17 @@ export default function LoginPage() {
         : { error: await res.text() };
 
       if (res.ok) {
-        // Save token and user data using your auth utility
         saveSession(data.token, data.user);
-        
-        // --- FIXED: Explicitly save the role for the Navbar to read ---
         localStorage.setItem("role", data.user.role);
 
         const role = data.user.role;
-        
-        // Route to the correct dashboard
+
         if (role === "ADMIN")        router.push("/admin/dashboard");
         else if (role === "STUDENT") router.push("/student/dashboard");
         else if (role === "TEACHER") router.push("/teacher/dashboard");
         else if (role === "MANAGER") router.push("/manager/dashboard");
         else setError("Unknown role");
-        
+
       } else {
         setError(data.error || "Login failed");
       }
@@ -88,7 +84,6 @@ export default function LoginPage() {
               placeholder="e.g. STD-2026-0001"
               className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase font-medium text-gray-900"
               value={formData.user_id}
-              // Automatically convert input to uppercase
               onChange={(e) => setFormData({ ...formData, user_id: e.target.value.toUpperCase() })}
               required
             />
@@ -96,7 +91,16 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-1.5">Password</label>
+          {/* ── Label row with Forgot Password link ── */}
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-sm font-bold text-gray-700">Password</label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-blue-600 hover:underline font-medium"
+            >
+              Forgot Password?
+            </Link>
+          </div>
           <div className="relative text-gray-700">
             <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
             <input
