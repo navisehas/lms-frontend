@@ -14,8 +14,8 @@ export default function AdminDashboard() {
   
   // 1. HARDCODED STATS
   const [stats] = useState({
-    monthlyRevenue: 1754000, // Rs. 1,254,000
-    revenueGrowth: 12.5,     // +12.5%
+    monthlyRevenue: 175400, 
+    revenueGrowth: 12.5,     
     totalStudents: 540,
     newStudents: 42,
     activeCourses: 6,
