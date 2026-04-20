@@ -36,13 +36,14 @@ export default function TeacherLayout({ children }) {
     .slice(0, 2);
 
   const menuItems = [
-    { name: "Overview",         href: "/teacher/dashboard",      icon: <LayoutDashboard  size={20} /> },
+    { name: "Dashboard",         href: "/teacher/dashboard",      icon: <LayoutDashboard  size={20} /> },
     { name: "My Courses",       href: "/teacher/courses",         icon: <BookOpen         size={20} /> },
     { name: "Course Materials", href: "/teacher/materials",       icon: <FolderOpen       size={20} /> },
     { name: "Exams & Quizzes",  href: "/teacher/exams/create",    icon: <ClipboardEdit    size={20} /> },
     { name: "Exam Results",     href: "/teacher/exams/results",   icon: <ClipboardList    size={20} /> },
     { name: "Student Progress", href: "/teacher/analytics",       icon: <LineChart        size={20} /> },
     { name: "My Income",        href: "/teacher/income",          icon: <Wallet           size={20} /> },
+    { name: "Attendance",       href: "/teacher/attendance",      icon: <GraduationCap    size={20} /> },
     { name: "Feedback",         href: "/teacher/feedback",        icon: <MessageSquare    size={20} /> },
     { name: "Profile",          href: "/teacher/profile",         icon: <User    size={20} /> },
   ];
