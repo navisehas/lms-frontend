@@ -17,8 +17,8 @@ import {
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function PublicCourses() {
-  const [rawCourses, setRawCourses] = useState<any[]>([]);
-  const [teachersMap, setTeachersMap] = useState<any>({});
+  const [rawCourses, setRawCourses] = useState([]);
+  const [teachersMap, setTeachersMap] = useState({});
   const [loading, setLoading] = useState(true);
 
   // URL param
@@ -29,14 +29,14 @@ export default function PublicCourses() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTeacher, setSelectedTeacher] = useState("All");
 
-  // ✅ Sync URL → state
+  // Sync URL → state
   useEffect(() => {
     if (teacherFromURL) {
       setSelectedTeacher(String(teacherFromURL));
     }
   }, [teacherFromURL]);
 
-  // ✅ Fetch data
+  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -48,7 +48,7 @@ export default function PublicCourses() {
         const courseData = await courseRes.json();
         const teacherData = await teacherRes.json();
 
-        const tMap: any = {};
+        const tMap = {};
         if (Array.isArray(teacherData)) {
           teacherData.forEach((t) => {
             tMap[String(t.user_id)] = {
@@ -70,7 +70,7 @@ export default function PublicCourses() {
     fetchData();
   }, []);
 
-  // ✅ Unique teachers for dropdown
+  // Unique teachers for dropdown
   const uniqueTeachers = useMemo(() => {
     const teacherIds = [
       ...new Set(
@@ -86,7 +86,7 @@ export default function PublicCourses() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [rawCourses, teachersMap]);
 
-  // ✅ FILTER LOGIC (FIXED)
+  // Filter logic
   const filteredCourses = useMemo(() => {
     return rawCourses
       .filter((c) => {
@@ -168,7 +168,7 @@ export default function PublicCourses() {
           </div>
         </div>
 
-        {/* ✅ FILTER BADGE */}
+        {/* FILTER BADGE */}
         {selectedTeacher !== "All" && (
           <div className="mb-4 text-sm text-blue-600 font-semibold">
             Showing courses for selected teacher
@@ -197,8 +197,8 @@ export default function PublicCourses() {
   );
 }
 
-// ✅ COURSE CARD
-function CourseCard({ course }: any) {
+// COURSE CARD
+function CourseCard({ course }) {
   return (
     <div className="bg-white rounded-xl shadow p-4 flex flex-col hover:shadow-lg transition">
       <h3 className="font-bold text-lg mb-1">{course.title}</h3>
