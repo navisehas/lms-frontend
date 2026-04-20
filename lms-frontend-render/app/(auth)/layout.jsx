@@ -1,14 +1,23 @@
+"use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Sparkles, Star, TrendingUp } from "lucide-react";
 
 export default function AuthLayout({ children }) {
+  const pathname = usePathname();
+  
+  // Register page needs wider card because it has more fields
+  const isRegisterPage = pathname?.includes("/register");
+  const cardMaxWidth = isRegisterPage ? "max-w-2xl" : "max-w-sm";
+
   return (
-    <div className="h-screen grid lg:grid-cols-2 overflow-hidden">
+    <div className="min-h-screen grid lg:grid-cols-2">
       
       {/* ═══════════════════════════════════════════════════════════
-          LEFT SIDE: Brand Showcase (unchanged)
+          LEFT SIDE: Brand Showcase
+          Sticky so it stays visible when right side scrolls
           ═══════════════════════════════════════════════════════════ */}
-      <div className="hidden lg:flex flex-col justify-between relative overflow-hidden bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 text-white p-10">
+      <div className="hidden lg:flex lg:sticky lg:top-0 lg:h-screen flex-col justify-between relative overflow-hidden bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 text-white p-10">
         
         {/* Animated Grid Background */}
         <div 
@@ -103,17 +112,17 @@ export default function AuthLayout({ children }) {
 
       {/* ═══════════════════════════════════════════════════════════
           RIGHT SIDE: Clean White with Subtle Accents
-          User-friendly, professional, welcoming
+          Scrollable when content is taller than screen
           ═══════════════════════════════════════════════════════════ */}
-      <div className="relative flex flex-col justify-center items-center p-6 overflow-hidden bg-white">
+      <div className="relative flex flex-col justify-center items-center p-6 py-10 overflow-hidden bg-white min-h-screen">
         
-        {/* Very subtle background accents - just enough to not be plain */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-50 rounded-full blur-3xl opacity-60 -translate-y-1/3 translate-x-1/3"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-50 rounded-full blur-3xl opacity-60 translate-y-1/3 -translate-x-1/3"></div>
+        {/* Very subtle background accents */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-50 rounded-full blur-3xl opacity-60 -translate-y-1/3 translate-x-1/3 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-50 rounded-full blur-3xl opacity-60 translate-y-1/3 -translate-x-1/3 pointer-events-none"></div>
         
         {/* Very subtle grid pattern */}
         <div 
-          className="absolute inset-0 opacity-[0.025]"
+          className="absolute inset-0 opacity-[0.025] pointer-events-none"
           style={{
             backgroundImage: `linear-gradient(rgba(59,130,246,1) 1px, transparent 1px),
                               linear-gradient(90deg, rgba(59,130,246,1) 1px, transparent 1px)`,
@@ -122,7 +131,7 @@ export default function AuthLayout({ children }) {
         />
         
         {/* ═══ CLEAN WHITE CARD WITH SUBTLE SHADOW ═══ */}
-        <div className="relative w-full max-w-sm z-10">
+        <div className={`relative w-full ${cardMaxWidth} z-10 my-auto`}>
           
           {/* Subtle blue glow behind card */}
           <div className="absolute -inset-2 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-3xl blur-2xl opacity-50"></div>
