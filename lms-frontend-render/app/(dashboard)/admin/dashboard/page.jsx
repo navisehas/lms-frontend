@@ -3,28 +3,33 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Users, DollarSign, BookOpen, Activity, 
-  TrendingUp, ArrowRight, UserPlus, Loader2, AlertCircle
+  TrendingUp, ArrowRight, UserPlus, AlertCircle
 } from "lucide-react";
-import { authFetch, getUser } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import { getUser } from "@/lib/auth";
 
 export default function AdminDashboard() {
   // --- Dynamic States ---
   const [greeting, setGreeting] = useState("Hello");
   const [adminName, setAdminName] = useState("Admin");
-  const [loading, setLoading] = useState(true);
   
-  const [stats, setStats] = useState({
-    monthlyRevenue: 0,
-    revenueGrowth: 0,
-    totalStudents: 0,
-    newStudents: 0,
-    activeCourses: 0,
-    systemStatus: "Checking..."
+  // 1. HARDCODED STATS
+  const [stats] = useState({
+    monthlyRevenue: 1254000, // Rs. 1,254,000
+    revenueGrowth: 12.5,     // +12.5%
+    totalStudents: 5240,
+    newStudents: 142,
+    activeCourses: 48,
+    systemStatus: "Operational"
   });
   
-  const [recentPayments, setRecentPayments] = useState([]);
+  // 2. HARDCODED RECENT TRANSACTIONS
+  const [recentPayments] = useState([
+    { transaction_id: "TXN-001", student_name: "Kamal Perera", amount: 3500, method: "Card (PayHere)", created_at: new Date().toISOString() },
+    { transaction_id: "TXN-002", student_name: "Nimali Silva", amount: 2500, method: "Bank Transfer", created_at: new Date(Date.now() - 15 * 60000).toISOString() },
+    { transaction_id: "TXN-003", student_name: "Ruwan Bandara", amount: 4000, method: "Cash", created_at: new Date(Date.now() - 45 * 60000).toISOString() },
+    { transaction_id: "TXN-004", student_name: "Amala Fernando", amount: 3000, method: "Card (PayHere)", created_at: new Date(Date.now() - 120 * 60000).toISOString() },
+    { transaction_id: "TXN-005", student_name: "Tharaka Peiris", amount: 3500, method: "Card (PayHere)", created_at: new Date(Date.now() - 180 * 60000).toISOString() },
+  ]);
 
   useEffect(() => {
     // 1. Set Greeting based on Time
@@ -42,42 +47,6 @@ export default function AdminDashboard() {
     if (user && user.name) {
       setAdminName(user.name.split(" ")[0] || "Admin"); 
     }
-
-    // 3. Fetch Dashboard Data
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        
-        // A. Fetch Admin Stats (Replace with actual endpoint)
-        const statsRes = await authFetch(`${API}/admin/dashboard/stats`);
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          setStats({
-            monthlyRevenue: statsData.monthly_revenue || 0,
-            revenueGrowth: statsData.revenue_growth || 0,
-            totalStudents: statsData.total_students || 0,
-            newStudents: statsData.new_students || 0,
-            activeCourses: statsData.active_courses || 0,
-            systemStatus: statsData.system_status || "Operational"
-          });
-        }
-
-        // B. Fetch Recent Payments (Replace with actual endpoint)
-        const paymentsRes = await authFetch(`${API}/admin/finance/recent`);
-        if (paymentsRes.ok) {
-          const paymentsData = await paymentsRes.json();
-          setRecentPayments(Array.isArray(paymentsData) ? paymentsData : []);
-        }
-
-      } catch (error) {
-        console.error("Failed to load dashboard data:", error);
-        setStats(prev => ({ ...prev, systemStatus: "Degraded" }));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
   }, []);
 
   // Helper to format timestamps to readable time (e.g., "10:30 AM")
@@ -105,7 +74,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500">Monthly Revenue</p>
               <h3 className="text-3xl font-bold text-gray-900 mt-1">
-                {loading ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" /> : `Rs. ${stats.monthlyRevenue.toLocaleString()}`}
+                Rs. {stats.monthlyRevenue.toLocaleString()}
               </h3>
             </div>
             <div className="p-2 bg-green-100 text-green-600 rounded-lg">
@@ -124,7 +93,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Students</p>
               <h3 className="text-3xl font-bold text-gray-900 mt-1">
-                {loading ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" /> : stats.totalStudents.toLocaleString()}
+                {stats.totalStudents.toLocaleString()}
               </h3>
             </div>
             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
@@ -132,7 +101,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="mt-4 text-xs text-gray-500">
-            {stats.newStudents} new enrollments this week
+            <span className="font-bold text-blue-600">+{stats.newStudents}</span> new enrollments this week
           </div>
         </div>
 
@@ -142,7 +111,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500">Active Courses</p>
               <h3 className="text-3xl font-bold text-gray-900 mt-1">
-                {loading ? <Loader2 className="w-6 h-6 animate-spin text-gray-300 mt-2" /> : stats.activeCourses}
+                {stats.activeCourses}
               </h3>
             </div>
             <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
@@ -160,7 +129,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500">System Status</p>
               <h3 className={`text-xl font-bold mt-2 ${stats.systemStatus === 'Operational' ? 'text-gray-900' : 'text-red-600'}`}>
-                {loading ? <Loader2 className="w-5 h-5 animate-spin text-gray-300" /> : stats.systemStatus}
+                {stats.systemStatus}
               </h3>
             </div>
             <div className={`p-2 rounded-lg ${stats.systemStatus === 'Operational' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
@@ -192,14 +161,7 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600 mb-2" />
-                      Loading transactions...
-                    </td>
-                  </tr>
-                ) : recentPayments.length === 0 ? (
+                {recentPayments.length === 0 ? (
                   <tr>
                     <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
                       No recent transactions found.
@@ -210,7 +172,7 @@ export default function AdminDashboard() {
                     <tr key={pay.transaction_id || idx} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">{pay.student_name}</td>
                       <td className="px-6 py-4 text-sm text-green-600 font-bold">Rs. {pay.amount?.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500">{pay.method || "Online"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{pay.method}</td>
                       <td className="px-6 py-4 text-sm text-gray-400 font-mono">{formatTime(pay.created_at)}</td>
                     </tr>
                   ))
