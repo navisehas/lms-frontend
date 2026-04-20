@@ -241,6 +241,16 @@ function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
     return { isValid: true, value: value.trim() };
   };
 
+  // Convert a File object to a base64 data URL string
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result); // "data:<mime>;base64,..."
+      reader.onerror = () => reject(new Error("File read failed"));
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function handleSave() {
     const subtopicValidation = validateSubtopic(subtopic);
     if (!subtopicValidation.isValid) {
@@ -258,27 +268,55 @@ function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
 
     setSaving(true); setErr(""); setSubtopicError(false);
     try {
-      const fd = new FormData();
-      if (isEdit) fd.append("title", title.trim());
-      fd.append("material_type", resolvedType);
-      fd.append("subtopic", subtopicValidation.value);
-      if (lessonId) fd.append("lesson_id", lessonId);
-      if (courseId) fd.append("course_id", courseId);
-      if (externalUrl.trim()) fd.append("external_url", externalUrl.trim());
-      for (let i = 0; i < files.length; i++) fd.append("files", files[i]);
-
-      const url = isEdit ? `${API}/materials/${material.material_id}` : `${API}/materials`;
+      const url    = isEdit ? `${API}/materials/${material.material_id}` : `${API}/materials`;
       const method = isEdit ? "PUT" : "POST";
-      const res = await authFetch(url, { method, body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || "Failed to save.");
 
-      if (isEdit) {
+      if (isEdit || files.length === 0) {
+        // Edit mode OR link-only: single JSON request
+        const file_base64 = files.length > 0 ? await fileToBase64(files[0]) : undefined;
+        const body = {
+          title:         isEdit ? title.trim() : (files[0]?.name || "Material"),
+          material_type: resolvedType,
+          subtopic:      subtopicValidation.value,
+          lesson_id:     lessonId  || undefined,
+          course_id:     courseId  || undefined,
+          external_url:  externalUrl.trim() || undefined,
+          file_base64,
+        };
+        const res  = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || "Failed to save.");
         onSaved(data.material);
       } else {
-        if (data.materials && Array.isArray(data.materials)) {
-          data.materials.forEach(mat => onSaved(mat));
-        } else if (data.material) {
+        // New upload with multiple files: send one request per file sequentially
+        for (const file of files) {
+          const file_base64 = await fileToBase64(file);
+          const body = {
+            title:         file.name,
+            material_type: detectTypeFromFile(file),
+            subtopic:      subtopicValidation.value,
+            lesson_id:     lessonId || undefined,
+            course_id:     courseId || undefined,
+            file_base64,
+          };
+          const res  = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || `Failed to upload ${file.name}`);
+          onSaved(data.material);
+        }
+        // If external link also provided alongside files, send as separate request
+        if (externalUrl.trim()) {
+          const body = {
+            title:         title.trim() || "External Link",
+            material_type: detectTypeFromUrl(externalUrl.trim()) || "LINK",
+            subtopic:      subtopicValidation.value,
+            lesson_id:     lessonId || undefined,
+            course_id:     courseId || undefined,
+            external_url:  externalUrl.trim(),
+          };
+          const res  = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || "Failed to save link.");
           onSaved(data.material);
         }
       }
@@ -552,8 +590,11 @@ function MaterialRow({ material, onEdit, onDelete }) {
               </a>
             )}
             {material.content_url && (
-              <a href={`${API}${material.content_url}`} target="_blank" rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-600 transition" title="View file">
+              <a
+                href={material.content_url.startsWith("data:") ? material.content_url : `${API}${material.content_url}`}
+                target="_blank" rel="noopener noreferrer"
+                download={material.content_url.startsWith("data:") ? material.title : undefined}
+                className="text-blue-400 hover:text-blue-600 transition" title="View / Download file">
                 <FileText size={11} />
               </a>
             )}
