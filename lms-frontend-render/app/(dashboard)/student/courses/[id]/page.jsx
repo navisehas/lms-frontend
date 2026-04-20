@@ -169,16 +169,16 @@ function CourseProgressBanner({ totalFiles, completedCount }) {
               <CheckCircle size={14} /> Course Completed! 🎉
             </p>
             <p className="text-xs text-green-600 mt-0.5">
-              ඔබ materials {totalFiles} ම සම්පූර්ණ කළා!
+              You have completed all {totalFiles} material{totalFiles !== 1 ? "s" : ""}!
             </p>
           </>
         ) : (
           <>
             <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-              <TrendingUp size={14} className="text-blue-500" /> ඔබේ Progress
+              <TrendingUp size={14} className="text-blue-500" /> Your Progress
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {completedCount} / {totalFiles} materials සම්පූර්ණ යි
+              {completedCount} / {totalFiles} material{totalFiles !== 1 ? "s" : ""} completed
             </p>
           </>
         )}
@@ -552,7 +552,7 @@ export default function CourseDetailsPage() {
   const loadProgress = useCallback(async () => {
     if (!courseId || !userRef.current || userRef.current.role !== "STUDENT") return;
     try {
-      const res = await authFetch(`${API}/api/courses/${courseId}/progress`);
+      const res = await authFetch(`${API}/courses/${courseId}/progress`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && Array.isArray(data.completed_material_ids)) {
@@ -577,7 +577,7 @@ export default function CourseDetailsPage() {
     });
 
     try {
-      const res = await authFetch(`${API}/api/courses/${courseId}/progress`, {
+      const res = await authFetch(`${API}/courses/${courseId}/progress`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ material_id: materialId, completed: isNowCompleted }),
@@ -652,8 +652,8 @@ export default function CourseDetailsPage() {
 
       try {
         const [courseRes, materialsRes] = await Promise.all([
-          authFetch(`${API}/api/courses/${courseId}`),
-          authFetch(`${API}/api/courses/${courseId}/materials`),
+          authFetch(`${API}/courses/${courseId}`),
+          authFetch(`${API}/courses/${courseId}/materials`),
         ]);
 
         if (!courseRes.ok) { setError("Course not found."); setLoading(false); return; }
@@ -672,7 +672,7 @@ export default function CourseDetailsPage() {
 
         // Load lessons list
         try {
-          const lessonsRes = await authFetch(`${API}/api/lessons/course/${courseId}`);
+          const lessonsRes = await authFetch(`${API}/lessons/course/${courseId}`);
           if (lessonsRes.ok) {
             const ld = await lessonsRes.json();
             setLessons(ld.lessons || []);
@@ -697,7 +697,7 @@ export default function CourseDetailsPage() {
   // ── Poll for enrollment ───────────────────────────────────────────────────
   const checkEnrollment = useCallback(async () => {
     try {
-      const res = await authFetch(`${API}/api/courses/${courseId}/materials`);
+      const res = await authFetch(`${API}/courses/${courseId}/materials`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
