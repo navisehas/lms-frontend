@@ -14,21 +14,21 @@ export default function AdminDashboard() {
   
   // 1. HARDCODED STATS
   const [stats] = useState({
-    monthlyRevenue: 1254000, // Rs. 1,254,000
+    monthlyRevenue: 1754000, // Rs. 1,254,000
     revenueGrowth: 12.5,     // +12.5%
-    totalStudents: 5240,
-    newStudents: 142,
-    activeCourses: 48,
+    totalStudents: 540,
+    newStudents: 42,
+    activeCourses: 6,
     systemStatus: "Operational"
   });
   
   // 2. HARDCODED RECENT TRANSACTIONS
   const [recentPayments] = useState([
-    { transaction_id: "TXN-001", student_name: "Kamal Perera", amount: 3500, method: "Card (PayHere)", created_at: new Date().toISOString() },
-    { transaction_id: "TXN-002", student_name: "Nimali Silva", amount: 2500, method: "Bank Transfer", created_at: new Date(Date.now() - 15 * 60000).toISOString() },
-    { transaction_id: "TXN-003", student_name: "Ruwan Bandara", amount: 4000, method: "Cash", created_at: new Date(Date.now() - 45 * 60000).toISOString() },
-    { transaction_id: "TXN-004", student_name: "Amala Fernando", amount: 3000, method: "Card (PayHere)", created_at: new Date(Date.now() - 120 * 60000).toISOString() },
-    { transaction_id: "TXN-005", student_name: "Tharaka Peiris", amount: 3500, method: "Card (PayHere)", created_at: new Date(Date.now() - 180 * 60000).toISOString() },
+    { transaction_id: "TXN-001", student_name: "THisen Nambukara", amount: 3500, method: "Card (PayHere)", created_at: new Date().toISOString() },
+    { transaction_id: "TXN-002", student_name: "Naviru Sehas", amount: 2500, method: "Bank Transfer", created_at: new Date(Date.now() - 15 * 60000).toISOString() },
+    { transaction_id: "TXN-003", student_name: "Sajana Hasanga", amount: 4000, method: "Cash", created_at: new Date(Date.now() - 45 * 60000).toISOString() },
+    { transaction_id: "TXN-004", student_name: "Tharidi Gamage", amount: 3000, method: "Card (PayHere)", created_at: new Date(Date.now() - 120 * 60000).toISOString() },
+    { transaction_id: "TXN-005", student_name: "Yasindu Mihiranga", amount: 3500, method: "Card (PayHere)", created_at: new Date(Date.now() - 180 * 60000).toISOString() },
   ]);
 
   useEffect(() => {
