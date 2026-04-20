@@ -145,7 +145,7 @@ export default function AdminComplaintsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <AlertTriangle className="text-orange-500" size={26} /> Complaints Management
+            <AlertTriangle className="text-blue-800" size={26} /> Complaints Management
           </h1>
           <p className="text-sm text-gray-500 mt-1">Review and respond to all complaints.</p>
         </div>
@@ -167,7 +167,7 @@ export default function AdminComplaintsPage() {
           { key: "RESOLVED",  label: "Resolved",  color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
         ].map(({ key, label, color }) => (
           <button key={key} onClick={() => setFilter(key)}
-            className={`rounded-xl border p-4 text-left transition-all ${color} ${filter === key ? "ring-2 ring-offset-1 ring-orange-400 shadow-md" : "hover:shadow-sm"}`}>
+            className={`rounded-xl border p-4 text-left transition-all ${color} ${filter === key ? "ring-2 ring-offset-1 ring-blue-800 shadow-md" : "hover:shadow-sm"}`}>
             <p className="text-2xl font-bold">{counts[key]}</p>
             <p className="text-xs font-semibold mt-0.5">{label}</p>
           </button>
@@ -186,7 +186,7 @@ export default function AdminComplaintsPage() {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search by name, ID, subject..."
-            className="w-full pl-9 pr-4 py-2.5 text-sm text-gray-900 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-orange-200" />
+            className="w-full pl-9 pr-4 py-2.5 text-sm text-gray-900 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
       </div>
 
@@ -206,7 +206,7 @@ export default function AdminComplaintsPage() {
             const isUpdating = updating && updating.startsWith(c.complaint_id);
             return (
               <div key={c.complaint_id}
-                className={`bg-white rounded-2xl border shadow-sm transition-all ${c.status === "PENDING" ? "border-amber-200" : "border-gray-100"}`}>
+                className={`bg-white rounded-2xl border shadow-sm transition-all ${c.status === "PENDING" ? "border-blue-200" : "border-gray-100"}`}>
 
                 {/* Row */}
                 <div
@@ -266,7 +266,7 @@ export default function AdminComplaintsPage() {
                         onChange={(e) => setResponseText(prev => ({ ...prev, [c.complaint_id]: e.target.value }))}
                         placeholder="Write a response to this user..."
                         rows={2}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-200 bg-white resize-none"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white resize-none"
                       />
                     </div>
 
