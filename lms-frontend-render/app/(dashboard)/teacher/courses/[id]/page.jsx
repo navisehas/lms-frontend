@@ -203,6 +203,14 @@ function detectMaterialType(material) {
 
   const cUrl = (material.content_url || "").toLowerCase();
   if (cUrl) {
+    // Base64 data URL — extract MIME type from "data:<mime>;base64,..."
+    if (cUrl.startsWith("data:")) {
+      const mime = cUrl.split(";")[0].replace("data:", "");
+      if (mime === "application/pdf") return "PDF";
+      if (mime.startsWith("video/")) return "VIDEO";
+      if (mime.startsWith("image/")) return "IMAGE";
+      return "DOC";
+    }
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
     if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
@@ -565,6 +573,13 @@ function MaterialRow({ material, onEdit, onDelete }) {
   const [deleting, setDeleting] = useState(false);
   const resolvedType = detectMaterialType(material);
 
+  // Build the correct href for uploaded files (base64 data URL or server path)
+  const fileHref = material.content_url
+    ? (material.content_url.startsWith("data:")
+        ? material.content_url
+        : `${API}${material.content_url}`)
+    : null;
+
   async function handleDelete() {
     if (!confirm(`Delete "${material.title}"?`)) return;
     setDeleting(true);
@@ -581,38 +596,65 @@ function MaterialRow({ material, onEdit, onDelete }) {
           {getFileIcon(material.title, resolvedType)}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
-            {material.external_url && (
-              <a href={material.external_url} target="_blank" rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-600 transition" title="Open link">
-                <ExternalLink size={11} />
-              </a>
-            )}
-            {material.content_url && (
-              <a
-                href={material.content_url.startsWith("data:") ? material.content_url : `${API}${material.content_url}`}
-                target="_blank" rel="noopener noreferrer"
-                download={material.content_url.startsWith("data:") ? material.title : undefined}
-                className="text-blue-400 hover:text-blue-600 transition" title="View / Download file">
-                <FileText size={11} />
-              </a>
-            )}
-          </div>
+          <span className="text-sm font-semibold text-gray-800 truncate block">{material.title}</span>
           <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(resolvedType)}`}>
             {resolvedType}
           </span>
         </div>
       </div>
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={() => onEdit(material)}
-          className="w-7 h-7 rounded-lg hover:bg-blue-100 flex items-center justify-center text-blue-600 transition">
-          <Edit2 size={12} />
-        </button>
-        <button onClick={handleDelete} disabled={deleting}
-          className="w-7 h-7 rounded-lg hover:bg-red-50 flex items-center justify-center text-red-400 hover:text-red-600 transition disabled:opacity-50">
-          {deleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
-        </button>
+
+      {/* Action buttons — always visible on right */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+
+        {/* View button — for uploaded files */}
+        {fileHref && (
+          <a
+            href={fileHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1.5 rounded-lg transition-colors"
+            title="View file"
+          >
+            <FileText size={11} /> View
+          </a>
+        )}
+
+        {/* Download button — for base64 files (direct download) */}
+        {fileHref && material.content_url.startsWith("data:") && (
+          <a
+            href={fileHref}
+            download={material.title}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 px-2.5 py-1.5 rounded-lg transition-colors"
+            title="Download file"
+          >
+            <FileText size={11} /> Download
+          </a>
+        )}
+
+        {/* Open button — for external links */}
+        {material.external_url && (
+          <a
+            href={material.external_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1.5 rounded-lg transition-colors"
+            title="Open link"
+          >
+            <ExternalLink size={11} /> Open
+          </a>
+        )}
+
+        {/* Edit & Delete — visible on hover */}
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onEdit(material)}
+            className="w-7 h-7 rounded-lg hover:bg-blue-100 flex items-center justify-center text-blue-600 transition">
+            <Edit2 size={12} />
+          </button>
+          <button onClick={handleDelete} disabled={deleting}
+            className="w-7 h-7 rounded-lg hover:bg-red-50 flex items-center justify-center text-red-400 hover:text-red-600 transition disabled:opacity-50">
+            {deleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+          </button>
+        </div>
       </div>
     </div>
   );
