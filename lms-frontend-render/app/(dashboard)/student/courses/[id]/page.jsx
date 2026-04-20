@@ -18,24 +18,13 @@ const POLL_INTERVAL = 5000;
 
 function getMaterialHref(value) {
   if (!value) return null;
-  if (value.startsWith("data:")) return value;       // base64 — use directly
-  if (/^https?:\/\//i.test(value)) return value;   // external URL
+  if (/^https?:\/\//i.test(value)) return value;
   const path = value.startsWith("/") ? value : `/${value}`;
   return `${API}${path}`;
 }
 
 const handleDownload = async (url, filename) => {
   try {
-    // base64 data URL — create anchor and trigger download directly
-    if (url.startsWith("data:")) {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename || "download";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      return;
-    }
     if (url.startsWith("http")) { window.open(url, "_blank"); return; }
     const response = await authFetch(url, { method: "GET" });
     if (!response.ok) throw new Error("Download failed");
@@ -72,20 +61,12 @@ function detectMaterialType(material) {
     if (exUrl.startsWith("http")) return "LINK";
   }
 
-  const cUrl = (material.resource_link || "").toLowerCase();
-  if (cUrl && !cUrl.startsWith("data:")) {
+  const cUrl = (material.content_url || "").toLowerCase();
+  if (cUrl) {
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
     if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
     if (cUrl.match(/\.(doc|docx|ppt|pptx|xls|xlsx)(\?|#|$)/)) return "DOC";
-  }
-
-  // For base64 data URLs, detect type from mimetype prefix
-  if (cUrl.startsWith("data:")) {
-    const mime = cUrl.split(";")[0].replace("data:", "");
-    if (mime === "application/pdf") return "PDF";
-    if (mime.startsWith("video/")) return "VIDEO";
-    if (mime.startsWith("image/")) return "IMAGE";
   }
 
   const explicit = material.material_type?.toUpperCase();
@@ -216,7 +197,7 @@ function CourseProgressBanner({ totalFiles, completedCount }) {
 
 // ─── Material Row ─────────────────────────────────────────────────────────────
 function MaterialCard({ material, index, isCompleted, onToggleComplete, toggling }) {
-  const downloadUrl = getMaterialHref(material.resource_link);
+  const downloadUrl = getMaterialHref(material.content_url);
   const externalUrl = material.external_url;
   const resolvedType = detectMaterialType(material);
 
@@ -251,7 +232,7 @@ function MaterialCard({ material, index, isCompleted, onToggleComplete, toggling
 
       {/* Actions */}
       <div className="flex gap-2 flex-shrink-0 items-center">
-        {downloadUrl && material.resource_link && (
+        {downloadUrl && material.content_url && (
           <a
             href={downloadUrl}
             target="_blank"
