@@ -192,30 +192,20 @@ function detectMaterialType(material) {
   if (["jpg","jpeg","png","gif","webp","svg","bmp"].includes(ext)) return "IMAGE";
   if (["ppt","pptx","xls","xlsx","doc","docx","txt","rtf","odt","sql","csv","json","xml","zip","rar"].includes(ext)) return "DOC";
 
-  // Check external_url (new schema) then resource_link (old alias)
-  const exUrl = (material.external_url || material.resource_link || "").toLowerCase();
-  if (exUrl && exUrl.startsWith("http")) {
+  const exUrl = (material.external_url || "").toLowerCase();
+  if (exUrl) {
     if (exUrl.includes("zoom.us") || exUrl.includes("meet.google") || exUrl.includes("teams.microsoft") || exUrl.includes("webex.com") || exUrl.includes("whereby.com")) return "MEETING";
     if (exUrl.includes("youtube.com") || exUrl.includes("youtu.be") || exUrl.includes("vimeo.com") || exUrl.includes("loom.com")) return "VIDEO";
     if (exUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (exUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
-    return "LINK";
+    if (exUrl.startsWith("http")) return "LINK";
   }
 
-  // Check content_url for file-path based type hints
   const cUrl = (material.content_url || "").toLowerCase();
-  if (cUrl && !cUrl.startsWith("data:")) {
+  if (cUrl) {
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
     if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
-  }
-
-  // For base64 data URLs, detect from mimetype prefix
-  if (cUrl.startsWith("data:")) {
-    const mime = cUrl.split(";")[0].replace("data:", "");
-    if (mime === "application/pdf") return "PDF";
-    if (mime.startsWith("video/")) return "VIDEO";
-    if (mime.startsWith("image/")) return "IMAGE";
   }
 
   const explicit = material.material_type?.toUpperCase();
@@ -228,7 +218,7 @@ function detectMaterialType(material) {
 function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
   const isEdit = Boolean(material);
   const [title, setTitle] = useState(material?.title || "");
-  const [externalUrl, setExternalUrl] = useState(material?.external_url || (material?.resource_link && !material.resource_link.startsWith('data:') ? material.resource_link : "") || "");
+  const [externalUrl, setExternalUrl] = useState(material?.external_url || "");
   const [files, setFiles] = useState([]);
   const [type, setType] = useState(material?.material_type || null);
   const [subtopic, setSubtopic] = useState(material?.subtopic || "");
@@ -555,25 +545,16 @@ function MaterialRow({ material, onEdit, onDelete }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
-            {(material.content_url || material.resource_link) && (() => {
-              const raw = material.content_url || material.resource_link;
-              const href = raw.startsWith("data:") ? raw : raw.startsWith("http") ? raw : `${API}${raw}`;
-              return (
-                <a
-                  href={href}
-                  download={raw.startsWith("data:") ? material.title : undefined}
-                  target="_blank" rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-600 transition" title="View / Download">
-                  <FileText size={11} />
-                </a>
-              );
-            })()}
             {material.external_url && (
-              <a
-                href={material.external_url}
-                target="_blank" rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-600 transition" title="Open Link">
+              <a href={material.external_url} target="_blank" rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-600 transition" title="Open link">
                 <ExternalLink size={11} />
+              </a>
+            )}
+            {material.content_url && (
+              <a href={`${API}${material.content_url}`} target="_blank" rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-600 transition" title="View file">
+                <FileText size={11} />
               </a>
             )}
           </div>
