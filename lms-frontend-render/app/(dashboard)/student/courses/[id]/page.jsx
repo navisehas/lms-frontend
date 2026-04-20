@@ -18,6 +18,8 @@ const POLL_INTERVAL = 5000;
 
 function getMaterialHref(value) {
   if (!value) return null;
+  // Base64 data URL — use directly (stored in DB, no server path needed)
+  if (value.startsWith("data:")) return value;
   if (/^https?:\/\//i.test(value)) return value;
   const path = value.startsWith("/") ? value : `/${value}`;
   return `${API}${path}`;
@@ -25,6 +27,16 @@ function getMaterialHref(value) {
 
 const handleDownload = async (url, filename) => {
   try {
+    // Base64 data URL — create a download link directly without fetching
+    if (url.startsWith("data:")) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "download";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
     if (url.startsWith("http")) { window.open(url, "_blank"); return; }
     const response = await authFetch(url, { method: "GET" });
     if (!response.ok) throw new Error("Download failed");
@@ -670,7 +682,7 @@ export default function CourseDetailsPage() {
           setIsEnrolled(false);
         }
 
-        // Load lessons list
+        // Load lessons for ordering/descriptions — merge after materials already set
         try {
           const lessonsRes = await authFetch(`${API}/lessons/course/${courseId}`);
           if (lessonsRes.ok) {
