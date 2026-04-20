@@ -192,7 +192,7 @@ function detectMaterialType(material) {
   if (["jpg","jpeg","png","gif","webp","svg","bmp"].includes(ext)) return "IMAGE";
   if (["ppt","pptx","xls","xlsx","doc","docx","txt","rtf","odt","sql","csv","json","xml","zip","rar"].includes(ext)) return "DOC";
 
-  const exUrl = (material.external_url || "").toLowerCase();
+  const exUrl = (material.resource_link || "").toLowerCase();
   if (exUrl) {
     if (exUrl.includes("zoom.us") || exUrl.includes("meet.google") || exUrl.includes("teams.microsoft") || exUrl.includes("webex.com") || exUrl.includes("whereby.com")) return "MEETING";
     if (exUrl.includes("youtube.com") || exUrl.includes("youtu.be") || exUrl.includes("vimeo.com") || exUrl.includes("loom.com")) return "VIDEO";
@@ -201,7 +201,7 @@ function detectMaterialType(material) {
     if (exUrl.startsWith("http")) return "LINK";
   }
 
-  const cUrl = (material.content_url || "").toLowerCase();
+  const cUrl = (material.resource_link || "").toLowerCase();
   if (cUrl) {
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
@@ -218,7 +218,7 @@ function detectMaterialType(material) {
 function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
   const isEdit = Boolean(material);
   const [title, setTitle] = useState(material?.title || "");
-  const [externalUrl, setExternalUrl] = useState(material?.external_url || "");
+  const [externalUrl, setExternalUrl] = useState((material?.resource_link && !material.resource_link.startsWith('data:')) ? material.resource_link : "");
   const [files, setFiles] = useState([]);
   const [type, setType] = useState(material?.material_type || null);
   const [subtopic, setSubtopic] = useState(material?.subtopic || "");
@@ -545,15 +545,12 @@ function MaterialRow({ material, onEdit, onDelete }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
-            {material.external_url && (
-              <a href={material.external_url} target="_blank" rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-600 transition" title="Open link">
-                <ExternalLink size={11} />
-              </a>
-            )}
-            {material.content_url && (
-              <a href={`${API}${material.content_url}`} target="_blank" rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-600 transition" title="View file">
+            {material.resource_link && (
+              <a
+                href={material.resource_link.startsWith("data:") ? material.resource_link : material.resource_link.startsWith("http") ? material.resource_link : `${API}${material.resource_link}`}
+                download={material.resource_link.startsWith("data:") ? material.title : undefined}
+                target="_blank" rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-600 transition" title="View / Download">
                 <FileText size={11} />
               </a>
             )}
