@@ -2,8 +2,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Calendar, Search, Edit2, Trash2, 
-  CheckCircle, XCircle, X, Loader, BookOpen, AlertTriangle, UserMinus, AlertCircle, FileText, DownloadCloud, FileDown, Clock
+  Calendar, Search, CheckCircle, XCircle, X, 
+  Loader, BookOpen, UserMinus, AlertCircle, 
+  FileText, DownloadCloud, FileDown, Clock
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 import jsPDF from "jspdf";
@@ -28,20 +29,12 @@ export default function TeacherAttendanceLog() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCourse, setFilterCourse] = useState("ALL");
   
-  const [updateModal, setUpdateModal] = useState({ isOpen: false, record: null });
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, record: null });
   const [absentModal, setAbsentModal] = useState({ isOpen: false, courseId: "", date: getLocalISODate() });
   
   // Report Modal State
   const [reportModal, setReportModal] = useState({ isOpen: false, type: "STUDENT" });
-
   const [alertPopup, setAlertPopup] = useState({ isOpen: false, type: "success", message: "" });
   
-  const [editCourseId, setEditCourseId] = useState(""); 
-  const [studentCourses, setStudentCourses] = useState([]); 
-  const [fetchingCourses, setFetchingCourses] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isMarkingAbsents, setIsMarkingAbsents] = useState(false);
 
   const showAlert = (type, message) => {
@@ -61,7 +54,6 @@ export default function TeacherAttendanceLog() {
 
   const fetchAttendance = async (id) => {
     try {
-      // Fetch ONLY attendance records for this specific teacher's courses
       const res = await authFetch(`${API}/teacher/${id}/attendance`);
       if (res.ok) setAttendanceData(await res.json());
     } catch (error) {
@@ -73,7 +65,6 @@ export default function TeacherAttendanceLog() {
 
   const fetchMyCourses = async (id) => {
     try {
-      // Fetch ONLY courses taught by this teacher
       const res = await authFetch(`${API}/teacher/${id}/courses`);
       if (res.ok) setMyCourses(await res.json());
     } catch (error) {
@@ -82,75 +73,6 @@ export default function TeacherAttendanceLog() {
   };
 
   const uniqueCoursesFilter = [...new Set(attendanceData.map(item => item.course))];
-
-  const openUpdateModal = async (record) => {
-    setUpdateModal({ isOpen: true, record });
-    setEditCourseId(record.course_id); 
-    setFetchingCourses(true);
-    try {
-      // Verify which of the TEACHER'S courses this student is actually enrolled in
-      const res = await authFetch(`${API}/student/${record.studentId}/courses`);
-      const allStudentCourses = await res.json();
-      
-      // Filter down to only courses that belong to THIS teacher
-      const myCourseIds = myCourses.map(c => c.course_id);
-      const intersectingCourses = allStudentCourses.filter(c => myCourseIds.includes(c.course_id));
-      
-      setStudentCourses(intersectingCourses);
-    } catch (error) {
-      showAlert("error", "Failed to load student courses");
-      setUpdateModal({ isOpen: false, record: null });
-    } finally {
-      setFetchingCourses(false);
-    }
-  };
-
-  const submitUpdate = async () => {
-    setIsSaving(true);
-    try {
-      const res = await authFetch(`${API}/attendance/${updateModal.record.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ course_id: editCourseId })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const selectedCourse = studentCourses.find(c => c.course_id === editCourseId);
-        setAttendanceData(attendanceData.map(item => 
-          item.id === updateModal.record.id ? { ...item, course_id: editCourseId, course: selectedCourse.title } : item
-        ));
-        setUpdateModal({ isOpen: false, record: null });
-        showAlert("success", "Course updated successfully!");
-      } else {
-        showAlert("error", data.error || "Failed to update course");
-      }
-    } catch (error) {
-      showAlert("error", "Server connection failed");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const submitDelete = async () => {
-    setIsDeleting(true);
-    try {
-      const res = await authFetch(`${API}/attendance/${deleteModal.record.id}`, { 
-        method: "DELETE" 
-      });
-      
-      if (res.ok) {
-        setAttendanceData(attendanceData.filter(item => item.id !== deleteModal.record.id));
-        setDeleteModal({ isOpen: false, record: null });
-        showAlert("success", "Record deleted successfully!");
-      } else {
-        const data = await res.json();
-        showAlert("error", data.error || "Failed to delete record.");
-      }
-    } catch (error) {
-      showAlert("error", "Server connection failed");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   const submitBulkAbsents = async () => {
     if (!absentModal.courseId) return showAlert("error", "Please select a course first.");
@@ -249,7 +171,6 @@ export default function TeacherAttendanceLog() {
       return stats;
     }).sort((a, b) => a.key.localeCompare(b.key));
   }, [filteredData, reportModal.isOpen, reportModal.type]);
-
 
   const getActiveFiltersString = () => {
     const activeFilters = [];
@@ -611,7 +532,6 @@ export default function TeacherAttendanceLog() {
                   <th className="px-6 py-4 font-bold bg-gray-50">Student Details</th>
                   <th className="px-6 py-4 font-bold bg-gray-50">Date & Time</th>
                   <th className="px-6 py-4 font-bold bg-gray-50">Status</th>
-                  <th className="px-6 py-4 font-bold text-right bg-gray-50">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
@@ -639,20 +559,10 @@ export default function TeacherAttendanceLog() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => openUpdateModal(item)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition">
-                          <Edit2 size={16} />
-                        </button>
-                        <button onClick={() => setDeleteModal({ isOpen: true, record: item })} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="4" className="px-6 py-16 text-center text-gray-400 bg-white">
+                    <td colSpan="3" className="px-6 py-16 text-center text-gray-400 bg-white">
                       <div className="flex flex-col items-center">
                         <Search className="w-10 h-10 text-gray-300 mb-3" />
                         <p className="font-medium text-gray-500">No attendance records found.</p>
@@ -812,62 +722,6 @@ export default function TeacherAttendanceLog() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* UPDATE MODAL - FIXED SCROLLING & FORM SUBMISSION */}
-      {updateModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center p-6 border-b border-gray-100 shrink-0">
-              <h2 className="text-xl font-bold text-gray-900">Edit Attendance Course</h2>
-              <button onClick={() => setUpdateModal({ isOpen: false, record: null })} className="text-gray-400 hover:text-gray-600 transition p-1 rounded-md hover:bg-gray-100"><X size={20} /></button>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); submitUpdate(); }} className="flex flex-col flex-1 overflow-hidden">
-              <div className="p-6 space-y-5 overflow-y-auto flex-1">
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Student</p>
-                  <p className="font-bold text-gray-900">{updateModal.record.name} <span className="font-mono text-xs text-gray-500 font-normal ml-1">({updateModal.record.studentId})</span></p>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Change Course to:</label>
-                  {fetchingCourses ? (
-                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg flex items-center gap-2 text-sm font-medium border border-indigo-100"><Loader size={16} className="animate-spin" /> Fetching enrolled courses...</div>
-                  ) : (
-                    <select value={editCourseId} onChange={(e) => setEditCourseId(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium text-gray-900 bg-white transition">
-                      {studentCourses.length === 0 && <option value="">No courses enrolled with you</option>}
-                      {studentCourses.map(c => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
-                    </select>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-3 p-4 border-t border-gray-100 bg-gray-50 shrink-0">
-                <button type="button" onClick={() => setUpdateModal({ isOpen: false, record: null })} className="flex-1 px-4 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition shadow-sm">Cancel</button>
-                <button type="submit" disabled={fetchingCourses || studentCourses.length === 0 || isSaving} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-indigo-400 font-bold transition flex items-center justify-center gap-2 shadow-sm">
-                  {isSaving ? <><Loader size={16} className="animate-spin"/> Saving...</> : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE MODAL - FIXED STRUCTURE */}
-      {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200 text-center p-6">
-            <div className="overflow-y-auto">
-              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100"><AlertTriangle size={32} /></div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Record?</h2>
-              <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete the attendance record for <span className="font-bold text-gray-700">{deleteModal.record?.name}</span> on <span className="font-bold text-gray-700">{deleteModal.record?.course}</span>? This action cannot be undone.</p>
-              <div className="flex gap-3">
-                <button onClick={() => setDeleteModal({ isOpen: false, record: null })} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition shadow-sm">Cancel</button>
-                <button onClick={submitDelete} disabled={isDeleting} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:bg-red-400 font-bold transition flex items-center justify-center gap-2 shadow-sm">
-                  {isDeleting ? <><Loader size={16} className="animate-spin"/> Deleting...</> : "Yes, Delete"}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
