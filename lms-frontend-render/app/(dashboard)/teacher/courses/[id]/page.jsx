@@ -158,7 +158,7 @@ function DropZone({ files, onChange, onRemove }) {
             <p className="text-sm font-semibold text-gray-700">
               {dragging ? "Drop files here" : "Drag & drop files here"}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">or <span className="text-blue-600 font-medium">browse</span> to upload · PDF, DOC, MP4, images… (max 25 MB each)</p>
+            <p className="text-xs text-gray-400 mt-0.5">or <span className="text-blue-600 font-medium">browse</span> to upload · PDF, DOC, MP4, images… (max 50 MB each)</p>
           </div>
         </div>
         <input ref={fileRef} type="file" multiple className="hidden" onChange={handleFileChange} />
