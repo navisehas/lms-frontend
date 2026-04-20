@@ -18,13 +18,24 @@ const POLL_INTERVAL = 5000;
 
 function getMaterialHref(value) {
   if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("data:")) return value;       // base64 — use directly
+  if (/^https?:\/\//i.test(value)) return value;   // external URL
   const path = value.startsWith("/") ? value : `/${value}`;
   return `${API}${path}`;
 }
 
 const handleDownload = async (url, filename) => {
   try {
+    // base64 data URL — create anchor and trigger download directly
+    if (url.startsWith("data:")) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "download";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
     if (url.startsWith("http")) { window.open(url, "_blank"); return; }
     const response = await authFetch(url, { method: "GET" });
     if (!response.ok) throw new Error("Download failed");
@@ -61,7 +72,7 @@ function detectMaterialType(material) {
     if (exUrl.startsWith("http")) return "LINK";
   }
 
-  const cUrl = (material.content_url || "").toLowerCase();
+  const cUrl = (material.resource_link || "").toLowerCase();
   if (cUrl) {
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
@@ -197,7 +208,7 @@ function CourseProgressBanner({ totalFiles, completedCount }) {
 
 // ─── Material Row ─────────────────────────────────────────────────────────────
 function MaterialCard({ material, index, isCompleted, onToggleComplete, toggling }) {
-  const downloadUrl = getMaterialHref(material.content_url);
+  const downloadUrl = getMaterialHref(material.resource_link);
   const externalUrl = material.external_url;
   const resolvedType = detectMaterialType(material);
 
@@ -232,7 +243,7 @@ function MaterialCard({ material, index, isCompleted, onToggleComplete, toggling
 
       {/* Actions */}
       <div className="flex gap-2 flex-shrink-0 items-center">
-        {downloadUrl && material.content_url && (
+        {downloadUrl && material.resource_link && (
           <a
             href={downloadUrl}
             target="_blank"
