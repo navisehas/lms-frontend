@@ -24,9 +24,9 @@ function StepIndicator({ current, steps }) {
             <div
               className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
                 i < current
-                  ? "bg-violet-500 text-white"
+                  ? "bg-blue-600 text-white"
                   : i === current
-                    ? "bg-violet-500 text-white shadow-lg shadow-violet-500/40 scale-110"
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/40 scale-110"
                     : "bg-white/5 text-slate-500 border border-white/10"
               }`}
             >
@@ -34,7 +34,7 @@ function StepIndicator({ current, steps }) {
             </div>
             <p
               className={`text-xs mt-1.5 font-medium whitespace-nowrap ${
-                i === current ? "text-violet-400" : "text-slate-600"
+                i === current ? "text-blue-500" : "text-slate-600"
               }`}
             >
               {step}
@@ -43,7 +43,7 @@ function StepIndicator({ current, steps }) {
           {i < steps.length - 1 && (
             <div
               className={`w-16 h-px mx-1 mb-5 transition-all duration-500 ${
-                i < current ? "bg-violet-500" : "bg-white/8"
+                i < current ? "bg-blue-600" : "bg-white/8"
               }`}
             />
           )}
@@ -67,10 +67,15 @@ function Field({ label, children, hint }) {
 }
 
 const inputClass =
-  "w-full px-4 py-2.5 rounded-xl text-sm text-slate-800 placeholder-slate-500 outline-none transition-all duration-200 focus:ring-2 focus:ring-violet-500/40";
+  "w-full px-4 py-2.5 rounded-xl text-sm text-slate-800 placeholder-slate-500 outline-none transition-all duration-200 focus:ring-2 focus:ring-blue-600/40";
 const inputStyle = {
   background: "rgba(0, 0, 0, 0.04)",
   border: "1px solid rgba(0, 0, 0, 0,012)",
+};
+
+const getLocalISODate = (value = new Date()) => {
+  const offsetMs = value.getTimezoneOffset() * 60000;
+  return new Date(value.getTime() - offsetMs).toISOString().slice(0, 10);
 };
 
 // Question Builder Card
@@ -91,7 +96,7 @@ function QuestionCard({ question, index, onChange, onDelete }) {
     >
       {/* Question header */}
       <div className="flex items-center justify-between mb-4">
-        <span className="text-xs font-bold text-violet-400 tracking-widest uppercase">
+        <span className="text-xs font-bold text-blue-500 tracking-widest uppercase">
           Question {index + 1}
         </span>
         <button
@@ -125,12 +130,12 @@ function QuestionCard({ question, index, onChange, onDelete }) {
               onClick={() => onChange({ ...question, correctAnswer: i })}
               className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                 question.correctAnswer === i
-                  ? "border-emerald-400 bg-emerald-400/20"
+                  ? "border-blue-500 bg-blue-500/20"
                   : "border-slate-600 hover:border-slate-400"
               }`}
             >
               {question.correctAnswer === i && (
-                <span className="text-emerald-400 text-xs font-bold">✓</span>
+                <span className="text-blue-500 text-xs font-bold">✓</span>
               )}
             </button>
             <input
@@ -259,7 +264,7 @@ export default function CreateExamPage() {
 
   const steps = ["Exam Details", "Add Questions", "Review & Publish"];
 
-  // ── Fetch teacher's own courses on mount ─────────────────────────────────
+  // ── Fetch teacher's own courses on mount ───────────
   useEffect(() => {
     authFetch(`${API}/exams/teacher/my-courses`)
       .then((r) => r.json())
@@ -276,7 +281,15 @@ export default function CreateExamPage() {
     if (!details.courseId) e.courseId = "Please select a course";
     if (!details.duration || details.duration < 5)
       e.duration = "Minimum 5 minutes";
-    if (!details.dueDate) e.dueDate = "Due date is required";
+    if (!details.dueDate) {
+      e.dueDate = "Due date is required";
+    } else {
+      const selected = new Date(details.dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      selected.setHours(0, 0, 0, 0);
+      if (selected < today) e.dueDate = "Due date cannot be in the past";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -341,14 +354,14 @@ export default function CreateExamPage() {
       >
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');`}</style>
         <div className="text-center">
-          <div className="w-20 h-20 rounded-full bg-violet-500/20 border border-violet-500/40 flex items-center justify-center mx-auto mb-5 text-4xl">
+          <div className="w-20 h-20 rounded-full bg-blue-600/20 border border-blue-600/40 flex items-center justify-center mx-auto mb-5 text-4xl">
             🎉
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">
             Exam Published!
           </h2>
           <p className="text-slate-400 text-sm mb-6">
-            <span className="text-violet-400 font-semibold">
+            <span className="text-blue-500 font-semibold">
               {details.title}
             </span>{" "}
             is now live for enrolled students.
@@ -356,7 +369,7 @@ export default function CreateExamPage() {
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => router.push("/dashboard/teacher/exams")}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-violet-500 hover:bg-violet-400 text-white transition-all"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all"
             >
               View All Exams
             </button>
@@ -403,7 +416,7 @@ export default function CreateExamPage() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(37,99,235,0.3); border-radius: 4px; }
       `}</style>
 
       {/* Header */}
@@ -524,6 +537,7 @@ export default function CreateExamPage() {
             <Field label="Due Date *">
               <input
                 type="date"
+                min={getLocalISODate()}
                 value={details.dueDate}
                 onChange={(e) =>
                   setDetails({ ...details, dueDate: e.target.value })
@@ -595,7 +609,7 @@ export default function CreateExamPage() {
             </div>
             <button
               onClick={addQuestion}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-violet-400 border border-violet-500/30 hover:bg-violet-500/10 transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-blue-500 border border-blue-600/30 hover:bg-blue-600/10 transition-all"
             >
               + Add Question
             </button>
@@ -627,7 +641,7 @@ export default function CreateExamPage() {
 
           <button
             onClick={addQuestion}
-            className="w-full py-3 rounded-2xl text-sm font-medium text-slate-500 hover:text-violet-400 transition-all duration-200 mt-2"
+            className="w-full py-3 rounded-2xl text-sm font-medium text-slate-500 hover:text-blue-500 transition-all duration-200 mt-2"
             style={{ border: "2px dashed rgba(255,255,255,0.08)" }}
           >
             + Add Another Question
@@ -668,7 +682,7 @@ export default function CreateExamPage() {
         {step < 2 ? (
           <button
             onClick={handleNext}
-            className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-violet-500 hover:bg-violet-400 text-white transition-all shadow-lg shadow-violet-500/25 active:scale-95"
+            className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg shadow-blue-600/25 active:scale-95"
           >
             Next →
           </button>
@@ -676,7 +690,7 @@ export default function CreateExamPage() {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-violet-500 hover:bg-violet-400 text-white transition-all shadow-lg shadow-violet-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg shadow-blue-600/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {submitting ? (
               <>
