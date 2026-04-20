@@ -73,11 +73,19 @@ function detectMaterialType(material) {
   }
 
   const cUrl = (material.resource_link || "").toLowerCase();
-  if (cUrl) {
+  if (cUrl && !cUrl.startsWith("data:")) {
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
     if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
     if (cUrl.match(/\.(doc|docx|ppt|pptx|xls|xlsx)(\?|#|$)/)) return "DOC";
+  }
+
+  // For base64 data URLs, detect type from mimetype prefix
+  if (cUrl.startsWith("data:")) {
+    const mime = cUrl.split(";")[0].replace("data:", "");
+    if (mime === "application/pdf") return "PDF";
+    if (mime.startsWith("video/")) return "VIDEO";
+    if (mime.startsWith("image/")) return "IMAGE";
   }
 
   const explicit = material.material_type?.toUpperCase();
