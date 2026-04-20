@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -11,7 +11,11 @@ import {
   MapPin, 
   Calendar,
   Camera,
-  Upload
+  Upload,
+  BookOpen,
+  ArrowRight,
+  Shield,
+  IdCard
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
@@ -32,6 +36,12 @@ export default function RegisterPage() {
   
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [mounted, setMounted] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Get today's date in YYYY-MM-DD format based on local timezone
   const todayObj = new Date();
@@ -46,7 +56,6 @@ export default function RegisterPage() {
     setFormData({ ...formData, phone_no: onlyNums });
   };
 
-  // (Converts to Base64)
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -63,21 +72,18 @@ export default function RegisterPage() {
     setLoading(true);
     setMessage(null);
 
-    // 1. Check for missing fields
     if (!formData.name || !formData.phone_no || !formData.gender || !formData.birthday || !formData.address) {
       setMessage({ type: "error", text: "All fields except ISIC Number and Profile Picture are required." });
       setLoading(false);
       return;
     }
 
-    // 2. Validate Phone Number
     if (formData.phone_no.length !== 10) {
       setMessage({ type: "error", text: "Please enter a valid 10-digit phone number." });
       setLoading(false);
       return;
     }
 
-    // 3. Validate Birthday (Cannot be today or in the future)
     if (formData.birthday >= maxDate) {
       setMessage({ type: "error", text: "Date of Birth must be a date in the past." });
       setLoading(false);
@@ -115,38 +121,32 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
-        <p className="text-sm text-gray-500 mt-2">Join us to start your learning journey.</p>
-      </div>
-
-      {message && (
-        <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 text-sm font-medium ${
-          message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
-          {message.type === 'success' ? <CheckCircle size={20} className="shrink-0"/> : <AlertCircle size={20} className="shrink-0"/>}
-          {message.text}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-
-        {/* --- PROFILE PICTURE UPLOAD --- */}
-        <div className="flex flex-col items-center justify-center mb-6">
+    <div className={`relative transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+      
+      {/* ═══ HEADER: Logo + Title + Avatar Side-by-Side ═══ */}
+      <div className="flex items-center gap-4 mb-5">
+        
+        {/* Avatar Upload (LEFT) */}
+        <div className="relative shrink-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full blur-md opacity-40"></div>
+          
           <div 
-            className="w-24 h-24 rounded-full border-4 border-gray-700 shadow-sm bg-gray-50 flex items-center justify-center overflow-hidden cursor-pointer relative group"
+            className="relative w-16 h-16 rounded-full border-2 border-white shadow-lg shadow-blue-500/30 bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center overflow-hidden cursor-pointer group"
             onClick={() => fileInputRef.current.click()}
             title="Upload Profile Picture"
           >
             {formData.profile_picture_url ? (
-              <img src={formData.profile_picture_url} alt="Preview" className="w-full h-full object-cover group-hover:opacity-50 transition" />
+              <img 
+                src={formData.profile_picture_url} 
+                alt="Preview" 
+                className="w-full h-full object-cover group-hover:opacity-60 transition" 
+              />
             ) : (
-              <User size={40} className="text-gray-700" />
+              <User size={26} className="text-blue-600" />
             )}
             
-            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200 text-white">
-              <Camera size={24} />
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200 text-white">
+              <Camera size={18} />
             </div>
           </div>
           <input 
@@ -156,130 +156,233 @@ export default function RegisterPage() {
             ref={fileInputRef} 
             onChange={handleImageUpload} 
           />
-          <p className="text-xs text-gray-700 mt-2 font-medium flex items-center gap-1">
-            <Upload size={12}/> Click to upload photo (Optional)
+        </div>
+
+        {/* Title (RIGHT) */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-extrabold tracking-tight text-gray-900 leading-tight">
+            Create your{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">
+              Account
+            </span>
+          </h1>
+          <p className="text-gray-500 text-[11px] flex items-center gap-1 mt-0.5">
+            <Upload size={10}/> Click avatar to upload photo (optional)
           </p>
         </div>
-        
-        {/* Full Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Full Name <span className="text-red-500">*</span></label>
-          <div className="relative">
-            <User className="absolute left-3 top-3 text-gray-700 w-5 h-5" />
-            <input 
-              name="name"
-              type="text" 
-              required
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700"
-              placeholder="Kasun Perera"
-              value={formData.name}
-              onChange={handleChange}
-            />
+      </div>
+
+      {/* Message */}
+      {message && (
+        <div className={`mb-3 p-2.5 rounded-lg flex items-start gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-2 ${
+          message.type === 'success' 
+            ? 'bg-green-50 text-green-700 border border-green-200' 
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {message.type === 'success' 
+            ? <CheckCircle size={14} className="shrink-0 mt-0.5"/> 
+            : <AlertCircle size={14} className="shrink-0 mt-0.5"/>}
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      {/* ═══ FORM: 2-Column Grid Layout ═══ */}
+      <form onSubmit={handleSubmit} className="space-y-3">
+
+        {/* ROW 1: Full Name + Phone */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Full Name */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              Full Name <span className="text-red-500">*</span>
+            </label>
+            <div className="relative group transition-all duration-300">
+              <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === 'name' ? 'opacity-30' : ''}`}></div>
+              <div className="relative">
+                <User className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'name' ? 'text-blue-600' : 'text-gray-400'}`} size={16} />
+                <input 
+                  name="name"
+                  type="text" 
+                  required
+                  placeholder="Kasun Perera"
+                  className="relative w-full pl-10 pr-3 py-2.5 rounded-lg text-gray-900 placeholder-gray-400 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-medium text-sm transition-all"
+                  value={formData.name}
+                  onChange={handleChange}
+                  onFocus={() => setFocusedField('name')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              Phone Number <span className="text-red-500">*</span>
+            </label>
+            <div className="relative group transition-all duration-300">
+              <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === 'phone_no' ? 'opacity-30' : ''}`}></div>
+              <div className="relative">
+                <Phone className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'phone_no' ? 'text-blue-600' : 'text-gray-400'}`} size={16} />
+                <input 
+                  name="phone_no"
+                  type="text" 
+                  required
+                  maxLength={10}
+                  placeholder="0771234567"
+                  className="relative w-full pl-10 pr-3 py-2.5 rounded-lg text-gray-900 placeholder-gray-400 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-medium text-sm transition-all"
+                  value={formData.phone_no}
+                  onChange={handlePhoneChange} 
+                  onFocus={() => setFocusedField('phone_no')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Phone Number */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-3 text-gray-700 w-5 h-5" />
-              <input 
-                name="phone_no"
-                type="text" 
-                required
-                maxLength={10}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700"
-                placeholder="0771234567"
-                value={formData.phone_no}
-                onChange={handlePhoneChange} 
-              />
-            </div>
-          </div>
+        {/* ROW 2: Gender + Date of Birth */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Gender */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Gender <span className="text-red-500">*</span></label>
-            <div className="relative">  
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              Gender <span className="text-red-500">*</span>
+            </label>
+            <div className="relative group transition-all duration-300">
+              <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === 'gender' ? 'opacity-30' : ''}`}></div>
               <select 
                 name="gender" 
-                className="w-full p-2.5 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white text-gray-700" 
+                className="relative w-full px-3 py-2.5 rounded-lg text-gray-900 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-medium text-sm transition-all cursor-pointer" 
                 onChange={handleChange} 
                 value={formData.gender}
+                onFocus={() => setFocusedField('gender')}
+                onBlur={() => setFocusedField(null)}
               >
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Date of Birth */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth <span className="text-red-500">*</span></label>
-            <div className="relative">
-               <Calendar className="absolute left-3 top-3 text-gray-700 w-5 h-5" />
-               <input 
-                 name="birthday" 
-                 type="date" 
-                 required
-                 max={maxDate} // Restricts the HTML calendar picker
-                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700" 
-                 onChange={handleChange} 
-                 value={formData.birthday} 
-               />
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              Date of Birth <span className="text-red-500">*</span>
+            </label>
+            <div className="relative group transition-all duration-300">
+              <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === 'birthday' ? 'opacity-30' : ''}`}></div>
+              <div className="relative">
+                <Calendar className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 pointer-events-none ${focusedField === 'birthday' ? 'text-blue-600' : 'text-gray-400'}`} size={16} />
+                <input 
+                  name="birthday" 
+                  type="date" 
+                  required
+                  max={maxDate}
+                  className="relative w-full pl-10 pr-3 py-2.5 rounded-lg text-gray-900 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-medium text-sm transition-all" 
+                  onChange={handleChange} 
+                  value={formData.birthday} 
+                  onFocus={() => setFocusedField('birthday')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </div>
             </div>
           </div>
+        </div>
 
+        {/* ROW 3: Address + ISIC Number */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Address */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <MapPin className="absolute left-3 top-3 text-gray-700 w-5 h-5" />
-              <input 
-                name="address"
-                type="text" 
-                required
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700"
-                placeholder="Colombo, Sri Lanka"
-                value={formData.address}
-                onChange={handleChange}
-              />
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              Address <span className="text-red-500">*</span>
+            </label>
+            <div className="relative group transition-all duration-300">
+              <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === 'address' ? 'opacity-30' : ''}`}></div>
+              <div className="relative">
+                <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'address' ? 'text-blue-600' : 'text-gray-400'}`} size={16} />
+                <input 
+                  name="address"
+                  type="text" 
+                  required
+                  placeholder="Colombo, Sri Lanka"
+                  className="relative w-full pl-10 pr-3 py-2.5 rounded-lg text-gray-900 placeholder-gray-400 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-medium text-sm transition-all"
+                  value={formData.address}
+                  onChange={handleChange}
+                  onFocus={() => setFocusedField('address')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ISIC Number */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              ISIC Number <span className="text-gray-400 font-normal">(Optional)</span>
+            </label>
+            <div className="relative group transition-all duration-300">
+              <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === 'isic_no' ? 'opacity-30' : ''}`}></div>
+              <div className="relative">
+                <IdCard className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'isic_no' ? 'text-blue-600' : 'text-gray-400'}`} size={16} />
+                <input 
+                  name="isic_no"
+                  type="text" 
+                  placeholder="If applicable"
+                  className="relative w-full pl-10 pr-3 py-2.5 rounded-lg text-gray-900 placeholder-gray-400 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-medium text-sm transition-all"
+                  value={formData.isic_no}
+                  onChange={handleChange}
+                  onFocus={() => setFocusedField('isic_no')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ISIC Number */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">ISIC Number (Optional)</label>
-          <div className="relative">
-            <User className="absolute left-3 top-3 text-gray-700 w-5 h-5" />
-            <input 
-              name="isic_no"
-              type="text" 
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700"
-              placeholder="Enter ISIC Number if applicable"
-              value={formData.isic_no}
-              onChange={handleChange}
-            />
-          </div>
-        </div>
-
+        {/* Submit Button */}
         <button 
           type="submit" 
           disabled={loading}
-          className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:bg-blue-500 mt-4"
+          className="group relative w-full overflow-hidden text-white py-3 rounded-lg font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/30"
         >
-          {loading ? "Creating Account..." : <>Register Now <UserPlus className="w-5 h-5" /></>}
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></span>
+          
+          <span className="relative flex items-center justify-center gap-2">
+            {loading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creating Account...
+              </>
+            ) : (
+              <>
+                Register Now
+                <UserPlus size={16} className="group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
+          </span>
         </button>
 
       </form>
 
-      <div className="mt-6 text-center text-sm text-gray-600">
-        Already have an account?{" "}
-        <Link href="/login" className="font-bold text-blue-600 hover:underline">
-          Sign In
-        </Link>
+      {/* ═══ FOOTER: Security Badge + Login Link in one row ═══ */}
+      <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-gray-100">
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <Shield className="w-3 h-3 text-green-500" />
+          <span>Encrypted &amp; secure</span>
+        </div>
+        <p className="text-gray-600 text-xs">
+          Already registered?{" "}
+          <Link 
+            href="/login" 
+            className="font-bold text-blue-600 hover:text-blue-700 transition-colors inline-flex items-center gap-1 group"
+          >
+            Sign In
+            <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        </p>
       </div>
     </div>
   );
