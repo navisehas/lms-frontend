@@ -9,6 +9,7 @@ import {
   ChevronDown, ChevronRight, GraduationCap, PlayCircle,
   RefreshCw, CheckCircle, Tag, Layers, File, FileVideo,
   FileImage, Link2, FolderOpen, BookMarked, Search, X,
+  Trophy, TrendingUp, Circle,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
@@ -43,7 +44,6 @@ const handleDownload = async (url, filename) => {
 
 // ─── Auto-detect material type from URL/filename ──────────────────────────────
 function detectMaterialType(material) {
-  // 1. Detect from title/filename FIRST (most reliable for uploaded files)
   const name = (material.title || "").toLowerCase();
   const ext  = name.includes(".") ? name.split(".").pop() : "";
   if (ext === "pdf") return "PDF";
@@ -51,7 +51,6 @@ function detectMaterialType(material) {
   if (["jpg","jpeg","png","gif","webp","svg","bmp"].includes(ext)) return "IMAGE";
   if (["ppt","pptx","xls","xlsx","doc","docx","txt","rtf","odt","sql","csv","json","xml","zip","rar"].includes(ext)) return "DOC";
 
-  // 2. Detect from external_url
   const exUrl = (material.external_url || "").toLowerCase();
   if (exUrl) {
     if (exUrl.includes("zoom.us") || exUrl.includes("meet.google") || exUrl.includes("teams.microsoft") || exUrl.includes("webex.com") || exUrl.includes("whereby.com") || exUrl.includes("skype.com")) return "MEETING";
@@ -62,7 +61,6 @@ function detectMaterialType(material) {
     if (exUrl.startsWith("http")) return "LINK";
   }
 
-  // 3. Detect from content_url path
   const cUrl = (material.content_url || "").toLowerCase();
   if (cUrl) {
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
@@ -71,7 +69,6 @@ function detectMaterialType(material) {
     if (cUrl.match(/\.(doc|docx|ppt|pptx|xls|xlsx)(\?|#|$)/)) return "DOC";
   }
 
-  // 4. Fall back to explicit DB value if meaningful (skip "DOC" — it's just the default)
   const explicit = material.material_type?.toUpperCase();
   if (explicit && explicit !== "OTHER" && explicit !== "DOC") return explicit;
 
@@ -106,7 +103,6 @@ function getTypeIcon(type, externalUrl) {
   }
 }
 
-// ─── Type badge style (matching student page) ────────────────────────────────
 function getTypeBadgeStyle(type) {
   switch (type?.toUpperCase()) {
     case "PDF":     return "bg-red-50 text-red-600 border-red-100";
@@ -119,25 +115,115 @@ function getTypeBadgeStyle(type) {
   }
 }
 
+// ─── Progress Ring SVG ────────────────────────────────────────────────────────
+function ProgressRing({ percent, size = 56, stroke = 5 }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (percent / 100) * circ;
+  const color = percent === 100 ? "#16a34a" : percent >= 50 ? "#2563eb" : "#93c5fd";
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rotate-[-90deg]">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e0e7ef" strokeWidth={stroke} />
+      <circle
+        cx={size / 2} cy={size / 2} r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        style={{ transition: "stroke-dashoffset 0.6s ease, stroke 0.4s" }}
+      />
+    </svg>
+  );
+}
+
+// ─── Overall Progress Banner ──────────────────────────────────────────────────
+function CourseProgressBanner({ totalFiles, completedCount }) {
+  const percent = totalFiles > 0 ? Math.round((completedCount / totalFiles) * 100) : 0;
+  const isComplete = percent === 100 && totalFiles > 0;
+
+  return (
+    <div className={`rounded-2xl border px-5 py-4 flex items-center gap-4 shadow-sm transition-all ${
+      isComplete
+        ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
+        : "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100"
+    }`}>
+      {/* Ring */}
+      <div className="relative flex-shrink-0">
+        <ProgressRing percent={percent} size={56} stroke={5} />
+        <div className="absolute inset-0 flex items-center justify-center">
+          {isComplete
+            ? <Trophy size={18} className="text-green-600" />
+            : <span className="text-xs font-extrabold text-blue-700">{percent}%</span>
+          }
+        </div>
+      </div>
+
+      {/* Text */}
+      <div className="flex-1 min-w-0">
+        {isComplete ? (
+          <>
+            <p className="text-sm font-bold text-green-700 flex items-center gap-1.5">
+              <CheckCircle size={14} /> Course Completed! 🎉
+            </p>
+            <p className="text-xs text-green-600 mt-0.5">
+              ඔබ materials {totalFiles} ම සම්පූර්ණ කළා!
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+              <TrendingUp size={14} className="text-blue-500" /> ඔබේ Progress
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {completedCount} / {totalFiles} materials සම්පූර්ණ යි
+            </p>
+          </>
+        )}
+
+        {/* Bar */}
+        <div className="mt-2 w-full bg-white/70 rounded-full h-2 border border-blue-100 overflow-hidden">
+          <div
+            className={`h-2 rounded-full transition-all duration-700 ${isComplete ? "bg-green-500" : "bg-blue-500"}`}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Material Row ─────────────────────────────────────────────────────────────
-function MaterialCard({ material, index }) {
+function MaterialCard({ material, index, isCompleted, onToggleComplete, toggling }) {
   const downloadUrl = getMaterialHref(material.content_url);
   const externalUrl = material.external_url;
-
-  // ✅ FIX: auto-detect the type so badge always shows correctly
   const resolvedType = detectMaterialType(material);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-blue-50/60 transition-colors rounded-xl gap-4 group">
+    <div className={`flex items-center justify-between px-4 py-3 transition-colors rounded-xl gap-4 group ${
+      isCompleted ? "bg-green-50/60 hover:bg-green-50" : "hover:bg-blue-50/60"
+    }`}>
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        {/* Number + Icon */}
+        {/* Icon */}
         <div className="relative flex-shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center">
-            {getTypeIcon(resolvedType, externalUrl)}
+          <div className={`w-8 h-8 rounded-lg border shadow-sm flex items-center justify-center transition-colors ${
+            isCompleted ? "bg-green-50 border-green-200" : "bg-white border-gray-100"
+          }`}>
+            {isCompleted
+              ? <CheckCircle size={14} className="text-green-500" />
+              : getTypeIcon(resolvedType, externalUrl)
+            }
           </div>
         </div>
+
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-800 truncate leading-tight">{material.title}</p>
+          <p className={`text-sm font-semibold truncate leading-tight ${
+            isCompleted ? "text-green-800 line-through decoration-green-400/60" : "text-gray-800"
+          }`}>
+            {material.title}
+          </p>
           <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(resolvedType)}`}>
             {resolvedType}
           </span>
@@ -145,7 +231,7 @@ function MaterialCard({ material, index }) {
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 flex-shrink-0">
+      <div className="flex gap-2 flex-shrink-0 items-center">
         {downloadUrl && material.content_url && (
           <a
             href={downloadUrl}
@@ -172,19 +258,36 @@ function MaterialCard({ material, index }) {
             <ExternalLink size={11} /> Open
           </a>
         )}
+
+        {/* Mark Complete Button — only shown when onToggleComplete is provided */}
+        {onToggleComplete && (
+          <button
+            onClick={() => onToggleComplete(material.material_id)}
+            disabled={toggling}
+            title={isCompleted ? "Completed — click to undo" : "Mark as complete"}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shadow-sm disabled:opacity-50 ${
+              isCompleted
+                ? "bg-green-100 text-green-700 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                : "bg-white text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"
+            }`}
+          >
+            <CheckCircle size={12} />
+            {isCompleted ? "Done" : "Mark Done"}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 // ─── Subtopic Section ─────────────────────────────────────────────────────────
-function SubtopicSection({ subtopic, materials, defaultOpen = true }) {
+function SubtopicSection({ subtopic, materials, completedIds, onToggleComplete, togglingId, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
   const isUncategorized = subtopic === "__none__";
+  const doneCount = materials.filter(m => completedIds.has(m.material_id)).length;
 
   return (
     <div className="rounded-xl overflow-hidden border border-blue-100">
-      {/* Subtopic header — only show if it has a real name */}
       {!isUncategorized && (
         <button
           onClick={() => setOpen(v => !v)}
@@ -196,6 +299,11 @@ function SubtopicSection({ subtopic, materials, defaultOpen = true }) {
             <span className="text-xs text-blue-400 font-medium">
               {materials.length} file{materials.length !== 1 ? "s" : ""}
             </span>
+            {doneCount > 0 && (
+              <span className="text-xs text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.5 rounded-full font-medium">
+                ✓ {doneCount}/{materials.length}
+              </span>
+            )}
           </div>
           {open
             ? <ChevronDown size={13} className="text-blue-400" />
@@ -203,11 +311,16 @@ function SubtopicSection({ subtopic, materials, defaultOpen = true }) {
         </button>
       )}
 
-      {/* Materials list */}
       {(open || isUncategorized) && (
-        <div className={`divide-y divide-gray-50 ${!isUncategorized ? "px-2 py-1" : "px-2 py-1"}`}>
-          {materials.map((mat, i) => (
-            <MaterialCard key={mat.material_id} material={mat} index={i} />
+        <div className="divide-y divide-gray-50 px-2 py-1">
+          {materials.map((mat) => (
+            <MaterialCard
+              key={mat.material_id}
+              material={mat}
+              isCompleted={completedIds.has(mat.material_id)}
+              onToggleComplete={onToggleComplete}
+              toggling={togglingId === mat.material_id}
+            />
           ))}
         </div>
       )}
@@ -216,7 +329,7 @@ function SubtopicSection({ subtopic, materials, defaultOpen = true }) {
 }
 
 // ─── Lesson Block ─────────────────────────────────────────────────────────────
-function LessonBlock({ lesson, index, isOpen, onToggle }) {
+function LessonBlock({ lesson, index, isOpen, onToggle, completedIds, onToggleComplete, togglingId }) {
   const subtopicGroups = useMemo(() => {
     const groups = new Map();
     (lesson.materials || []).forEach((m) => {
@@ -225,7 +338,6 @@ function LessonBlock({ lesson, index, isOpen, onToggle }) {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(m);
     });
-    // Sort: named subtopics alphabetically, __none__ last
     return Array.from(groups.entries()).sort(([a], [b]) => {
       if (a === "__none__") return 1;
       if (b === "__none__") return -1;
@@ -235,24 +347,34 @@ function LessonBlock({ lesson, index, isOpen, onToggle }) {
 
   const totalMaterials = lesson.materials?.length || 0;
   const subtopicCount = subtopicGroups.filter(([k]) => k !== "__none__").length;
+  const lessonCompleted = (lesson.materials || []).filter(m => completedIds.has(m.material_id)).length;
+  const lessonPercent = totalMaterials > 0 ? Math.round((lessonCompleted / totalMaterials) * 100) : 0;
+  const isLessonDone = lessonCompleted === totalMaterials && totalMaterials > 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden shadow-sm">
+    <div className={`bg-white rounded-2xl border overflow-hidden shadow-sm transition-colors ${
+      isLessonDone ? "border-green-200" : "border-blue-100"
+    }`}>
       {/* Lesson Header */}
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-blue-50/40 transition-colors text-left"
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <span className="w-8 h-8 rounded-xl bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center flex-shrink-0 shadow-sm">
-            {index + 1}
-          </span>
+          <div className="relative flex-shrink-0">
+            <span className={`w-8 h-8 rounded-xl text-white text-xs font-extrabold flex items-center justify-center shadow-sm ${
+              isLessonDone ? "bg-green-600" : "bg-blue-700"
+            }`}>
+              {isLessonDone ? <CheckCircle size={14} /> : index + 1}
+            </span>
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-gray-900 truncate">{lesson.lessonTitle}</p>
             {lesson.lessonDescription && (
               <p className="text-xs text-gray-400 mt-0.5 truncate">{lesson.lessonDescription}</p>
             )}
           </div>
+
           {/* Stats pills */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {subtopicCount > 0 && (
@@ -263,9 +385,31 @@ function LessonBlock({ lesson, index, isOpen, onToggle }) {
             <span className="text-xs text-blue-500 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full font-medium">
               {totalMaterials} file{totalMaterials !== 1 ? "s" : ""}
             </span>
+            {/* Lesson progress pill */}
+            {totalMaterials > 0 && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+                isLessonDone
+                  ? "text-green-600 bg-green-50 border-green-200"
+                  : lessonCompleted > 0
+                  ? "text-blue-600 bg-blue-50 border-blue-200"
+                  : "text-gray-400 bg-gray-50 border-gray-100"
+              }`}>
+                {lessonCompleted}/{totalMaterials} done
+              </span>
+            )}
           </div>
         </div>
-        <div className="ml-3 flex-shrink-0">
+
+        {/* Mini progress bar + chevron */}
+        <div className="ml-3 flex items-center gap-2 flex-shrink-0">
+          {totalMaterials > 0 && (
+            <div className="hidden sm:block w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+              <div
+                className={`h-1.5 rounded-full transition-all duration-500 ${isLessonDone ? "bg-green-500" : "bg-blue-500"}`}
+                style={{ width: `${lessonPercent}%` }}
+              />
+            </div>
+          )}
           {isOpen
             ? <ChevronDown size={16} className="text-blue-400" />
             : <ChevronRight size={16} className="text-blue-400" />}
@@ -283,6 +427,9 @@ function LessonBlock({ lesson, index, isOpen, onToggle }) {
                 key={subtopic}
                 subtopic={subtopic}
                 materials={mats}
+                completedIds={completedIds}
+                onToggleComplete={onToggleComplete}
+                togglingId={togglingId}
                 defaultOpen={true}
               />
             ))
@@ -293,7 +440,7 @@ function LessonBlock({ lesson, index, isOpen, onToggle }) {
   );
 }
 
-// ─── Course Progress Summary ──────────────────────────────────────────────────
+// ─── Course Summary Bar ───────────────────────────────────────────────────────
 function CourseSummaryBar({ lessonBlocks }) {
   const totalLessons = lessonBlocks.length;
   const totalFiles = lessonBlocks.reduce((s, l) => s + (l.materials?.length || 0), 0);
@@ -327,7 +474,8 @@ function CourseSummaryBar({ lessonBlocks }) {
 export default function CourseDetailsPage() {
   const router   = useRouter();
   const params   = useParams();
-  const courseId = params.id;
+  // ── FIX: Safely extract courseId — params may be undefined during SSR ──────
+  const courseId = params?.id;
 
   const [user,            setUser]            = useState(null);
   const [course,          setCourse]          = useState(null);
@@ -340,6 +488,10 @@ export default function CourseDetailsPage() {
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [paymentChecked,  setPaymentChecked]  = useState(false);
   const [searchQuery,     setSearchQuery]     = useState("");
+
+  // ── Progress state ──────────────────────────────────────────────────────────
+  const [completedIds,    setCompletedIds]    = useState(new Set());
+  const [togglingId,      setTogglingId]      = useState(null);
 
   const pollTimer = useRef(null);
   const userRef   = useRef(null);
@@ -385,12 +537,77 @@ export default function CourseDetailsPage() {
           m.title?.toLowerCase().includes(q) ||
           (m.subtopic ?? m.sub_topic ?? m.subTopic ?? "")?.toLowerCase().includes(q)
         );
-        if (lessonMatch) return lb; // show entire lesson if lesson title matches
+        if (lessonMatch) return lb;
         if (filteredMaterials.length > 0) return { ...lb, materials: filteredMaterials };
         return null;
       })
       .filter(Boolean);
   }, [lessonBlocks, searchQuery]);
+
+  // ── Computed progress totals ──────────────────────────────────────────────
+  const totalFiles     = materials.length;
+  const completedCount = completedIds.size;
+
+  // ── Load progress from API ────────────────────────────────────────────────
+  const loadProgress = useCallback(async () => {
+    if (!courseId || !userRef.current || userRef.current.role !== "STUDENT") return;
+    try {
+      const res = await authFetch(`${API}/api/courses/${courseId}/progress`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && Array.isArray(data.completed_material_ids)) {
+        setCompletedIds(new Set(data.completed_material_ids));
+      }
+    } catch (_) {}
+  }, [courseId]);
+
+  // ── Toggle material complete ──────────────────────────────────────────────
+  const handleToggleComplete = useCallback(async (materialId) => {
+    if (togglingId) return;
+    setTogglingId(materialId);
+
+    const isNowCompleted = !completedIds.has(materialId);
+
+    // Optimistic update
+    setCompletedIds(prev => {
+      const next = new Set(prev);
+      if (isNowCompleted) next.add(materialId);
+      else next.delete(materialId);
+      return next;
+    });
+
+    try {
+      const res = await authFetch(`${API}/api/courses/${courseId}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ material_id: materialId, completed: isNowCompleted }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setCompletedIds(prev => {
+          const next = new Set(prev);
+          if (isNowCompleted) next.delete(materialId);
+          else next.add(materialId);
+          return next;
+        });
+      } else {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.completed_material_ids)) {
+          setCompletedIds(new Set(data.completed_material_ids));
+        }
+      }
+    } catch (_) {
+      // Revert on network error
+      setCompletedIds(prev => {
+        const next = new Set(prev);
+        if (isNowCompleted) next.delete(materialId);
+        else next.add(materialId);
+        return next;
+      });
+    } finally {
+      setTogglingId(null);
+    }
+  }, [completedIds, courseId, togglingId]);
 
   // Auto-open all lessons
   useEffect(() => {
@@ -399,218 +616,187 @@ export default function CourseDetailsPage() {
       lessonBlocks.forEach((lb) => { initial[lb.lessonId || lb.lessonTitle] = true; });
       setOpenLessons(initial);
     }
-  }, [lessonBlocks.length]);
+  }, [lessonBlocks]);
 
-  function toggleLesson(key) {
-    setOpenLessons((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
-  // Expand / collapse all
-  function expandAll() {
-    const all = {};
-    lessonBlocks.forEach((lb) => { all[lb.lessonId || lb.lessonTitle] = true; });
-    setOpenLessons(all);
-  }
-  function collapseAll() {
-    const all = {};
-    lessonBlocks.forEach((lb) => { all[lb.lessonId || lb.lessonTitle] = false; });
-    setOpenLessons(all);
-  }
-
-  // ── Fetch helpers ─────────────────────────────────────────────────────────
-  const fetchMaterials = useCallback(async (cId) => {
-    try {
-      const matRes  = await authFetch(`${API}/courses/${cId}/materials`);
-      const matData = await matRes.json();
-      if (!matRes.ok || !matData.success) {
-        setMaterials([]);
-        if (matData.error) setError(matData.error);
-      } else {
-        setMaterials(matData.materials || []);
-        setError("");
-      }
-    } catch (_) { setMaterials([]); }
+  const toggleLesson = useCallback((key) => {
+    setOpenLessons(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const fetchLessons = useCallback(async (cId) => {
-    try {
-      const res = await authFetch(`${API}/courses/${cId}/lessons`);
-      if (res.ok) { const data = await res.json(); setLessons(data.lessons || []); }
-    } catch (_) {}
+  const expandAll = useCallback(() => {
+    const all = {};
+    lessonBlocks.forEach(lb => { all[lb.lessonId || lb.lessonTitle] = true; });
+    setOpenLessons(all);
+  }, [lessonBlocks]);
+
+  const collapseAll = useCallback(() => {
+    setOpenLessons({});
   }, []);
 
-  const fetchCourseDetails = useCallback(async (studentId, silent = false) => {
-    if (!studentId || !courseId) return;
-    if (!silent) setLoading(true);
-    try {
-      const courseRes = await authFetch(`${API}/courses/${courseId}`);
-      if (!courseRes.ok) {
-        if (!silent) setError("Course not found.");
-        setCourse(null);
+  // ── Auth & data load ──────────────────────────────────────────────────────
+  // ── FIX: Guard against router or courseId being undefined on first render ─
+  useEffect(() => {
+    if (!router || !courseId) return;
+
+    const init = async () => {
+      // FIX: guardRoute(requiredRole, router) — must pass "STUDENT" as first arg
+      let u = null;
+      try {
+        u = guardRoute("STUDENT", router);
+      } catch (err) {
+        console.error("guardRoute error:", err);
         return;
       }
-      const courseData = await courseRes.json();
-      setCourse(courseData);
+      if (!u) return;
+      setUser(u);
+      userRef.current = u;
 
-      const enrollRes = await authFetch(`${API}/payments/courses/${studentId}`);
-      if (enrollRes.ok) {
-        const enrollData    = await enrollRes.json();
-        const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
-        const enrolled      = Boolean(matchedCourse?.is_enrolled);
+      try {
+        const [courseRes, materialsRes] = await Promise.all([
+          authFetch(`${API}/api/courses/${courseId}`),
+          authFetch(`${API}/api/courses/${courseId}/materials`),
+        ]);
 
-        if (enrolled !== isEnrolled) {
-          setIsEnrolled(enrolled);
-          if (enrolled) {
-            await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
-            setPaymentChecked(true);
-            setTimeout(() => setPaymentChecked(false), 5000);
-            if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
-          } else {
-            setMaterials([]);
+        if (!courseRes.ok) { setError("Course not found."); setLoading(false); return; }
+        const courseData = await courseRes.json();
+        setCourse(courseData);
+
+        if (materialsRes.ok) {
+          const matData = await materialsRes.json();
+          if (matData.success) {
+            setMaterials(matData.materials || []);
+            setIsEnrolled(true);
           }
-        } else if (enrolled && materials.length === 0 && !silent) {
-          await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
+        } else if (materialsRes.status === 403) {
+          setIsEnrolled(false);
         }
-      }
-    } catch (_) {
-      if (!silent) setError("Failed to load course details.");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [courseId, isEnrolled, materials.length, fetchMaterials, fetchLessons]);
 
-  const checkPaymentStatus = useCallback(async (studentId) => {
-    if (!studentId || !courseId) return;
-    try {
-      const enrollRes  = await authFetch(`${API}/payments/courses/${studentId}`);
-      if (enrollRes.ok) {
-        const enrollData    = await enrollRes.json();
-        const matchedCourse = (enrollData.courses || []).find((c) => c.course_id === courseId);
-        const enrolled      = Boolean(matchedCourse?.is_enrolled);
-        if (enrolled !== isEnrolled) {
-          setIsEnrolled(enrolled);
-          if (enrolled) {
-            await Promise.all([fetchMaterials(courseId), fetchLessons(courseId)]);
-            setPaymentChecked(true);
-            setTimeout(() => setPaymentChecked(false), 5000);
-            if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; }
+        // Load lessons list
+        try {
+          const lessonsRes = await authFetch(`${API}/api/lessons/course/${courseId}`);
+          if (lessonsRes.ok) {
+            const ld = await lessonsRes.json();
+            setLessons(ld.lessons || []);
           }
+        } catch (_) {}
+      } catch (err) {
+        setError("Failed to load course.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, [courseId, router]);
+
+  // Load progress after enrollment confirmed
+  useEffect(() => {
+    if (isEnrolled && user?.role === "STUDENT") {
+      loadProgress();
+    }
+  }, [isEnrolled, user, loadProgress]);
+
+  // ── Poll for enrollment ───────────────────────────────────────────────────
+  const checkEnrollment = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API}/api/courses/${courseId}/materials`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setMaterials(data.materials || []);
+          setIsEnrolled(true);
+          clearInterval(pollTimer.current);
+          loadProgress();
         }
       }
     } catch (_) {}
-  }, [courseId, isEnrolled, fetchMaterials, fetchLessons]);
+  }, [courseId, loadProgress]);
+
+  const handleManualRefresh = useCallback(async () => {
+    setCheckingPayment(true);
+    await checkEnrollment();
+    setPaymentChecked(true);
+    setCheckingPayment(false);
+  }, [checkEnrollment]);
 
   useEffect(() => {
-    const auth = guardRoute("STUDENT", router);
-    if (auth) {
-      setUser(auth);
-      userRef.current = auth;
-      fetchCourseDetails(auth.user_id, false);
-      if (!isEnrolled) {
-        setCheckingPayment(true);
-        pollTimer.current = setInterval(() => {
-          if (userRef.current && !isEnrolled) checkPaymentStatus(userRef.current.user_id);
-        }, POLL_INTERVAL);
-      }
+    if (!isEnrolled && user && user.role === "STUDENT") {
+      pollTimer.current = setInterval(checkEnrollment, POLL_INTERVAL);
     }
-    return () => { if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null; } };
-  }, [router, courseId]);
+    return () => clearInterval(pollTimer.current);
+  }, [isEnrolled, user, checkEnrollment]);
 
-  const handleManualRefresh = async () => {
-    if (user) {
-      setCheckingPayment(true);
-      await fetchCourseDetails(user.user_id, false);
-      setCheckingPayment(false);
-    }
-  };
+  // ── Render ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <Loader size={28} className="animate-spin text-blue-400" />
+      </div>
+    );
+  }
 
-  if (!user) return null;
+  if (error) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center">
+        <AlertCircle className="mx-auto mb-3 text-red-400" size={32} />
+        <p className="text-red-600 font-semibold">{error}</p>
+        <Link href="/student/courses" className="mt-4 inline-block text-sm text-blue-600 underline">
+          Back to Courses
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-
+    <div className="max-w-2xl mx-auto px-3 py-5 space-y-5 pb-16">
       {/* Back */}
-      <Link href="/student/courses"
-        className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors group">
-        <ArrowLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
-        Back to My Courses
+      <Link href="/student/courses" className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium">
+        <ArrowLeft size={14} /> Back to Courses
       </Link>
 
-      {/* Banners */}
-      {checkingPayment && !isEnrolled && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-3.5 text-sm">
-          <Loader size={15} className="animate-spin flex-shrink-0" />
-          Checking for payment confirmation…
-        </div>
-      )}
-      {paymentChecked && isEnrolled && (
-        <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3.5 text-sm">
-          <CheckCircle size={15} className="flex-shrink-0" />
-          Payment confirmed! Course materials are now available.
-        </div>
-      )}
-      {error && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3.5 text-sm">
-          <AlertCircle size={15} className="flex-shrink-0" /> {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-32 gap-3 text-blue-400">
-          <Loader size={28} className="animate-spin" />
-          <span className="text-sm font-medium text-gray-500">Loading course…</span>
-        </div>
-      ) : !course ? null : (
+      {course && (
         <>
-          {/* ── Course Hero Card ──────────────────────────────────────── */}
-          <div className={`relative bg-white rounded-3xl border shadow-sm overflow-hidden ${isEnrolled ? "border-blue-200" : "border-amber-200"}`}>
-            <div className={`h-1.5 w-full ${isEnrolled ? "bg-gradient-to-r from-blue-500 via-blue-700 to-indigo-700" : "bg-gradient-to-r from-amber-300 to-orange-300"}`} />
-            <div className="p-6 sm:p-8">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${isEnrolled ? "bg-blue-50" : "bg-amber-50"}`}>
-                    <GraduationCap size={24} className={isEnrolled ? "text-blue-700" : "text-amber-500"} />
-                  </div>
-                  <div>
-                    <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">{course.title}</h1>
-                    {course.description && <p className="text-sm text-gray-500 mt-1 leading-relaxed">{course.description}</p>}
-                  </div>
-                </div>
-                {isEnrolled ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
-                    <BadgeCheck size={13} /> Enrolled
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
-                    <Lock size={13} /> Locked
-                  </span>
+          {/* Course Header Card */}
+          <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-lg font-extrabold text-gray-900 leading-tight">{course.title}</h1>
+                {course.description && (
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{course.description}</p>
                 )}
               </div>
+              {isEnrolled ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
+                  <BadgeCheck size={13} /> Enrolled
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 text-xs font-bold flex-shrink-0">
+                  <Lock size={13} /> Locked
+                </span>
+              )}
+            </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {course.teacher_name && (
-                  <div className="bg-blue-50 rounded-xl p-3">
-                    <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><User size={11} /> Teacher</p>
-                    <p className="font-bold text-gray-800 text-sm">{course.teacher_name}</p>
-                  </div>
-                )}
-                {course.duration && (
-                  <div className="bg-blue-50 rounded-xl p-3">
-                    <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><Clock size={11} /> Duration</p>
-                    <p className="font-bold text-gray-800 text-sm">{course.duration}</p>
-                  </div>
-                )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {course.teacher_name && (
                 <div className="bg-blue-50 rounded-xl p-3">
-                  <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><DollarSign size={11} /> Monthly Fee</p>
-                  <p className="font-bold text-blue-700 text-sm">
-                    {course.fee > 0 ? `Rs. ${parseFloat(course.fee).toLocaleString()}` : "Free"}
-                  </p>
+                  <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><User size={11} /> Teacher</p>
+                  <p className="font-bold text-gray-800 text-sm">{course.teacher_name}</p>
                 </div>
+              )}
+              {course.duration && (
+                <div className="bg-blue-50 rounded-xl p-3">
+                  <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><Clock size={11} /> Duration</p>
+                  <p className="font-bold text-gray-800 text-sm">{course.duration}</p>
+                </div>
+              )}
+              <div className="bg-blue-50 rounded-xl p-3">
+                <p className="text-xs text-blue-400 flex items-center gap-1 mb-1"><DollarSign size={11} /> Monthly Fee</p>
+                <p className="font-bold text-blue-700 text-sm">
+                  {course.fee > 0 ? `Rs. ${parseFloat(course.fee).toLocaleString()}` : "Free"}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* ── Materials Section ─────────────────────────────────────── */}
+          {/* ── Materials Section ───────────────────────────────────────────── */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
@@ -707,6 +893,14 @@ export default function CourseDetailsPage() {
                 {/* Summary bar */}
                 <CourseSummaryBar lessonBlocks={lessonBlocks} />
 
+                {/* ── Overall Progress Banner (only for STUDENT) ── */}
+                {user?.role === "STUDENT" && totalFiles > 0 && (
+                  <CourseProgressBanner
+                    totalFiles={totalFiles}
+                    completedCount={completedCount}
+                  />
+                )}
+
                 {/* Lesson blocks */}
                 <div className="space-y-3">
                   {filteredLessonBlocks.length === 0 ? (
@@ -725,6 +919,9 @@ export default function CourseDetailsPage() {
                           index={idx}
                           isOpen={!!openLessons[key]}
                           onToggle={() => toggleLesson(key)}
+                          completedIds={completedIds}
+                          onToggleComplete={user?.role === "STUDENT" ? handleToggleComplete : null}
+                          togglingId={togglingId}
                         />
                       );
                     })
