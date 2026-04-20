@@ -1,7 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Phone, KeyRound, Loader2 } from "lucide-react";
+import { 
+  ArrowLeft, 
+  Phone, 
+  KeyRound, 
+  Loader2, 
+  AlertCircle,
+  Shield,
+  Send,
+  ShieldQuestion,
+  ArrowRight
+} from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -14,6 +24,12 @@ export default function ForgotPassword() {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [mounted, setMounted]         = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // ── Step 1: Request OTP ─────────────────────────────────────────────────────
   const handleSendOtp = async (e) => {
@@ -41,15 +57,7 @@ export default function ForgotPassword() {
     }
   };
 
-  // ── Step 2: Verify OTP on backend, then navigate to reset page ──────────────
-  // We call /forgot-password/reset with a dummy password just to verify the OTP,
-  // but instead we store user_id + otp in sessionStorage and let reset-password
-  // page do the actual password update (cleaner UX flow).
-  // Actually: we verify OTP by calling send-otp again is wrong.
-  // The correct approach: store userId + otp in sessionStorage, then the
-  // reset-password page sends all three (user_id, otp, new_password) together.
-  // OTP is only consumed (deleted) when /forgot-password/reset is called.
-  // This keeps OTP single-use and verified server-side at reset time.
+  // ── Step 2: Store OTP + userId, redirect to reset page ──────────────────────
   const handleVerifyOtp = async (e) => {
     e?.preventDefault();
     const otpString = otp.join("");
@@ -111,124 +119,229 @@ export default function ForgotPassword() {
     }, 1000);
   };
 
-  // ── STEP: Enter User ID ─────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 1: Enter User ID
+  // ═══════════════════════════════════════════════════════════════════════════
   if (step === "enter_id") {
     return (
-      <div>
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Forgot Password?</h1>
-          <p className="text-sm text-gray-500 mt-2">
-            Enter your User ID and we&apos;ll send an OTP to your registered phone.
+      <div className={`relative transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        
+        {/* Logo Icon */}
+        <div className="flex justify-center mb-4">
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl blur-md opacity-50"></div>
+            <div className="relative w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg shadow-blue-500/30">
+              <ShieldQuestion className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
+
+        {/* Heading */}
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 mb-1 leading-tight">
+            Forgot your
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">
+              Password?
+            </span>
+          </h1>
+          <p className="text-gray-500 text-xs">
+            Enter your User ID to receive an OTP
           </p>
         </div>
 
+        {/* Error Message */}
         {error && (
-          <div className="mb-5 p-3 bg-red-50 border border-red-100 text-red-700 rounded-lg text-sm font-medium">
-            {error}
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-2">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSendOtp} className="space-y-6">
+        {/* Form */}
+        <form onSubmit={handleSendOtp} className="space-y-4">
+          
+          {/* User ID */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
-            <div className="relative">
-              <KeyRound className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                required
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase font-medium text-gray-900"
-                placeholder="e.g. STD-2026-0001"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value.toUpperCase())}
-              />
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              User ID
+            </label>
+            <div className="relative group transition-all duration-300">
+              {/* Focus glow */}
+              <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === 'user_id' ? 'opacity-30' : ''}`}></div>
+              
+              <div className="relative">
+                <KeyRound className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300 z-10 ${focusedField === 'user_id' ? 'text-blue-600' : 'text-gray-400'}`} size={16} />
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. STD-2026-0001"
+                  className="relative w-full pl-10 pr-3 py-2.5 rounded-lg text-gray-900 placeholder-gray-400 bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none uppercase font-medium text-sm transition-all"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value.toUpperCase())}
+                  onFocus={() => setFocusedField('user_id')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </div>
             </div>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading || !userId.trim()}
-            className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition disabled:bg-blue-400 flex items-center justify-center gap-2"
+            className="group relative w-full overflow-hidden text-white py-3 rounded-lg font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/30"
           >
-            {loading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</>
-            ) : (
-              "Send OTP"
-            )}
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></span>
+            
+            <span className="relative flex items-center justify-center gap-2">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sending OTP...
+                </>
+              ) : (
+                <>
+                  Send OTP
+                  <Send size={14} className="group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
+            </span>
           </button>
         </form>
 
-        <div className="mt-8 text-center">
+        {/* Security Badge */}
+        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
+          <Shield className="w-3 h-3 text-green-500" />
+          <span>Secure OTP verification</span>
+        </div>
+
+        {/* Divider */}
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200"></div>
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="px-3 bg-white text-gray-400 uppercase tracking-wider font-medium text-[10px]">
+              Or
+            </span>
+          </div>
+        </div>
+
+        {/* Back to Login */}
+        <div className="text-center">
           <Link
             href="/login"
-            className="flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition"
+            className="font-bold text-blue-600 hover:text-blue-700 transition-colors inline-flex items-center gap-1 group text-xs"
           >
-            <ArrowLeft className="w-4 h-4" /> Back to Login
+            <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+            Back to Login
           </Link>
         </div>
       </div>
     );
   }
 
-  // ── STEP: Enter OTP ─────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 2: Enter OTP
+  // ═══════════════════════════════════════════════════════════════════════════
   if (step === "enter_otp") {
     return (
-      <div>
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Phone className="w-7 h-7" />
+      <div className={`relative transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        
+        {/* Logo Icon */}
+        <div className="flex justify-center mb-4">
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl blur-md opacity-50"></div>
+            <div className="relative w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg shadow-blue-500/30">
+              <Phone className="w-6 h-6 text-white" />
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Check your phone</h1>
-          <p className="text-sm text-gray-500 mt-2">
+        </div>
+
+        {/* Heading */}
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 mb-1 leading-tight">
+            Check your
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">
+              Phone
+            </span>
+          </h1>
+          <p className="text-gray-500 text-xs">
             We sent a 6-digit OTP to{" "}
-            <span className="font-semibold text-gray-700">{maskedPhone}</span>
+            <span className="font-bold text-gray-700">{maskedPhone}</span>
           </p>
         </div>
 
+        {/* Error Message */}
         {error && (
-          <div className="mb-5 p-3 bg-red-50 border border-red-100 text-red-700 rounded-lg text-sm font-medium">
-            {error}
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-2">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleVerifyOtp} className="space-y-6">
+        {/* Form */}
+        <form onSubmit={handleVerifyOtp} className="space-y-4">
+          
+          {/* OTP Inputs */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
-              Enter OTP
+            <label className="block text-xs font-bold text-gray-700 mb-2 text-center">
+              Enter 6-Digit OTP
             </label>
             <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
               {otp.map((digit, index) => (
-                <input
+                <div 
                   key={index}
-                  id={`otp-${index}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(index, e.target.value)}
-                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="w-11 h-12 text-center text-xl font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-gray-900 transition"
-                />
+                  className="relative group transition-all duration-300"
+                >
+                  {/* Focus glow */}
+                  <div className={`absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg blur opacity-0 transition-opacity duration-300 ${focusedField === `otp-${index}` ? 'opacity-40' : ''}`}></div>
+                  <input
+                    id={`otp-${index}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    onFocus={() => setFocusedField(`otp-${index}`)}
+                    onBlur={() => setFocusedField(null)}
+                    className="relative w-11 h-12 text-center text-xl font-bold bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-gray-900 transition-all"
+                  />
+                </div>
               ))}
             </div>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading || otp.join("").length < 6}
-            className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition disabled:bg-blue-400 flex items-center justify-center gap-2"
+            className="group relative w-full overflow-hidden text-white py-3 rounded-lg font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/30"
           >
-            {loading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
-            ) : (
-              "Verify & Continue"
-            )}
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></span>
+            
+            <span className="relative flex items-center justify-center gap-2">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  Verify &amp; Continue
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
+            </span>
           </button>
         </form>
 
-        <div className="mt-5 text-center text-sm text-gray-500">
+        {/* Resend */}
+        <div className="mt-4 text-center text-xs text-gray-500">
           Didn&apos;t receive it?{" "}
           {resendCooldown > 0 ? (
-            <span className="text-gray-400">Resend in {resendCooldown}s</span>
+            <span className="text-gray-400 font-medium">Resend in {resendCooldown}s</span>
           ) : (
             <button
               onClick={handleSendOtp}
@@ -240,16 +353,30 @@ export default function ForgotPassword() {
           )}
         </div>
 
-        <div className="mt-6 text-center">
+        {/* Divider */}
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200"></div>
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="px-3 bg-white text-gray-400 uppercase tracking-wider font-medium text-[10px]">
+              Or
+            </span>
+          </div>
+        </div>
+
+        {/* Change User ID */}
+        <div className="text-center">
           <button
             onClick={() => {
               setStep("enter_id");
               setOtp(["", "", "", "", "", ""]);
               setError(null);
             }}
-            className="flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition mx-auto"
+            className="font-bold text-blue-600 hover:text-blue-700 transition-colors inline-flex items-center gap-1 group text-xs"
           >
-            <ArrowLeft className="w-4 h-4" /> Use a different User ID
+            <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+            Use a different User ID
           </button>
         </div>
       </div>
