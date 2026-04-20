@@ -75,6 +75,13 @@ function detectMaterialType(material) {
 
   const cUrl = (material.content_url || "").toLowerCase();
   if (cUrl) {
+    if (cUrl.startsWith("data:")) {
+      const mime = cUrl.split(";")[0].replace("data:", "");
+      if (mime === "application/pdf") return "PDF";
+      if (mime.startsWith("video/")) return "VIDEO";
+      if (mime.startsWith("image/")) return "IMAGE";
+      return "DOC";
+    }
     if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
     if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
     if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
@@ -251,7 +258,7 @@ function MaterialCard({ material, index, isCompleted, onToggleComplete, toggling
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
             onClick={(e) => {
-              if (!downloadUrl.startsWith("http")) {
+              if (!downloadUrl.startsWith("http") && !downloadUrl.startsWith("data:")) {
                 e.preventDefault();
                 handleDownload(downloadUrl, material.title);
               }
