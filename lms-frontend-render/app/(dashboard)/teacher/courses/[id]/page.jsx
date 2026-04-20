@@ -4,10 +4,10 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Loader, AlertCircle, Trash2, Edit2, Save,
-  X, BookOpen, FileText, ExternalLink, Upload, Link2,
-  ChevronDown, ChevronRight, GraduationCap, Tag, Layers,
+  X, BookOpen, FileText, ExternalLink, Link2,
+  ChevronDown, ChevronRight, GraduationCap, Tag,
   CheckCircle, FolderPlus, FilePlus, File, FileVideo,
-  FileImage, Cloud, CloudUpload, Search,
+  FileImage, Cloud, CloudUpload, Search, Eye, Download,
 } from "lucide-react";
 import { authFetch, guardRoute } from "@/lib/auth";
 
@@ -71,6 +71,55 @@ function Btn({ children, onClick, variant = "primary", size = "md", disabled, cl
   );
 }
 
+// ─── Authenticated file fetching ─────────────────────────────────────────────
+// Files now live in the DB as base64 — grab them via authenticated endpoint
+// and turn into a blob URL for preview or download.
+async function fetchMaterialBlob(materialId) {
+  const res = await authFetch(`${API}/materials/${materialId}/file`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || "Failed to fetch file");
+  }
+  return await res.blob();
+}
+
+async function downloadMaterial(material) {
+  try {
+    const blob = await fetchMaterialBlob(material.material_id);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = material.title || "download";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+  } catch (_) {
+    alert("Download failed. Please try again.");
+  }
+}
+
+async function previewMaterial(material) {
+  try {
+    const blob = await fetchMaterialBlob(material.material_id);
+    const url = window.URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => window.URL.revokeObjectURL(url), 60 * 1000);
+  } catch (_) {
+    alert("Preview failed. Please try again.");
+  }
+}
+
+// Only PDFs, images and videos can be rendered natively in a browser tab.
+function isPreviewable(material) {
+  const mime = (material.content_mime || "").toLowerCase();
+  if (mime === "application/pdf") return true;
+  if (mime.startsWith("image/")) return true;
+  if (mime.startsWith("video/")) return true;
+  const type = (material.material_type || "").toUpperCase();
+  return ["PDF", "IMAGE", "VIDEO"].includes(type);
+}
+
 // ─── Drag & Drop Upload Zone ─────────────────────────────────────────────────
 function DropZone({ files, onChange, onRemove }) {
   const [dragging, setDragging] = useState(false);
@@ -109,7 +158,7 @@ function DropZone({ files, onChange, onRemove }) {
             <p className="text-sm font-semibold text-gray-700">
               {dragging ? "Drop files here" : "Drag & drop files here"}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">or <span className="text-blue-600 font-medium">browse</span> to upload · PDF, DOC, MP4, images…</p>
+            <p className="text-xs text-gray-400 mt-0.5">or <span className="text-blue-600 font-medium">browse</span> to upload · PDF, DOC, MP4, images… (max 25 MB each)</p>
           </div>
         </div>
         <input ref={fileRef} type="file" multiple className="hidden" onChange={handleFileChange} />
@@ -201,19 +250,11 @@ function detectMaterialType(material) {
     if (exUrl.startsWith("http")) return "LINK";
   }
 
-  const cUrl = (material.content_url || "").toLowerCase();
-  if (cUrl) {
-    // Base64 data URL — extract MIME type from "data:<mime>;base64,..."
-    if (cUrl.startsWith("data:")) {
-      const mime = cUrl.split(";")[0].replace("data:", "");
-      if (mime === "application/pdf") return "PDF";
-      if (mime.startsWith("video/")) return "VIDEO";
-      if (mime.startsWith("image/")) return "IMAGE";
-      return "DOC";
-    }
-    if (cUrl.match(/\.pdf(\?|#|$)/)) return "PDF";
-    if (cUrl.match(/\.(mp4|mov|avi|mkv|webm)(\?|#|$)/)) return "VIDEO";
-    if (cUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/)) return "IMAGE";
+  const mime = (material.content_mime || "").toLowerCase();
+  if (mime) {
+    if (mime === "application/pdf") return "PDF";
+    if (mime.startsWith("video/")) return "VIDEO";
+    if (mime.startsWith("image/")) return "IMAGE";
   }
 
   const explicit = material.material_type?.toUpperCase();
@@ -249,16 +290,6 @@ function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
     return { isValid: true, value: value.trim() };
   };
 
-  // Convert a File object to a base64 data URL string
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result); // "data:<mime>;base64,..."
-      reader.onerror = () => reject(new Error("File read failed"));
-      reader.readAsDataURL(file);
-    });
-  }
-
   async function handleSave() {
     const subtopicValidation = validateSubtopic(subtopic);
     if (!subtopicValidation.isValid) {
@@ -276,55 +307,27 @@ function MaterialModal({ lessonId, courseId, material, onClose, onSaved }) {
 
     setSaving(true); setErr(""); setSubtopicError(false);
     try {
-      const url    = isEdit ? `${API}/materials/${material.material_id}` : `${API}/materials`;
-      const method = isEdit ? "PUT" : "POST";
+      const fd = new FormData();
+      if (isEdit) fd.append("title", title.trim());
+      fd.append("material_type", resolvedType);
+      fd.append("subtopic", subtopicValidation.value);
+      if (lessonId) fd.append("lesson_id", lessonId);
+      if (courseId) fd.append("course_id", courseId);
+      if (externalUrl.trim()) fd.append("external_url", externalUrl.trim());
+      for (let i = 0; i < files.length; i++) fd.append("files", files[i]);
 
-      if (isEdit || files.length === 0) {
-        // Edit mode OR link-only: single JSON request
-        const file_base64 = files.length > 0 ? await fileToBase64(files[0]) : undefined;
-        const body = {
-          title:         isEdit ? title.trim() : (files[0]?.name || "Material"),
-          material_type: resolvedType,
-          subtopic:      subtopicValidation.value,
-          lesson_id:     lessonId  || undefined,
-          course_id:     courseId  || undefined,
-          external_url:  externalUrl.trim() || undefined,
-          file_base64,
-        };
-        const res  = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || "Failed to save.");
+      const url = isEdit ? `${API}/materials/${material.material_id}` : `${API}/materials`;
+      const method = isEdit ? "PUT" : "POST";
+      const res = await authFetch(url, { method, body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to save.");
+
+      if (isEdit) {
         onSaved(data.material);
       } else {
-        // New upload with multiple files: send one request per file sequentially
-        for (const file of files) {
-          const file_base64 = await fileToBase64(file);
-          const body = {
-            title:         file.name,
-            material_type: detectTypeFromFile(file),
-            subtopic:      subtopicValidation.value,
-            lesson_id:     lessonId || undefined,
-            course_id:     courseId || undefined,
-            file_base64,
-          };
-          const res  = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || `Failed to upload ${file.name}`);
-          onSaved(data.material);
-        }
-        // If external link also provided alongside files, send as separate request
-        if (externalUrl.trim()) {
-          const body = {
-            title:         title.trim() || "External Link",
-            material_type: detectTypeFromUrl(externalUrl.trim()) || "LINK",
-            subtopic:      subtopicValidation.value,
-            lesson_id:     lessonId || undefined,
-            course_id:     courseId || undefined,
-            external_url:  externalUrl.trim(),
-          };
-          const res  = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || "Failed to save link.");
+        if (data.materials && Array.isArray(data.materials)) {
+          data.materials.forEach(mat => onSaved(mat));
+        } else if (data.material) {
           onSaved(data.material);
         }
       }
@@ -571,14 +574,10 @@ function LessonModal({ courseId, lesson, existingLessons = [], onClose, onSaved 
 // ─── Material Row ────────────────────────────────────────────────────────────
 function MaterialRow({ material, onEdit, onDelete }) {
   const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(null); // 'preview' | 'download' | null
   const resolvedType = detectMaterialType(material);
-
-  // Build the correct href for uploaded files (base64 data URL or server path)
-  const fileHref = material.content_url
-    ? (material.content_url.startsWith("data:")
-        ? material.content_url
-        : `${API}${material.content_url}`)
-    : null;
+  const hasFile = material.has_file === true || material.has_file === "true";
+  const canPreview = hasFile && isPreviewable(material);
 
   async function handleDelete() {
     if (!confirm(`Delete "${material.title}"?`)) return;
@@ -589,6 +588,16 @@ function MaterialRow({ material, onEdit, onDelete }) {
     } catch (_) { } finally { setDeleting(false); }
   }
 
+  async function handleView() {
+    setBusy("preview");
+    try { await previewMaterial(material); } finally { setBusy(null); }
+  }
+
+  async function handleDownload() {
+    setBusy("download");
+    try { await downloadMaterial(material); } finally { setBusy(null); }
+  }
+
   return (
     <div className="flex items-center justify-between px-3 py-2.5 hover:bg-blue-50/60 transition-colors rounded-xl gap-3 group">
       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -596,65 +605,52 @@ function MaterialRow({ material, onEdit, onDelete }) {
           {getFileIcon(material.title, resolvedType)}
         </div>
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-semibold text-gray-800 truncate block">{material.title}</span>
-          <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 mt-0.5 ${getTypeBadgeStyle(resolvedType)}`}>
-            {resolvedType}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-gray-800 truncate">{material.title}</span>
+            {material.external_url && (
+              <a href={material.external_url} target="_blank" rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-600 transition" title="Open link">
+                <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={`inline-flex items-center text-xs font-medium border rounded-full px-2 py-0.5 ${getTypeBadgeStyle(resolvedType)}`}>
+              {resolvedType}
+            </span>
+            {material.content_size ? (
+              <span className="text-xs text-gray-400">{formatBytes(material.content_size)}</span>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* Action buttons — always visible on right */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-
-        {/* View button — for uploaded files */}
-        {fileHref && (
-          <a
-            href={fileHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1.5 rounded-lg transition-colors"
-            title="View file"
-          >
-            <FileText size={11} /> View
-          </a>
-        )}
-
-        {/* Download button — for base64 files (direct download) */}
-        {fileHref && material.content_url.startsWith("data:") && (
-          <a
-            href={fileHref}
-            download={material.title}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 px-2.5 py-1.5 rounded-lg transition-colors"
-            title="Download file"
-          >
-            <FileText size={11} /> Download
-          </a>
-        )}
-
-        {/* Open button — for external links */}
-        {material.external_url && (
-          <a
-            href={material.external_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1.5 rounded-lg transition-colors"
-            title="Open link"
-          >
-            <ExternalLink size={11} /> Open
-          </a>
-        )}
-
-        {/* Edit & Delete — visible on hover */}
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(material)}
-            className="w-7 h-7 rounded-lg hover:bg-blue-100 flex items-center justify-center text-blue-600 transition">
-            <Edit2 size={12} />
+      {/* Action buttons */}
+      <div className="flex gap-1 items-center">
+        {canPreview && (
+          <button onClick={handleView} disabled={busy !== null}
+            className="w-7 h-7 rounded-lg hover:bg-indigo-50 flex items-center justify-center text-indigo-600 transition disabled:opacity-50"
+            title="View file">
+            {busy === "preview" ? <Loader size={12} className="animate-spin" /> : <Eye size={12} />}
           </button>
-          <button onClick={handleDelete} disabled={deleting}
-            className="w-7 h-7 rounded-lg hover:bg-red-50 flex items-center justify-center text-red-400 hover:text-red-600 transition disabled:opacity-50">
-            {deleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+        )}
+        {hasFile && (
+          <button onClick={handleDownload} disabled={busy !== null}
+            className="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-blue-600 transition disabled:opacity-50"
+            title="Download file">
+            {busy === "download" ? <Loader size={12} className="animate-spin" /> : <Download size={12} />}
           </button>
-        </div>
+        )}
+        <button onClick={() => onEdit(material)}
+          className="w-7 h-7 rounded-lg hover:bg-blue-100 flex items-center justify-center text-blue-600 transition"
+          title="Edit">
+          <Edit2 size={12} />
+        </button>
+        <button onClick={handleDelete} disabled={deleting}
+          className="w-7 h-7 rounded-lg hover:bg-red-50 flex items-center justify-center text-red-400 hover:text-red-600 transition disabled:opacity-50"
+          title="Delete">
+          {deleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+        </button>
       </div>
     </div>
   );
@@ -704,6 +700,11 @@ function LessonBlock({ lesson, onLessonEdit, onLessonDelete, onMaterialSaved, on
   const [showMatModal, setShowMatModal] = useState(false);
   const [editMaterial, setEditMaterial] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Keep local material list in sync when parent reloads lessons
+  useEffect(() => {
+    setMaterials(lesson.materials || []);
+  }, [lesson.materials]);
 
   // In search mode, show only matched materials; otherwise show all
   const displayMaterials = highlightMaterials ?? materials;
@@ -893,6 +894,7 @@ export default function TeacherCourseDetailsPage() {
       if (courseRes.ok) { const d = await courseRes.json(); setCourse(d); }
       if (lessonsRes.ok) {
         const d = await lessonsRes.json();
+        // For each lesson, pull its materials (metadata only)
         const lessonsWithMaterials = await Promise.all(
           (d.lessons || []).map(async (l) => {
             try {
@@ -1029,7 +1031,7 @@ export default function TeacherCourseDetailsPage() {
                 {/* Summary bar */}
                 <CourseSummaryBar lessons={lessons} />
 
-                {/* ── Search bar ─────────────────────────────────────────── */}
+                {/* Search bar */}
                 <div className="relative">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   <input
