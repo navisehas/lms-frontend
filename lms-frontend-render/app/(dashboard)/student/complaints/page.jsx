@@ -122,14 +122,14 @@ export default function StudentComplaintsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <AlertTriangle className="text-orange-500" size={26} /> My Complaints
+            <AlertTriangle className="text-blue-800" size={26} /> My Complaints
           </h1>
           <p className="text-sm text-gray-500 mt-1">Submit complaints and track admin responses.</p>
         </div>
         <button
           onClick={() => { setShowForm(!showForm); resetForm(); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm ${
-            showForm ? "bg-gray-200 text-gray-700 hover:bg-gray-300" : "bg-orange-500 hover:bg-orange-600 text-white"
+            showForm ? "bg-gray-200 text-gray-700 hover:bg-gray-300" : "bg-blue-800 hover:bg-blue-900 text-white"
           }`}
         >
           {showForm ? <X size={16} /> : <Plus size={16} />}
@@ -141,23 +141,23 @@ export default function StudentComplaintsPage() {
       {success && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 mb-4 text-sm"><CheckCircle size={16} />{success}</div>}
 
       {showForm && (
-        <div className="bg-white rounded-2xl border border-orange-100 shadow-md p-6 mb-6">
+        <div className="bg-white rounded-2xl border border-blue-100 shadow-md p-6 mb-6">
           <h2 className="font-bold text-gray-800 mb-5 flex items-center gap-2 text-base">
-            <Send size={16} className="text-orange-500" /> Submit a Complaint
+            <Send size={16} className="text-blue-800" /> Submit a Complaint
           </h2>
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subject *</label>
               <input value={subject} onChange={(e) => setSubject(e.target.value)}
                 placeholder="e.g. Unable to access course materials"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300 bg-gray-50" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Describe Your Issue *</label>
               <textarea value={message} onChange={(e) => setMessage(e.target.value)}
                 placeholder="Please describe the issue in detail..."
                 rows={4}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300 bg-gray-50 resize-none" />
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50 resize-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Rate Your Experience *</label>
@@ -171,7 +171,7 @@ export default function StudentComplaintsPage() {
             <button onClick={() => { setShowForm(false); resetForm(); }}
               className="px-5 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>
             <button onClick={handleSubmit} disabled={submitting}
-              className="flex items-center gap-2 px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl disabled:opacity-60 transition-colors shadow-sm">
+              className="flex items-center gap-2 px-6 py-2 bg-blue-800 hover:bg-blue-900 text-white text-sm font-semibold rounded-xl disabled:opacity-60 transition-colors shadow-sm">
               {submitting ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}Submit Complaint
             </button>
           </div>
